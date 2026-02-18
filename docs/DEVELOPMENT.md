@@ -90,6 +90,184 @@ web/src/
 
 No layer reaches into another's internals. Data flows through the public trait boundaries defined in `scbdb-core`.
 
+## Mobile-First Web Development
+
+Every UI component is designed for small screens first, then enhanced for larger viewports. No desktop-first CSS.
+
+### Principles
+
+- **Start at 320px.** If it doesn't work on a small phone, it doesn't ship.
+- **Enhance upward.** Base styles are mobile. Breakpoints add complexity, never remove it.
+- **Touch targets first.** Minimum 44x44px for all interactive elements. No hover-only interactions.
+- **Content priority.** Decide what matters on a 5-inch screen before thinking about sidebar layouts.
+
+### Tailwind CSS 4+ Breakpoints
+
+Write base styles for mobile. Use `sm:`, `md:`, `lg:`, `xl:` to layer on tablet/desktop overrides.
+
+```tsx
+// correct — mobile-first
+<div className="flex flex-col gap-4 md:flex-row md:gap-6 lg:gap-8">
+  <main className="w-full md:w-2/3">...</main>
+  <aside className="w-full md:w-1/3">...</aside>
+</div>
+
+// wrong — desktop-first (undoing at smaller sizes)
+<div className="flex flex-row gap-8 sm:flex-col sm:gap-4">
+```
+
+Standard breakpoints:
+
+| Prefix | Min width | Target |
+|---|---|---|
+| *(none)* | 0px | Phones (default) |
+| `sm:` | 640px | Large phones / small tablets |
+| `md:` | 768px | Tablets |
+| `lg:` | 1024px | Laptops |
+| `xl:` | 1280px | Desktops |
+
+### Layout Patterns
+
+#### Stacking → Side-by-side
+
+The most common pattern. Content stacks vertically on mobile, flows horizontally on larger screens.
+
+```tsx
+// components/products/ProductGrid.tsx
+export function ProductGrid({ products }: Props) {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {products.map((p) => (
+        <ProductCard key={p.id} product={p} />
+      ))}
+    </div>
+  );
+}
+```
+
+#### Responsive Tables
+
+Data tables collapse to card layouts on mobile. Never force horizontal scroll on small screens for primary data.
+
+```
+web/src/
+  components/
+    data-display/
+      ResponsiveTable.tsx       # table on md+, cards on mobile
+      ResponsiveTable.test.tsx
+      DataCard.tsx              # single-record card view
+      DataCard.test.tsx
+```
+
+```tsx
+// components/data-display/ResponsiveTable.tsx
+export function ResponsiveTable<T>({ data, columns, renderCard }: Props<T>) {
+  return (
+    <>
+      {/* card layout — mobile */}
+      <div className="flex flex-col gap-3 md:hidden">
+        {data.map(renderCard)}
+      </div>
+      {/* table — tablet+ */}
+      <table className="hidden md:table w-full">
+        ...
+      </table>
+    </>
+  );
+}
+```
+
+#### Navigation
+
+Bottom nav on mobile, sidebar on desktop. One component per pattern, composed in the layout.
+
+```
+web/src/
+  components/
+    layout/
+      AppShell.tsx            # composes nav + content area
+      AppShell.test.tsx
+      BottomNav.tsx           # mobile: fixed bottom bar
+      BottomNav.test.tsx
+      Sidebar.tsx             # desktop: collapsible side nav
+      Sidebar.test.tsx
+```
+
+```tsx
+// components/layout/AppShell.tsx
+export function AppShell({ children }: Props) {
+  return (
+    <div className="min-h-screen pb-16 md:pb-0 md:pl-64">
+      <Sidebar className="hidden md:flex" />
+      <main className="p-4 md:p-6 lg:p-8">{children}</main>
+      <BottomNav className="fixed bottom-0 left-0 right-0 md:hidden" />
+    </div>
+  );
+}
+```
+
+### shadcn/ui Responsive Rules
+
+- Use `Sheet` (slide-over) for mobile modals, `Dialog` for desktop. Switch with a `useMediaQuery` hook.
+- `DropdownMenu` on desktop, `Drawer` on mobile for action menus.
+- `Popover` panels should be full-width on mobile (`w-screen sm:w-auto`).
+- Keep each shadcn wrapper in its own file — don't build a mega-component.
+
+```
+web/src/
+  hooks/
+    useMediaQuery.ts
+    useMediaQuery.test.ts
+    useIsMobile.ts           # thin wrapper: useMediaQuery("(max-width: 767px)")
+    useIsMobile.test.ts
+```
+
+### Touch & Interaction
+
+- Minimum touch target: `min-h-11 min-w-11` (44px at default scale).
+- Swipe gestures for navigation (tab switching, dismissing sheets) — use a dedicated hook per gesture.
+- No hover-dependent UI. `:hover` is progressive enhancement only — the feature must work without it.
+- Use `active:` states for touch feedback (`active:scale-95`, `active:bg-muted`).
+
+### Performance on Mobile
+
+- Lazy-load below-the-fold content with `React.lazy` + `Suspense`.
+- Virtualize long lists (product catalogs, bill lists) — don't render 500 DOM nodes on a phone.
+- Images: use `srcSet` / `sizes` for responsive images. Serve WebP with AVIF fallback.
+- Keep the initial JS bundle under 200KB gzipped. Code-split by route.
+
+```
+web/src/
+  components/
+    common/
+      LazyImage.tsx           # responsive srcSet + loading="lazy"
+      LazyImage.test.tsx
+      VirtualList.tsx          # windowed rendering for long lists
+      VirtualList.test.tsx
+```
+
+### Testing Responsive Behavior
+
+- Test mobile and desktop variants separately in component tests using `useMediaQuery` mocks.
+- Viewport-specific assertions: verify that mobile-only elements render and desktop-only elements don't (and vice versa).
+
+```tsx
+// components/layout/AppShell.test.tsx
+describe("AppShell", () => {
+  it("renders bottom nav on mobile", () => {
+    mockMediaQuery("(max-width: 767px)", true);
+    render(<AppShell>content</AppShell>);
+    expect(screen.getByRole("navigation", { name: /bottom/i })).toBeVisible();
+  });
+
+  it("renders sidebar on desktop", () => {
+    mockMediaQuery("(max-width: 767px)", false);
+    render(<AppShell>content</AppShell>);
+    expect(screen.getByRole("navigation", { name: /sidebar/i })).toBeVisible();
+  });
+});
+```
+
 ## TDD Workflow
 
 Strict red-green-refactor for every change. No production code is written without a failing test first.
