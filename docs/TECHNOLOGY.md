@@ -1,12 +1,17 @@
 # Technology Stack
 
-## Language
+## Backend
 
-- **Rust** — Primary language for all components (CLI, collectors, data pipeline)
+- **Rust** — Primary language for backend, CLI, collectors, and data pipeline
+- **Axum** — HTTP framework for the REST/API layer
+- **clap** — Argument parsing and command routing for the CLI
 
-## CLI Framework
+## Frontend
 
-- **clap** — Argument parsing and command routing for the CLI interface
+- **React 19** — UI framework
+- **TypeScript** — Frontend language
+- **Tailwind CSS 4+** — Utility-first styling
+- **shadcn/ui** — Component library (built on Radix UI primitives)
 
 ## Data Collection
 
