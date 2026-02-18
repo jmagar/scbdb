@@ -7,6 +7,12 @@
 **Date:** February 14, 2026
 **Status:** Draft — Semi-official proof of concept
 
+> **Tech Stack Update:** This PRD was written with a TypeScript/Node.js/Turborepo stack
+> in mind (Section 5.2). The project has since been redesigned as a **Rust/Cargo workspace**
+> with an **Axum** backend and **React 19** frontend. The data model, CLI interface, and
+> business logic described here remain authoritative — only the implementation technology
+> has changed. See `docs/TECHNOLOGY.md` and `docs/ARCHITECTURE.md` for the current stack.
+
 ---
 
 ## 1. Executive Summary

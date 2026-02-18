@@ -49,7 +49,7 @@ scbdb/
 │       ├── components/
 │       └── lib/
 ├── config/
-│   └── brands.yaml         # seed data — competitor shop URLs
+│   └── brands.yaml         # seed data — competitor/portfolio brand registry (URLs, tiers, notes)
 ├── migrations/             # sqlx SQL migration files (append-only)
 ├── justfile                # task runner (build, dev, migrate, etc.)
 ├── lefthook.yml            # git hooks config (pre-commit checks)
@@ -138,6 +138,11 @@ Integration with the LegiScan API for tracking cannabis-related legislation. Ing
 ### Market Sentiment (`scbdb-sentiment`)
 
 Pipeline for aggregating and scoring market sentiment signals alongside product and legislative data.
+
+> **Design TBD:** Data sources (news APIs, RSS, Reddit, social media), scoring methodology,
+> and storage schema for the sentiment pipeline are not yet defined. See
+> [MVP.md](MVP.md) Phase 4 for the open design questions that must be resolved before
+> implementation.
 
 ## Frontend (`web/`)
 
