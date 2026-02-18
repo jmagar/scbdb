@@ -8,6 +8,7 @@
 
 ## Frontend
 
+- **Vite** — Dev server and build tooling
 - **React 19** — UI framework
 - **TypeScript** — Frontend language
 - **Tailwind CSS 4+** — Utility-first styling
@@ -16,3 +17,8 @@
 ## Data Collection
 
 - **Custom Shopify scraper** — Purpose-built HTTP client that pulls `products.json` from Shopify storefronts and normalizes the response into the internal product schema
+- **LegiScan API** — Legislative data extraction for cannabis-related bills and votes
+
+## Analysis
+
+- **Market sentiment pipeline** — Aggregation and scoring of market signals
