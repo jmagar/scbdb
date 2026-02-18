@@ -1,5 +1,95 @@
 # Development
 
+## Module Structure
+
+All code must be small, focused modules. No monolithic files. Every module has a single responsibility.
+
+### Rules
+
+- One concern per file. If a module does two things, split it.
+- No file should exceed ~200 lines. If it does, it needs decomposition.
+- Public API of each module is explicit — re-export from `mod.rs` / `lib.rs`, keep internals private.
+- Traits define boundaries between layers. Concrete types implement traits; consumers depend on traits.
+
+### Rust Crate Internals
+
+Each library crate follows the same internal layout:
+
+```
+crates/scbdb-scraper/src/
+  lib.rs              # public re-exports only
+  client.rs           # HTTP client construction
+  pagination.rs       # page iteration logic
+  normalize.rs        # Shopify JSON → internal model mapping
+  rate_limit.rs       # throttling / backoff
+  error.rs            # crate-specific error types
+```
+
+`lib.rs` is a manifest, not an implementation file:
+
+```rust
+// crates/scbdb-scraper/src/lib.rs
+mod client;
+mod error;
+mod normalize;
+mod pagination;
+mod rate_limit;
+
+pub use client::ShopifyClient;
+pub use error::ScraperError;
+pub use normalize::normalize_product;
+```
+
+### Frontend Modules
+
+Components, hooks, and utilities each get their own file. No barrel files that re-export everything — import from the specific module.
+
+```
+web/src/
+  components/
+    products/
+      ProductCard.tsx
+      ProductCard.test.tsx
+      ProductTable.tsx
+      ProductTable.test.tsx
+    legislation/
+      BillSummary.tsx
+      BillSummary.test.tsx
+  hooks/
+    useProducts.ts
+    useProducts.test.ts
+    useBills.ts
+    useBills.test.ts
+  lib/
+    api/
+      client.ts         # shared fetch wrapper
+      products.ts       # product endpoints
+      legislation.ts    # legislation endpoints
+      sentiment.ts      # sentiment endpoints
+    format/
+      price.ts
+      price.test.ts
+      date.ts
+      date.test.ts
+  types/
+    product.ts
+    bill.ts
+    sentiment.ts
+```
+
+### Separation of Concerns
+
+| Layer | Rust crate | Responsibility |
+|---|---|---|
+| Domain models | `scbdb-core` | Types, traits, validation — zero I/O |
+| Persistence | `scbdb-db` | Database queries, migrations — no business logic |
+| Collection | `scbdb-scraper`, `scbdb-legiscan` | External API interaction — no persistence, returns domain types |
+| Analysis | `scbdb-sentiment` | Computation over domain types — no I/O |
+| Presentation | `scbdb-server` | HTTP routing, serialization — delegates to other crates |
+| Orchestration | `scbdb-cli` | Wires layers together, handles user input — no business logic |
+
+No layer reaches into another's internals. Data flows through the public trait boundaries defined in `scbdb-core`.
+
 ## TDD Workflow
 
 Strict red-green-refactor for every change. No production code is written without a failing test first.
