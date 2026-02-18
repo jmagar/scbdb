@@ -7,7 +7,8 @@ All code must be small, focused modules. No monolithic files. Every module has a
 ### Rules
 
 - One concern per file. If a module does two things, split it.
-- No file should exceed ~200 lines. If it does, it needs decomposition.
+- Target ~200 lines per file. Hard max 300. If it's over 300, it must be split — no exceptions.
+- `#[cfg(test)]` blocks and co-located test modules (`*.test.ts`) do not count against the limit. Only production code counts.
 - Public API of each module is explicit — re-export from `mod.rs` / `lib.rs`, keep internals private.
 - Traits define boundaries between layers. Concrete types implement traits; consumers depend on traits.
 
