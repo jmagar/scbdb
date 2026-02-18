@@ -1,0 +1,70 @@
+brands: - name: Ayrloom relationship: portfolio
+    domain: ayrloom.com shop_url:
+    https://ayrloom.com/collections/beverages notes:
+    "Also has shop.ayrloom.com for hemp DTC. Main
+    collections page has full beverage lineup."
+  - name: Better Than Booze relationship: portfolio
+    domain: drinkbetterthanbooze.com shop_url:
+    https://drinkbetterthanbooze.com/collections/all
+    notes: "Shopify store. Has both CBD+THC and sober
+    mocktail lines — filter for THC products."
+  - name: BRĒZ relationship: portfolio domain:
+    drinkbrez.com shop_url:
+    https://drinkbrez.com/collections notes: "Large
+    catalog — OG, Amplify, Drift, Dream, Elevate,
+    Spirit bottles, Shots. May need to hit
+    sub-collections."
+  - name: Cann relationship: portfolio domain:
+    drinkcann.com shop_url:
+    https://drinkcann.com/collections/all notes:
+    "Three dosage tiers (2mg, 5mg Hi Boy, 10mg Hi'er
+    Boy). Also distributed by United in GA — overlap
+    brand."
+  - name: Cycling Frog relationship: portfolio
+    domain: cyclingfrog.com shop_url:
+    https://cyclingfrog.com/collections/seltzers-and-drinks
+    notes: "CBD:THC ratio products (5mg THC + 10mg
+    CBD standard). Important to capture both values."
+  - name: Drink Delta relationship: portfolio domain:
+    drinkdelta.com shop_url:
+    https://drinkdelta.com/shop notes: "5/10/20mg
+    tiers. Also has a Cannabis Spirit bottle. 2:1
+    THC:CBD ratio on some SKUs."
+  - name: Find Wunder relationship: portfolio domain:
+    findwunder.com shop_url:
+    https://findwunder.com/shop notes: "Also
+    distributed by United in GA — overlap brand.
+    Italian soda positioning."
+  - name: Green Monke relationship: portfolio domain:
+    greenmonkehemp.com shop_url:
+    https://www.greenmonkehemp.com/s/shop notes:
+    "Squarespace /s/shop path. Happy Soda line +
+    Cookies collab. 8 SKUs in SHL."
+  - name: Happy Flower relationship: portfolio
+    domain: drinkhappyflower.com shop_url:
+    https://drinkhappyflower.com/collections/all-products
+    notes: "Tilray Brands product. 5mg + 10mg
+    SuperBloom lines. Also distributed by United in
+    GA — overlap brand."
+  - name: High Rise relationship: portfolio domain:
+    highrisebev.com shop_url:
+    https://highrisebev.com/collections/all-products
+    notes: "Charleston SC local brand. 5mg, 10mg THC
+    lines + CBD-only line + Adaptogen line. Founded
+    2022."
+  - name: Island Chill relationship: portfolio
+    domain: islandbrandsusa.com shop_url:
+    https://www.islandbrandsusa.com/pages/island-chill
+    notes: "Sub-brand of Island Brands USA (also
+    makes Active beer). Individual products at
+    /products/. 5mg THC + 10mg CBD."
+  - name: Levity relationship: portfolio domain:
+    drinklevity.com shop_url:
+    https://drinklevity.com/shop notes: "Charleston
+    SC based. Widest dosage range in portfolio (4mg
+    cans to 200mg Founder's Reserve bottle). Has
+    750ml spirit bottles."
+  - name: Trail Magic relationship: portfolio domain:
+    drinktrailmagic.com shop_url:
+    https://www.drinktrailmagic.com/collections/all-beverages-4-packs
+    notes: "Tea and lemonade focused, not seltzers. Real brewed tea. 3mg entry point."
