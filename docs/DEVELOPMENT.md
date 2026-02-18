@@ -311,6 +311,36 @@ The justfile also provides a manual command for running all checks without commi
 just check   # fmt + clippy + tsc --noEmit + test + eslint + prettier
 ```
 
+## Local Development Environment
+
+### Docker Compose
+
+PostgreSQL runs via Docker Compose. No local database installation required.
+
+```sh
+# start PostgreSQL (and pgAdmin if enabled)
+docker compose up -d
+
+# stop services
+docker compose down
+
+# stop and remove volumes (full reset)
+docker compose down -v
+```
+
+`DATABASE_URL` in `.env` should point to the Docker Compose PostgreSQL instance: `postgres://scbdb:scbdb@localhost:5432/scbdb`
+
+### Environment Variables
+
+Copy `.env.example` to `.env` and fill in required values:
+
+```sh
+DATABASE_URL=postgres://scbdb:scbdb@localhost:5432/scbdb
+LEGISCAN_API_KEY=<your-key>
+```
+
+`dotenvy` loads `.env` automatically in both `scbdb-cli` and `scbdb-server`.
+
 ## Migrations
 
 SQL migration files live in `migrations/` at the repo root. Managed by sqlx's built-in migration runner.

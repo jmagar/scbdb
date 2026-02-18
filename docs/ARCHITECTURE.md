@@ -52,7 +52,12 @@ scbdb/
 │   └── brands.yaml         # seed data — competitor shop URLs
 ├── migrations/             # sqlx SQL migration files (append-only)
 ├── justfile                # task runner (build, dev, migrate, etc.)
-└── lefthook.yml            # git hooks config (pre-commit checks)
+├── lefthook.yml            # git hooks config (pre-commit checks)
+├── docker-compose.yml      # local dev services (PostgreSQL, pgAdmin)
+├── Dockerfile              # multi-stage build for Rust backend
+└── .github/
+    └── workflows/
+        └── ci.yml          # GitHub Actions CI pipeline
 ```
 
 ## Workspace Layout
@@ -116,7 +121,7 @@ Rust binary built with **clap** for command parsing. Single entry point with sub
 
 ### API Server (`scbdb-server`)
 
-**Axum**-based HTTP server exposing a REST API consumed by the frontend. Serves product data, competitor listings, legislative tracking, market sentiment, and scrape status.
+**Axum**-based HTTP server exposing a REST API consumed by the frontend. Serves product data, competitor listings, legislative tracking, market sentiment, and scrape status. Protected by API key authentication, CORS, and rate limiting middleware via tower layers.
 
 ### Data Collection
 
