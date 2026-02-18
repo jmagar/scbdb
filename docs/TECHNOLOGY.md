@@ -28,6 +28,17 @@
 
 - **Market sentiment pipeline** — Aggregation and scoring of market signals
 
+## Error Handling
+
+- **thiserror** — Derive macros for custom error enums in library crates (`scbdb-core`, `scbdb-scraper`, `scbdb-db`, etc.)
+- **anyhow** — Convenient error propagation in binary crates only (`scbdb-cli`, `scbdb-server`). Not used in libraries.
+
+## Logging & Tracing
+
+- **tracing** — Structured, span-based instrumentation for async Rust. The standard for tokio/axum applications.
+- **tracing-subscriber** — Configures output format, filtering (`RUST_LOG`), and log levels.
+- **tower-http TraceLayer** — Axum middleware for automatic HTTP request/response tracing.
+
 ## Monorepo & Task Running
 
 - **Cargo workspace** — Manages all Rust crates as a single workspace with shared dependencies
