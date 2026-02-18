@@ -68,7 +68,7 @@ scbdb/
 | Crate | Type | Purpose |
 |---|---|---|
 | `scbdb-core` | lib | Shared domain models, error types, configuration, and common traits |
-| `scbdb-db` | lib | Database layer — connection pooling, migrations, query builders |
+| `scbdb-db` | lib | PostgreSQL layer — sqlx connection pooling, migrations, typed queries |
 | `scbdb-scraper` | lib | Shopify `products.json` collector — pagination, normalization, rate limiting |
 | `scbdb-legiscan` | lib | LegiScan API client — bill/amendment/vote ingestion |
 | `scbdb-sentiment` | lib | Market sentiment aggregation and scoring |
@@ -88,6 +88,24 @@ scbdb-server ───┬──▶ scbdb-db ────────▶ scbdb-co
 ```
 
 Both binaries depend on the same set of library crates. No library crate depends on a binary crate. `scbdb-core` is the leaf dependency with zero internal deps.
+
+## Database
+
+**PostgreSQL** is the sole persistent data store. All access goes through the `scbdb-db` crate using **sqlx** — compile-time checked SQL queries with async support and zero ORM overhead.
+
+### Key choices
+
+- **Raw SQL over ORM** — sqlx validates queries against the real database schema at compile time. No runtime query building, no magic.
+- **Connection pooling** — sqlx's built-in `PgPool` manages connections. The pool is created once at startup and shared via Axum state or passed into CLI command handlers.
+- **Migrations** — SQL files in `migrations/` managed by `sqlx migrate`. Applied via `just migrate` or automatically on server startup in development.
+
+### Schema conventions
+
+- All tables use `snake_case` names.
+- Primary keys are `id BIGINT GENERATED ALWAYS AS IDENTITY`.
+- Timestamps use `TIMESTAMPTZ` (never `TIMESTAMP`), defaulting to `NOW()`.
+- Soft deletes via `deleted_at TIMESTAMPTZ` where needed — never hard-delete user-facing data.
+- Foreign keys are always indexed.
 
 ## Backend (Rust)
 

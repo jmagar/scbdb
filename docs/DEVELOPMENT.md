@@ -390,20 +390,28 @@ just test
 
 ### Rust
 
-- `cargo fmt --all` — format all crates
-- `cargo clippy --workspace -- -D warnings` — lint with warnings as errors
+- `cargo fmt --all` — format all crates (rustfmt, zero config)
+- `cargo clippy --workspace -- -D warnings` — lint with all warnings as errors
 
 ### Frontend
 
-- `npx eslint .` — lint TypeScript/React
-- `npx prettier --check .` — format check
+- `npx eslint .` — lint TypeScript/React (ESLint 9+ flat config with `eslint-plugin-react-hooks` and `eslint-plugin-jsx-a11y`)
+- `npx prettier --check .` — format check (TypeScript, TSX, JSON, Markdown, CSS)
+- `npx prettier --write .` — auto-format all files
+
+### Type Checking
+
+Vite intentionally skips type checking for build speed. TypeScript type errors will ship silently unless `tsc` is run separately.
+
+- `cargo check --workspace` — fast Rust type checking without full compilation
+- `cd web && npx tsc --noEmit` — TypeScript type checking (must pass in CI)
 
 ### Pre-commit
 
 All checks must pass before committing. The justfile provides a single command:
 
 ```sh
-just check   # fmt + clippy + test + lint + prettier
+just check   # fmt + clippy + tsc --noEmit + test + eslint + prettier
 ```
 
 ## Commit Discipline
