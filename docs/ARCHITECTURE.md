@@ -50,8 +50,9 @@ scbdb/
 │       └── lib/
 ├── config/
 │   └── brands.yaml         # seed data — competitor shop URLs
-├── migrations/             # SQL migration files
-└── justfile                # task runner (build, dev, migrate, etc.)
+├── migrations/             # sqlx SQL migration files (append-only)
+├── justfile                # task runner (build, dev, migrate, etc.)
+└── lefthook.yml            # git hooks config (pre-commit checks)
 ```
 
 ## Workspace Layout

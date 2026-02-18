@@ -47,3 +47,25 @@
 
 - **rustfmt** — Rust formatter via `cargo fmt --all` — zero configuration, one canonical style
 - **Prettier** — Formats TypeScript, TSX, JSON, Markdown, and CSS across `web/` and root docs
+
+## Testing
+
+### Rust
+
+- **cargo test** — Built-in test runner for unit and integration tests
+- **tokio::test** — Async test runtime for anything touching sqlx, reqwest, or axum handlers
+- **wiremock** — HTTP mock server for testing Shopify/LegiScan clients without hitting real APIs
+- **sqlx::test** — `#[sqlx::test]` macro gives each test a clean, migrated PostgreSQL database — no manual setup/teardown
+
+### Frontend
+
+- **Vitest** — Test runner for all frontend unit and component tests
+- **React Testing Library** — Component behavior testing — asserts on what users see, not implementation details
+
+## Migrations
+
+- **sqlx migrate** — Built-in sqlx migration runner. Timestamped `.sql` files in `migrations/`. No separate migration tool needed.
+
+## Pre-commit
+
+- **lefthook** — Git hooks manager. Single Go binary, no runtime dependencies. Runs Rust and Node checks in parallel.

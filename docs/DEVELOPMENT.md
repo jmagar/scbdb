@@ -311,6 +311,63 @@ mod tests {
 }
 ```
 
+### Async Tests
+
+Any test touching sqlx, reqwest, or axum handlers uses `#[tokio::test]` for the async runtime.
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn fetches_products_from_shopify() {
+        let mock_server = wiremock::MockServer::start().await;
+        // ...
+    }
+}
+```
+
+### HTTP Mocking
+
+**wiremock** provides a mock HTTP server for testing the Shopify scraper and LegiScan client without hitting real APIs. Each test gets its own server instance — no shared state, no port conflicts.
+
+```rust
+use wiremock::{MockServer, Mock, ResponseTemplate};
+use wiremock::matchers::{method, path};
+
+#[tokio::test]
+async fn scraper_handles_empty_product_list() {
+    let mock = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/products.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"products": []})))
+        .mount(&mock)
+        .await;
+
+    let client = ShopifyClient::new(&mock.uri());
+    let products = client.fetch_all().await.unwrap();
+    assert!(products.is_empty());
+}
+```
+
+### Database Tests
+
+**`#[sqlx::test]`** gives each test function its own migrated PostgreSQL database. Migrations run automatically, the database is dropped after the test. No manual setup, no cleanup, no test ordering issues.
+
+```rust
+#[sqlx::test]
+async fn inserts_and_retrieves_product(pool: PgPool) {
+    let product = Product { name: "Test".into(), /* ... */ };
+    insert_product(&pool, &product).await.unwrap();
+
+    let found = get_product_by_name(&pool, "Test").await.unwrap();
+    assert_eq!(found.name, "Test");
+}
+```
+
+Requires `DATABASE_URL` set in `.env` or environment. sqlx creates temporary databases from this connection.
+
 ### Integration Tests
 
 Per-crate `tests/` directory for tests that cross module boundaries or hit external interfaces (database, HTTP).
@@ -343,6 +400,7 @@ test-utils = []
 # crates/scbdb-scraper/Cargo.toml
 [dev-dependencies]
 scbdb-core = { path = "../scbdb-core", features = ["test-utils"] }
+wiremock = "0.6"
 ```
 
 ## Frontend Testing
@@ -406,13 +464,68 @@ Vite intentionally skips type checking for build speed. TypeScript type errors w
 - `cargo check --workspace` — fast Rust type checking without full compilation
 - `cd web && npx tsc --noEmit` — TypeScript type checking (must pass in CI)
 
-### Pre-commit
+### Pre-commit (lefthook)
 
-All checks must pass before committing. The justfile provides a single command:
+**lefthook** manages git hooks. Single Go binary, no Node or Python runtime required. Runs Rust and frontend checks in parallel.
+
+Install: `brew install lefthook` (macOS) or `cargo install lefthook` or download the binary directly.
+
+```yaml
+# lefthook.yml
+pre-commit:
+  parallel: true
+  commands:
+    rust-fmt:
+      glob: "*.rs"
+      run: cargo fmt --all -- --check
+    rust-clippy:
+      glob: "*.rs"
+      run: cargo clippy --workspace -- -D warnings
+    ts-lint:
+      glob: "*.{ts,tsx}"
+      run: cd web && npx eslint .
+    ts-typecheck:
+      glob: "*.{ts,tsx}"
+      run: cd web && npx tsc --noEmit
+    prettier:
+      glob: "*.{ts,tsx,json,md,css}"
+      run: npx prettier --check .
+```
+
+After cloning the repo, run `lefthook install` to set up the hooks. This is a one-time step.
+
+The justfile also provides a manual command for running all checks without committing:
 
 ```sh
 just check   # fmt + clippy + tsc --noEmit + test + eslint + prettier
 ```
+
+## Migrations
+
+SQL migration files live in `migrations/` at the repo root. Managed by sqlx's built-in migration runner.
+
+### Commands
+
+```sh
+# create a new migration
+sqlx migrate add <name>         # creates migrations/<timestamp>_<name>.sql
+
+# apply pending migrations
+sqlx migrate run                # or: just migrate
+
+# revert last migration
+sqlx migrate revert
+
+# check migration status
+sqlx migrate info
+```
+
+### Rules
+
+- Migrations are **append-only**. Never edit a migration that has been applied to any environment.
+- Each migration file is a single `.sql` file with plain SQL. No Rust code in migrations.
+- Destructive changes (dropping columns/tables) require a two-step migration: first deprecate, then remove in a later migration.
+- `DATABASE_URL` must be set in `.env` for sqlx to connect. Format: `postgres://user:pass@localhost:5432/scbdb`
 
 ## Commit Discipline
 
