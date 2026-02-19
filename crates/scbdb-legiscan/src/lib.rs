@@ -1,18 +1,13 @@
-use thiserror::Error;
+//! `LegiScan` API client for SCBDB regulatory tracking.
+//!
+//! Provides a typed client for the [`LegiScan` API](https://legiscan.com/legiscan),
+//! along with domain-level normalization for persisting bill and event data.
 
-#[derive(Debug, Error)]
-pub enum LegiscanError {
-    #[error("http error: {0}")]
-    Http(#[from] reqwest::Error),
-}
+pub mod client;
+pub mod error;
+pub mod normalize;
+pub mod types;
 
-/// Fetch bill JSON from the given URL.
-///
-/// # Errors
-///
-/// Returns [`LegiscanError::Http`] if the HTTP request or JSON decoding fails.
-pub async fn fetch_bill_json(url: &str) -> Result<serde_json::Value, LegiscanError> {
-    let response = reqwest::get(url).await?;
-    let payload = response.json::<serde_json::Value>().await?;
-    Ok(payload)
-}
+pub use client::LegiscanClient;
+pub use error::LegiscanError;
+pub use normalize::{normalize_bill, normalize_bill_events, NormalizedBill, NormalizedBillEvent};

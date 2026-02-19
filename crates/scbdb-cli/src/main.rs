@@ -1,7 +1,11 @@
 mod collect;
+mod regs;
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
+
+use collect::CollectCommands;
+use regs::RegsCommands;
 
 #[derive(Debug, Parser)]
 #[command(name = "scbdb-cli")]
@@ -12,34 +16,17 @@ struct Cli {
 }
 
 #[derive(Debug, Subcommand)]
-pub enum CollectCommands {
-    /// Collect full product catalog and variant data from all active brands
-    Products {
-        /// Restrict collection to a specific brand (by slug)
-        #[arg(long)]
-        brand: Option<String>,
-
-        /// Preview what would be collected without writing to the database
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Capture pricing snapshots for products already in the database
-    Pricing {
-        /// Restrict snapshots to a specific brand (by slug)
-        #[arg(long)]
-        brand: Option<String>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
 enum Commands {
     /// Collect product and pricing data from Shopify storefronts
     Collect {
         #[command(subcommand)]
         command: CollectCommands,
     },
-    /// Track regulatory filings and legislative activity (Phase 3)
-    Regs,
+    /// Track regulatory filings and legislative activity
+    Regs {
+        #[command(subcommand)]
+        command: RegsCommands,
+    },
     /// Generate reports and exports (Phase 5)
     Report,
     /// Database management commands
@@ -82,10 +69,29 @@ async fn main() -> anyhow::Result<()> {
                 collect::run_collect_pricing(&pool, &config, brand.as_deref()).await?;
             }
         },
-        Some(Commands::Regs) => {
-            eprintln!("error: `regs` command is not yet implemented (Phase 3)");
-            std::process::exit(1);
-        }
+        Some(Commands::Regs { command }) => match command {
+            RegsCommands::Ingest {
+                state,
+                keyword,
+                dry_run,
+            } => {
+                let config = load_config_or_exit();
+                let pool = connect_or_exit().await;
+                regs::run_regs_ingest(&pool, &config, &state, keyword.as_deref(), dry_run).await?;
+            }
+            RegsCommands::Status { state, limit } => {
+                let pool = connect_or_exit().await;
+                regs::run_regs_status(&pool, state.as_deref(), limit).await?;
+            }
+            RegsCommands::Timeline { state, bill } => {
+                let pool = connect_or_exit().await;
+                regs::run_regs_timeline(&pool, &state, &bill).await?;
+            }
+            RegsCommands::Report { state } => {
+                let pool = connect_or_exit().await;
+                regs::run_regs_report(&pool, state.as_deref()).await?;
+            }
+        },
         Some(Commands::Report) => {
             eprintln!("error: `report` command is not yet implemented (Phase 5)");
             std::process::exit(1);
@@ -179,136 +185,4 @@ async fn connect_or_exit() -> sqlx::PgPool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_db_ping_command() {
-        let cli =
-            Cli::try_parse_from(["scbdb-cli", "db", "ping"]).expect("expected valid cli args");
-
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Db {
-                command: DbCommands::Ping
-            })
-        ));
-    }
-
-    #[test]
-    fn parses_db_migrate_command() {
-        let cli =
-            Cli::try_parse_from(["scbdb-cli", "db", "migrate"]).expect("expected valid cli args");
-
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Db {
-                command: DbCommands::Migrate
-            })
-        ));
-    }
-
-    #[test]
-    fn parses_db_seed_command() {
-        let cli =
-            Cli::try_parse_from(["scbdb-cli", "db", "seed"]).expect("expected valid cli args");
-
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Db {
-                command: DbCommands::Seed
-            })
-        ));
-    }
-
-    #[test]
-    fn no_command_is_none() {
-        let cli = Cli::try_parse_from(["scbdb-cli"]).expect("expected valid cli args");
-        assert!(cli.command.is_none());
-    }
-
-    #[test]
-    fn test_collect_products_no_filter_defaults_to_all_brands() {
-        let cli = Cli::try_parse_from(["scbdb", "collect", "products"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Collect {
-                command: CollectCommands::Products {
-                    brand: None,
-                    dry_run: false
-                }
-            })
-        ));
-    }
-
-    #[test]
-    fn test_collect_products_with_brand_filter() {
-        let cli =
-            Cli::try_parse_from(["scbdb", "collect", "products", "--brand", "high-rise"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Collect {
-                command: CollectCommands::Products {
-                    brand: Some(ref b),
-                    dry_run: false
-                }
-            }) if b == "high-rise"
-        ));
-    }
-
-    #[test]
-    fn test_collect_products_dry_run() {
-        let cli = Cli::try_parse_from(["scbdb", "collect", "products", "--dry-run"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Collect {
-                command: CollectCommands::Products { dry_run: true, .. }
-            })
-        ));
-    }
-
-    #[test]
-    fn test_collect_pricing_no_filter() {
-        let cli = Cli::try_parse_from(["scbdb", "collect", "pricing"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Collect {
-                command: CollectCommands::Pricing { brand: None }
-            })
-        ));
-    }
-
-    #[test]
-    fn test_collect_pricing_with_brand() {
-        let cli = Cli::try_parse_from(["scbdb", "collect", "pricing", "--brand", "cann"]).unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Collect {
-                command: CollectCommands::Pricing { brand: Some(ref b) }
-            }) if b == "cann"
-        ));
-    }
-
-    /// Verifies that brand + dry-run flags combine correctly when both are present.
-    #[test]
-    fn collect_products_brand_and_dry_run_together() {
-        let cli = Cli::try_parse_from([
-            "scbdb",
-            "collect",
-            "products",
-            "--brand",
-            "cann",
-            "--dry-run",
-        ])
-        .unwrap();
-        assert!(matches!(
-            cli.command,
-            Some(Commands::Collect {
-                command: CollectCommands::Products {
-                    brand: Some(ref b),
-                    dry_run: true,
-                }
-            }) if b == "cann"
-        ));
-    }
-}
+mod tests;

@@ -1861,6 +1861,7 @@ name = "scbdb-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "clap",
  "dotenvy",
  "scbdb-core",
@@ -1904,10 +1905,13 @@ dependencies = [
 name = "scbdb-legiscan"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "reqwest",
  "serde",
  "serde_json",
  "thiserror",
+ "tokio",
+ "wiremock",
 ]
 
 [[package]]

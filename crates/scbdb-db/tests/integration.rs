@@ -77,6 +77,7 @@ fn product_row_has_expected_fields() {
         name: "Hi Boy Blood Orange".to_string(),
         status: Some("active".to_string()),
         handle: None,
+        source_url: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };

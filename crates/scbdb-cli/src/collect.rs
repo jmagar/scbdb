@@ -4,6 +4,29 @@
 //! established. Per-brand failures are logged and skipped rather than
 //! propagated so a single bad brand does not abort the full run.
 
+use clap::Subcommand;
+
+/// Sub-commands available under `collect`.
+#[derive(Debug, Subcommand)]
+pub enum CollectCommands {
+    /// Collect full product catalog and variant data from all active brands
+    Products {
+        /// Restrict collection to a specific brand (by slug)
+        #[arg(long)]
+        brand: Option<String>,
+
+        /// Preview what would be collected without writing to the database
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Capture pricing snapshots for products already in the database
+    Pricing {
+        /// Restrict snapshots to a specific brand (by slug)
+        #[arg(long)]
+        brand: Option<String>,
+    },
+}
+
 fn build_shopify_client(
     config: &scbdb_core::AppConfig,
 ) -> anyhow::Result<scbdb_scraper::ShopifyClient> {

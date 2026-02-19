@@ -30,6 +30,9 @@ pub struct ProductRow {
     pub status: Option<String>,
     /// Added in Phase 2 migration; excluded from queries against initial schema.
     pub handle: Option<String>,
+    /// Added in Phase 2 migration (20260219000300); excluded from queries
+    /// against earlier schema versions.
+    pub source_url: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

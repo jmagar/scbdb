@@ -5,11 +5,13 @@
 //! (`crates/scbdb-db/`), so `"../../migrations"` resolves to the workspace
 //! migration directory.
 
+use chrono::NaiveDate;
 use scbdb_core::{NormalizedProduct, NormalizedVariant};
 use scbdb_db::{
-    complete_collection_run, create_collection_run, fail_collection_run, get_brand_by_slug,
-    get_collection_run, insert_price_snapshot_if_changed, list_active_brands, start_collection_run,
-    upsert_product, upsert_variant,
+    complete_collection_run, create_collection_run, fail_collection_run,
+    get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
+    insert_price_snapshot_if_changed, list_active_brands, list_bill_events, list_bills,
+    start_collection_run, upsert_bill, upsert_bill_event, upsert_product, upsert_variant,
 };
 
 // ---------------------------------------------------------------------------
@@ -581,4 +583,420 @@ async fn get_brand_by_slug_returns_none_when_inactive(pool: sqlx::PgPool) {
         .await
         .expect("get_brand_by_slug failed");
     assert!(result.is_none(), "expected None for inactive brand");
+}
+
+// ---------------------------------------------------------------------------
+// Section 6: Bills and Bill Events
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn bill_upsert_is_idempotent(pool: sqlx::PgPool) {
+    let id_first = upsert_bill(
+        &pool,
+        "SC",
+        "H-1234",
+        "Hemp Beverage Act",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        Some("2025-2026"),
+        None,
+    )
+    .await
+    .expect("first upsert_bill failed");
+
+    let id_second = upsert_bill(
+        &pool,
+        "SC",
+        "H-1234",
+        "Hemp Beverage Act",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        Some("2025-2026"),
+        None,
+    )
+    .await
+    .expect("second upsert_bill failed");
+
+    assert_eq!(
+        id_first, id_second,
+        "upsert must return the same id both times"
+    );
+
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM bills WHERE jurisdiction = 'SC' AND bill_number = 'H-1234'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        count, 1,
+        "exactly one bill row should exist after two upserts"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn bill_upsert_updates_status_on_conflict(pool: sqlx::PgPool) {
+    upsert_bill(
+        &pool,
+        "SC",
+        "H-2000",
+        "Test Bill",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("first upsert failed");
+
+    upsert_bill(
+        &pool,
+        "SC",
+        "H-2000",
+        "Test Bill",
+        None,
+        "passed",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("second upsert failed");
+
+    let status: String = sqlx::query_scalar(
+        "SELECT status FROM bills WHERE jurisdiction = 'SC' AND bill_number = 'H-2000'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(status, "passed", "status should be updated on conflict");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn bill_upsert_does_not_overwrite_introduced_date(pool: sqlx::PgPool) {
+    let original_date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
+
+    upsert_bill(
+        &pool,
+        "SC",
+        "H-3000",
+        "Intro Date Bill",
+        None,
+        "introduced",
+        None,
+        Some(original_date),
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("first upsert failed");
+
+    let different_date = NaiveDate::from_ymd_opt(2025, 6, 1).unwrap();
+    upsert_bill(
+        &pool,
+        "SC",
+        "H-3000",
+        "Intro Date Bill",
+        None,
+        "passed",
+        None,
+        Some(different_date),
+        None,
+        None,
+        None,
+    )
+    .await
+    .expect("second upsert failed");
+
+    let stored_date: NaiveDate = sqlx::query_scalar(
+        "SELECT introduced_date FROM bills WHERE jurisdiction = 'SC' AND bill_number = 'H-3000'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        stored_date, original_date,
+        "introduced_date should be preserved from the first insert"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn bill_event_not_duplicated_on_reingest(pool: sqlx::PgPool) {
+    let bill_id = upsert_bill(
+        &pool,
+        "SC",
+        "H-4000",
+        "Event Dedup Bill",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let event_date = NaiveDate::from_ymd_opt(2025, 3, 1);
+
+    upsert_bill_event(
+        &pool,
+        bill_id,
+        event_date,
+        Some("hearing"),
+        Some("house"),
+        "First reading",
+        None,
+    )
+    .await
+    .expect("first event insert failed");
+
+    upsert_bill_event(
+        &pool,
+        bill_id,
+        event_date,
+        Some("hearing"),
+        Some("house"),
+        "First reading",
+        None,
+    )
+    .await
+    .expect("second event insert failed");
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM bill_events WHERE bill_id = $1")
+        .bind(bill_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(count, 1, "duplicate event should not create a second row");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn bill_event_different_description_creates_new_row(pool: sqlx::PgPool) {
+    let bill_id = upsert_bill(
+        &pool,
+        "SC",
+        "H-4100",
+        "Multi Event Bill",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let event_date = NaiveDate::from_ymd_opt(2025, 3, 1);
+
+    upsert_bill_event(
+        &pool,
+        bill_id,
+        event_date,
+        Some("hearing"),
+        Some("house"),
+        "First reading",
+        None,
+    )
+    .await
+    .unwrap();
+
+    upsert_bill_event(
+        &pool,
+        bill_id,
+        event_date,
+        Some("vote"),
+        Some("house"),
+        "Passed committee",
+        None,
+    )
+    .await
+    .unwrap();
+
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM bill_events WHERE bill_id = $1")
+        .bind(bill_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        count, 2,
+        "different descriptions should create distinct rows"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_bills_filters_by_jurisdiction(pool: sqlx::PgPool) {
+    upsert_bill(
+        &pool,
+        "SC",
+        "H-5000",
+        "SC Bill",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_bill(
+        &pool,
+        "NC",
+        "S-100",
+        "NC Bill",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let sc_bills = list_bills(&pool, Some("SC"), 100).await.unwrap();
+    assert_eq!(sc_bills.len(), 1, "should return only SC bills");
+    assert_eq!(sc_bills[0].jurisdiction, "SC");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_bills_returns_all_when_no_filter(pool: sqlx::PgPool) {
+    upsert_bill(
+        &pool,
+        "SC",
+        "H-6000",
+        "SC Bill 2",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    upsert_bill(
+        &pool,
+        "NC",
+        "S-200",
+        "NC Bill 2",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let all_bills = list_bills(&pool, None, 100).await.unwrap();
+    assert_eq!(
+        all_bills.len(),
+        2,
+        "should return all bills when jurisdiction is None"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_bill_events_ordered_by_date_desc(pool: sqlx::PgPool) {
+    let bill_id = upsert_bill(
+        &pool,
+        "SC",
+        "H-7000",
+        "Ordering Bill",
+        None,
+        "introduced",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+
+    let date_jan = NaiveDate::from_ymd_opt(2025, 1, 10);
+    let date_mar = NaiveDate::from_ymd_opt(2025, 3, 15);
+    let date_feb = NaiveDate::from_ymd_opt(2025, 2, 20);
+
+    upsert_bill_event(&pool, bill_id, date_jan, None, None, "January event", None)
+        .await
+        .unwrap();
+    upsert_bill_event(&pool, bill_id, date_mar, None, None, "March event", None)
+        .await
+        .unwrap();
+    upsert_bill_event(&pool, bill_id, date_feb, None, None, "February event", None)
+        .await
+        .unwrap();
+
+    let events = list_bill_events(&pool, bill_id).await.unwrap();
+    assert_eq!(events.len(), 3);
+    assert_eq!(events[0].description, "March event");
+    assert_eq!(events[1].description, "February event");
+    assert_eq!(events[2].description, "January event");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn get_bill_by_jurisdiction_number_found(pool: sqlx::PgPool) {
+    upsert_bill(
+        &pool,
+        "GA",
+        "H-100",
+        "Georgia Hemp Act",
+        Some("Regulates hemp beverages"),
+        "introduced",
+        None,
+        None,
+        None,
+        Some("2025-2026"),
+        None,
+    )
+    .await
+    .unwrap();
+
+    let bill = get_bill_by_jurisdiction_number(&pool, "GA", "H-100")
+        .await
+        .expect("query failed")
+        .expect("expected Some(bill), got None");
+
+    assert_eq!(bill.jurisdiction, "GA");
+    assert_eq!(bill.bill_number, "H-100");
+    assert_eq!(bill.title, "Georgia Hemp Act");
+    assert_eq!(bill.summary.as_deref(), Some("Regulates hemp beverages"));
+    assert_eq!(bill.session.as_deref(), Some("2025-2026"));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn get_bill_by_jurisdiction_number_not_found(pool: sqlx::PgPool) {
+    let result = get_bill_by_jurisdiction_number(&pool, "ZZ", "X-9999")
+        .await
+        .expect("query failed");
+
+    assert!(result.is_none(), "expected None for nonexistent bill");
 }
