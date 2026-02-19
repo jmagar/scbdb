@@ -1,5 +1,11 @@
 # Technology Stack
 
+## Document Metadata
+
+- Version: 1.1
+- Status: Active
+- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+
 ## Backend
 
 - **Rust** — Primary language for backend, CLI, collectors, and data pipeline
@@ -12,7 +18,7 @@
 - **chrono** — Date/time handling for `TIMESTAMPTZ` columns, Shopify timestamps, and LegiScan dates. Has native sqlx and serde integration (`features = ["serde"]`).
 - **uuid** — UUID generation for external-facing identifiers. Sequential `BIGINT` primary keys stay internal; public API responses use UUIDs to avoid exposing row counts and ordering.
 - **tower** `RateLimitLayer` — Server-side rate limiting middleware for the Axum API. Applied globally or per-route via tower's layered middleware stack (already using tower-http for tracing).
-- **tokio-cron-scheduler** — In-process job scheduling for recurring scrape runs. Alternative: external cron/systemd timers for simpler deployments.
+- **tokio-cron-scheduler** (optional, post-MVP) — In-process job scheduling for recurring scrape runs. For MVP, external cron/systemd timers are preferred.
 
 ## Database
 
@@ -33,6 +39,12 @@
 
 - **Custom Shopify scraper** — Purpose-built HTTP client that pulls `products.json` from Shopify storefronts and normalizes the response into the internal product schema
 - **LegiScan API** — Legislative data extraction for cannabis-related bills and votes
+
+## Post-MVP Planned Components
+
+- **Spider** — fallback crawling for non-Shopify sources
+- **Qdrant** — semantic vector retrieval index
+- **TEI** — embedding generation service
 
 ## Analysis
 
@@ -103,7 +115,7 @@
 
 ## Containerization
 
-- **Docker Compose** — Local development environment. Runs PostgreSQL (and optionally pgAdmin) with a single `docker compose up`. No manual database installation required.
+- **Docker Compose** — Local development environment. Runs PostgreSQL  with a single `docker compose up`. No manual database installation required.
 - **Dockerfile** — Multi-stage build for the Rust backend: build stage compiles release binaries, runtime stage uses a minimal base image. Frontend is built separately and served as static assets.
 
 ## CI/CD

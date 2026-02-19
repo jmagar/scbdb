@@ -1,5 +1,11 @@
 # Logging & Error Handling
 
+## Document Metadata
+
+- Version: 1.1
+- Status: Active
+- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+
 ## Error Handling
 
 ### Library Crates — thiserror

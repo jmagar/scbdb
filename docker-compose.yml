@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: scbdb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-scbdb}
+      POSTGRES_USER: ${POSTGRES_USER:-scbdb}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scbdb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - scbdb_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-scbdb} -d ${POSTGRES_DB:-scbdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  scbdb_postgres_data:

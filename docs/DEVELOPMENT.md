@@ -1,5 +1,32 @@
 # Development
 
+## Document Metadata
+
+- Version: 1.1
+- Status: Active
+- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+
+## Justfile Commands
+
+The `just` command interface is the standard task runner contract for local development and CI parity. Keep this section synchronized with the implemented `justfile`.
+
+| Command | Purpose |
+|---|---|
+| `just dev` | Start local development stack (backend/frontend helpers as configured) |
+| `just build` | Build workspace artifacts |
+| `just test` | Run all tests (Rust + frontend) |
+| `just check` | Run lint, type-check, and formatting checks |
+| `just migrate` | Apply database migrations |
+| `just migrate-status` | Show migration state |
+| `just db-up` | Start PostgreSQL services via Docker Compose |
+| `just db-down` | Stop PostgreSQL services |
+| `just format` | Apply formatters (`cargo fmt`, frontend formatter) |
+| `just clean` | Remove local build artifacts |
+
+Use `just --list` to verify the canonical command list once the `justfile` is present.
+
+Current status: the command table above is implemented in the repository `justfile`.
+
 ## Module Structure
 
 All code must be small, focused modules. No monolithic files. Every module has a single responsibility.
@@ -318,7 +345,7 @@ just check   # fmt + clippy + tsc --noEmit + test + eslint + prettier
 PostgreSQL runs via Docker Compose. No local database installation required.
 
 ```sh
-# start PostgreSQL (and pgAdmin if enabled)
+# start PostgreSQL
 docker compose up -d
 
 # stop services
@@ -335,11 +362,17 @@ docker compose down -v
 Copy `.env.example` to `.env` and fill in required values:
 
 ```sh
+SCBDB_ENV=development
 DATABASE_URL=postgres://scbdb:scbdb@localhost:5432/scbdb
+SCBDB_API_KEY_HASH_SALT=<change-me>
+SCBDB_BIND_ADDR=0.0.0.0:3000
+SCBDB_LOG_LEVEL=info
+SCBDB_BRANDS_PATH=./config/brands.yaml
 LEGISCAN_API_KEY=<your-key>
 ```
 
 `dotenvy` loads `.env` automatically in both `scbdb-cli` and `scbdb-server`.
+See `CONFIG_LOADING.md` for full precedence and validation rules.
 
 ## Migrations
 

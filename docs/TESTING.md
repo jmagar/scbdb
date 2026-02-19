@@ -1,5 +1,11 @@
 # Testing
 
+## Document Metadata
+
+- Version: 1.1
+- Status: Active
+- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+
 ## TDD Workflow
 
 Strict red-green-refactor for every change. No production code is written without a failing test first.

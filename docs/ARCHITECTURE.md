@@ -1,6 +1,12 @@
 # Architecture
 
-## Repository Structure
+## Document Metadata
+
+- Version: 1.1
+- Status: Active
+- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+
+## Target Repository Structure
 
 Cargo workspace monorepo with the Vite frontend co-located at the top level.
 
@@ -49,11 +55,11 @@ scbdb/
 │       ├── components/
 │       └── lib/
 ├── config/
-│   └── brands.yaml         # seed data — competitor/portfolio brand registry (URLs, tiers, notes)
+│   └── brands.yaml         # seed data — brand registry (portfolio + competitor, URLs, tiers, notes)
 ├── migrations/             # sqlx SQL migration files (append-only)
 ├── justfile                # task runner (build, dev, migrate, etc.)
 ├── lefthook.yml            # git hooks config (pre-commit checks)
-├── docker-compose.yml      # local dev services (PostgreSQL, pgAdmin)
+├── docker-compose.yml      # local dev services (PostgreSQL)
 ├── Dockerfile              # multi-stage build for Rust backend
 └── .github/
     └── workflows/
@@ -66,7 +72,7 @@ scbdb/
 
 | Crate | Type | Purpose |
 |---|---|---|
-| `scbdb-cli` | bin | clap CLI — subcommands for scraping, brand management, legislative queries, data export |
+| `scbdb-cli` | bin | clap CLI — subcommands for scraping, brand management, legislative queries, and report export |
 | `scbdb-server` | bin | Axum HTTP server — REST API consumed by the frontend |
 
 ### Libraries
@@ -129,7 +135,7 @@ Rust binary built with **clap** for command parsing. Single entry point with sub
 
 Custom scraper that fetches `{domain}/products.json` from Shopify-powered competitor storefronts. Handles pagination, normalizes the Shopify product/variant schema into the internal product model, and persists structured data to the database.
 
-This is the primary ingestion path — most tracked brands run Shopify storefronts (see `brands.yaml` for shop URLs).
+This is the primary ingestion path — most tracked brands run Shopify storefronts (see `config/brands.yaml` for shop URLs).
 
 #### LegiScan Extraction (`scbdb-legiscan`)
 
@@ -141,8 +147,15 @@ Pipeline for aggregating and scoring market sentiment signals alongside product 
 
 > **Design TBD:** Data sources (news APIs, RSS, Reddit, social media), scoring methodology,
 > and storage schema for the sentiment pipeline are not yet defined. See
-> [MVP.md](MVP.md) Phase 4 for the open design questions that must be resolved before
-> implementation.
+> [MVP.md](MVP.md) and [phase-4-sentiment-pipeline.md](mvp_phases/phase-4-sentiment-pipeline.md) for open design items.
+
+### Post-MVP Components
+
+The following components are part of the roadmap but out of MVP scope:
+
+- Spider fallback crawler
+- Qdrant vector index
+- TEI embedding generation pipeline
 
 ## Frontend (`web/`)
 
