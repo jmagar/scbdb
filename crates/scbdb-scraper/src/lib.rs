@@ -1,13 +1,11 @@
-use thiserror::Error;
+pub mod client;
+pub mod error;
+pub mod normalize;
+pub mod pagination;
+pub mod parse;
+pub mod types;
 
-#[derive(Debug, Error)]
-pub enum ScraperError {
-    #[error("http error: {0}")]
-    Http(#[from] reqwest::Error),
-}
-
-pub async fn fetch_products_json(url: &str) -> Result<serde_json::Value, ScraperError> {
-    let response = reqwest::get(url).await?;
-    let payload = response.json::<serde_json::Value>().await?;
-    Ok(payload)
-}
+pub use client::ShopifyClient;
+pub use error::ScraperError;
+pub use normalize::normalize_product;
+pub use types::{ShopifyProduct, ShopifyProductsResponse, ShopifyVariant};

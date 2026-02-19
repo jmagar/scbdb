@@ -1,14 +1,32 @@
 name: CI
 
 on:
-  pull_request:
   push:
-    branches:
-      - main
+    branches: [main, "claude/**", "feat/**"]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  rust:
-    name: Rust Checks
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+  test:
+    name: Test
+    needs: [check]
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -16,66 +34,57 @@ jobs:
         env:
           POSTGRES_DB: scbdb
           POSTGRES_USER: scbdb
-          POSTGRES_PASSWORD: scbdb
+          POSTGRES_PASSWORD: ci_test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
         ports:
           - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U scbdb -d scbdb"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-
     env:
-      DATABASE_URL: postgres://scbdb:scbdb@localhost:5432/scbdb
-
+      POSTGRES_PASSWORD: ci_test_password
+      DATABASE_URL: postgres://scbdb:ci_test_password@localhost:5432/scbdb
+      SCBDB_API_KEY_HASH_SALT: ci_test_salt_placeholder
+      SCBDB_ENV: test
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache sqlx-cli
+        uses: actions/cache@v4
+        id: cache-sqlx
+        with:
+          path: ~/.cargo/bin/sqlx
+          key: sqlx-cli-${{ runner.os }}-v0.8
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-
-      - name: Format
-        run: cargo fmt --all -- --check
-
-      - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
-
-      - name: Test
+      - name: Install sqlx-cli
+        if: steps.cache-sqlx.outputs.cache-hit != 'true'
+        run: cargo install sqlx-cli --no-default-features --features postgres,rustls
+      - name: Run migrations
+        run: sqlx migrate run
+      - name: Run tests
         run: cargo test --workspace
 
   web:
     name: Web Checks
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
         with:
           version: 10
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-
       - name: Install
         run: pnpm install --frozen-lockfile=false
-
       - name: Typecheck
         run: pnpm --dir web typecheck
-
       - name: Lint
         run: pnpm --dir web lint
-
       - name: Prettier Check
         run: pnpm --dir web format:check
-
       - name: Vitest
         run: pnpm --dir web test

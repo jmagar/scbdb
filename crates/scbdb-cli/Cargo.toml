@@ -9,10 +9,14 @@ publish.workspace = true
 name = "scbdb-cli"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
 dotenvy.workspace = true
+sqlx.workspace = true
 scbdb-core = { path = "../scbdb-core" }
 scbdb-db = { path = "../scbdb-db" }
 scbdb-legiscan = { path = "../scbdb-legiscan" }
