@@ -1,4 +1,5 @@
 use scbdb_core::AppConfig;
+use sqlx::migrate::Migrate;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::time::Duration;
 use thiserror::Error;
@@ -91,16 +92,21 @@ pub async fn connect_pool_from_env() -> Result<PgPool, DbError> {
 ///
 /// Returns [`sqlx::migrate::MigrateError`] if any migration fails.
 pub async fn run_migrations(pool: &PgPool) -> Result<usize, sqlx::migrate::MigrateError> {
-    // Count applied migrations before running. The _sqlx_migrations table may not
-    // exist yet on a fresh database; treat absence as zero applied.
-    let applied_before = applied_migrations_count(pool).await?;
+    let applied_before = {
+        let mut conn = pool.acquire().await?;
+        conn.ensure_migrations_table().await?;
+        conn.list_applied_migrations().await?.len()
+    };
 
     MIGRATOR.run(pool).await?;
 
-    let applied_after = applied_migrations_count(pool).await?;
+    let applied_after = {
+        let mut conn = pool.acquire().await?;
+        conn.ensure_migrations_table().await?;
+        conn.list_applied_migrations().await?.len()
+    };
 
-    let delta = (applied_after - applied_before).max(0);
-    Ok(usize::try_from(delta).unwrap_or(0))
+    Ok(applied_after.saturating_sub(applied_before))
 }
 
 /// Send a `SELECT 1` to verify the pool has a live connection.
@@ -123,18 +129,6 @@ pub async fn ping(pool: &PgPool) -> Result<(), sqlx::Error> {
 pub async fn health_check(pool: &PgPool) -> Result<(), DbError> {
     ping(pool).await?;
     Ok(())
-}
-
-async fn applied_migrations_count(pool: &PgPool) -> Result<i64, sqlx::migrate::MigrateError> {
-    let query = "SELECT COUNT(*) FROM _sqlx_migrations WHERE success = true";
-    match sqlx::query_scalar::<_, i64>(query).fetch_one(pool).await {
-        Ok(count) => Ok(count),
-        Err(sqlx::Error::Database(db_err)) if db_err.code().as_deref() == Some("42P01") => {
-            // Fresh DB before first migration run: migration table does not exist yet.
-            Ok(0)
-        }
-        Err(err) => Err(sqlx::migrate::MigrateError::Execute(err)),
-    }
 }
 
 #[cfg(test)]

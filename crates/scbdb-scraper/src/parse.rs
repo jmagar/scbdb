@@ -13,7 +13,7 @@
 ///
 /// Returns `None` when no parseable pattern is found.
 #[must_use]
-pub fn parse_thc_mg(title: &str) -> Option<f64> {
+pub(crate) fn parse_thc_mg(title: &str) -> Option<f64> {
     let lower = title.to_lowercase();
     parse_mg_with_label(&lower, "thc").or_else(|| {
         // Bare "Nmg" with no CBD label: attribute to THC.
@@ -32,7 +32,7 @@ pub fn parse_thc_mg(title: &str) -> Option<f64> {
 ///
 /// Returns `None` when no parseable pattern is found.
 #[must_use]
-pub fn parse_cbd_mg(title: &str) -> Option<f64> {
+pub(crate) fn parse_cbd_mg(title: &str) -> Option<f64> {
     let lower = title.to_lowercase();
     parse_mg_with_label(&lower, "cbd")
 }
@@ -45,7 +45,7 @@ pub fn parse_cbd_mg(title: &str) -> Option<f64> {
 ///
 /// Returns `Some((value, unit))` or `None` if no size is found.
 #[must_use]
-pub fn parse_size(title: &str) -> Option<(f64, String)> {
+pub(crate) fn parse_size(title: &str) -> Option<(f64, String)> {
     let lower = title.to_lowercase();
     parse_size_unit(&lower, "oz").or_else(|| parse_size_unit(&lower, "ml"))
 }
@@ -123,13 +123,16 @@ fn all_mg_values(s: &str) -> Vec<f64> {
             }
             let num_str = &s[num_start..i];
             let after_num = i;
-            while i < len && bytes[i] == b' ' {
-                i += 1;
+            let mut scan = i;
+            while scan < len && bytes[scan] == b' ' {
+                scan += 1;
             }
-            if s[i..].starts_with("mg") {
+            if s[scan..].starts_with("mg") {
                 if let Ok(v) = num_str.parse::<f64>() {
                     values.push(v);
                 }
+                i = scan.saturating_add(2);
+                continue;
             }
             i = after_num;
         } else {

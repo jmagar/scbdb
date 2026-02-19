@@ -122,6 +122,10 @@ pub struct ShopifyVariant {
 }
 
 /// Default value for `ShopifyVariant::available` when the field is absent.
+///
+/// This cannot be a `const`: serde's `default = "...“` attribute expects a
+/// function path to call for each missing field. `true` is intentional here
+/// (we prefer optimistic availability when Shopify omits the field).
 fn default_available() -> bool {
     true
 }

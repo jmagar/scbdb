@@ -2,7 +2,7 @@ pub mod client;
 pub mod error;
 pub mod normalize;
 pub mod pagination;
-pub mod parse;
+pub(crate) mod parse;
 pub mod types;
 
 pub use client::ShopifyClient;

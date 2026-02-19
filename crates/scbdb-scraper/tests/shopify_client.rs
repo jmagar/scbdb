@@ -163,6 +163,30 @@ async fn fetch_all_products_propagates_rate_limit_error() {
     }
 }
 
+#[tokio::test]
+async fn fetch_all_products_rate_limit_without_retry_after_defaults_to_60s() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/products.json"))
+        .respond_with(ResponseTemplate::new(429))
+        .mount(&server)
+        .await;
+
+    let client = test_client();
+    let result = client.fetch_all_products(&server.uri(), 250, 0).await;
+
+    assert!(result.is_err(), "expected Err for 429 response");
+    match result.unwrap_err() {
+        ScraperError::RateLimited {
+            retry_after_secs, ..
+        } => {
+            assert_eq!(retry_after_secs, 60, "expected default Retry-After of 60s");
+        }
+        other => panic!("expected ScraperError::RateLimited, got: {other:?}"),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Test 5 – 404 not-found propagation
 // ---------------------------------------------------------------------------
@@ -185,6 +209,28 @@ async fn fetch_all_products_propagates_not_found_error() {
         matches!(result.unwrap_err(), ScraperError::NotFound { .. }),
         "expected ScraperError::NotFound"
     );
+}
+
+#[tokio::test]
+async fn fetch_all_products_propagates_unexpected_status_error_for_5xx() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/products.json"))
+        .respond_with(ResponseTemplate::new(503))
+        .mount(&server)
+        .await;
+
+    let client = test_client();
+    let result = client.fetch_all_products(&server.uri(), 250, 0).await;
+
+    assert!(result.is_err(), "expected Err for 503 response");
+    match result.unwrap_err() {
+        ScraperError::UnexpectedStatus { status, .. } => {
+            assert_eq!(status, 503);
+        }
+        other => panic!("expected ScraperError::UnexpectedStatus, got: {other:?}"),
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,193 @@
 //! established. Per-brand failures are logged and skipped rather than
 //! propagated so a single bad brand does not abort the full run.
 
+fn build_shopify_client(
+    config: &scbdb_core::AppConfig,
+) -> anyhow::Result<scbdb_scraper::ShopifyClient> {
+    scbdb_scraper::ShopifyClient::new(
+        config.scraper_request_timeout_secs,
+        &config.scraper_user_agent,
+    )
+    .map_err(|e| anyhow::anyhow!("failed to build Shopify client: {e}"))
+}
+
+async fn fail_run_best_effort(
+    pool: &sqlx::PgPool,
+    run_id: i64,
+    context: &'static str,
+    message: String,
+) {
+    if let Err(mark_err) = scbdb_db::fail_collection_run(pool, run_id, &message).await {
+        tracing::error!(
+            run_id,
+            error = %mark_err,
+            "failed to mark {context} run as failed"
+        );
+    }
+}
+
+async fn collect_brand_products(
+    pool: &sqlx::PgPool,
+    client: &scbdb_scraper::ShopifyClient,
+    config: &scbdb_core::AppConfig,
+    run_id: i64,
+    brand: &scbdb_db::BrandRow,
+) -> anyhow::Result<i32> {
+    let shop_url = brand
+        .shop_url
+        .as_deref()
+        .expect("shop_url is Some after filter");
+
+    let raw_products = match client
+        .fetch_all_products(shop_url, 250, config.scraper_inter_request_delay_ms)
+        .await
+    {
+        Ok(products) => products,
+        Err(e) => {
+            let err_string = e.to_string();
+            eprintln!(
+                "error: failed to fetch products for {}: {err_string}",
+                brand.slug
+            );
+            scbdb_db::upsert_collection_run_brand(
+                pool,
+                run_id,
+                brand.id,
+                "failed",
+                None,
+                Some(&err_string),
+            )
+            .await?;
+            return Ok(0);
+        }
+    };
+
+    let mut brand_records: i32 = 0;
+    for raw_product in raw_products {
+        let normalized = match scbdb_scraper::normalize_product(raw_product, shop_url) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(
+                    slug = %brand.slug,
+                    error = %e,
+                    "skipping product — normalization failed"
+                );
+                continue;
+            }
+        };
+
+        let product_id = scbdb_db::upsert_product(pool, brand.id, &normalized).await?;
+        for variant in &normalized.variants {
+            let variant_id = scbdb_db::upsert_variant(pool, product_id, variant).await?;
+            scbdb_db::insert_price_snapshot_if_changed(
+                pool,
+                variant_id,
+                Some(run_id),
+                &variant.price,
+                variant.compare_at_price.as_deref(),
+                &variant.currency_code,
+                variant.source_url.as_deref(),
+            )
+            .await?;
+        }
+        brand_records = brand_records.saturating_add(1);
+    }
+
+    scbdb_db::upsert_collection_run_brand(
+        pool,
+        run_id,
+        brand.id,
+        "succeeded",
+        Some(brand_records),
+        None,
+    )
+    .await?;
+    Ok(brand_records)
+}
+
+async fn collect_brand_pricing(
+    pool: &sqlx::PgPool,
+    client: &scbdb_scraper::ShopifyClient,
+    config: &scbdb_core::AppConfig,
+    run_id: i64,
+    brand: &scbdb_db::BrandRow,
+) -> anyhow::Result<(i32, i32)> {
+    let shop_url = brand
+        .shop_url
+        .as_deref()
+        .expect("shop_url is Some after filter");
+
+    let raw_products = match client
+        .fetch_all_products(shop_url, 250, config.scraper_inter_request_delay_ms)
+        .await
+    {
+        Ok(products) => products,
+        Err(e) => {
+            let err_string = e.to_string();
+            eprintln!(
+                "error: failed to fetch products for {}: {err_string}",
+                brand.slug
+            );
+            scbdb_db::upsert_collection_run_brand(
+                pool,
+                run_id,
+                brand.id,
+                "failed",
+                None,
+                Some(&err_string),
+            )
+            .await?;
+            return Ok((0, 0));
+        }
+    };
+
+    let mut brand_products: i32 = 0;
+    let mut brand_snapshots: i32 = 0;
+    for raw_product in raw_products {
+        let normalized = match scbdb_scraper::normalize_product(raw_product, shop_url) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!(
+                    slug = %brand.slug,
+                    error = %e,
+                    "skipping product — normalization failed"
+                );
+                continue;
+            }
+        };
+
+        brand_products = brand_products.saturating_add(1);
+        let product_id = scbdb_db::upsert_product(pool, brand.id, &normalized).await?;
+        for variant in &normalized.variants {
+            let variant_id = scbdb_db::upsert_variant(pool, product_id, variant).await?;
+            let inserted = scbdb_db::insert_price_snapshot_if_changed(
+                pool,
+                variant_id,
+                Some(run_id),
+                &variant.price,
+                variant.compare_at_price.as_deref(),
+                &variant.currency_code,
+                variant.source_url.as_deref(),
+            )
+            .await?;
+            if inserted {
+                brand_snapshots = brand_snapshots.saturating_add(1);
+            }
+        }
+    }
+
+    scbdb_db::upsert_collection_run_brand(
+        pool,
+        run_id,
+        brand.id,
+        "succeeded",
+        Some(brand_products),
+        None,
+    )
+    .await?;
+    Ok((brand_products, brand_snapshots))
+}
+
 /// Load the brands to process for a collect run.
 ///
 /// If `brand_filter` is `Some(slug)`, fetches that single brand and returns an
@@ -56,6 +243,10 @@ pub(crate) async fn run_collect_products(
     dry_run: bool,
 ) -> anyhow::Result<()> {
     let brands = load_brands_for_collect(pool, brand_filter).await?;
+    if brands.is_empty() {
+        println!("no eligible brands found for product collection; skipping run creation");
+        return Ok(());
+    }
 
     if dry_run {
         let slugs: Vec<&str> = brands.iter().map(|b| b.slug.as_str()).collect();
@@ -67,102 +258,39 @@ pub(crate) async fn run_collect_products(
         return Ok(());
     }
 
-    let client = scbdb_scraper::ShopifyClient::new(
-        config.scraper_request_timeout_secs,
-        &config.scraper_user_agent,
-    )
-    .map_err(|e| anyhow::anyhow!("failed to build Shopify client: {e}"))?;
+    let client = build_shopify_client(config)?;
 
     let run = scbdb_db::create_collection_run(pool, "products", "cli").await?;
     scbdb_db::start_collection_run(pool, run.id).await?;
 
-    let mut total_records: i64 = 0;
+    let mut total_records: i32 = 0;
     let brand_count = brands.len();
 
-    for brand in &brands {
-        // SAFETY: load_brands_for_collect already filtered out brands without shop_url.
-        let shop_url = brand
-            .shop_url
-            .as_deref()
-            .expect("shop_url is Some after filter");
-
-        let raw_products = match client
-            .fetch_all_products(shop_url, 250, config.scraper_inter_request_delay_ms)
-            .await
-        {
-            Ok(products) => products,
-            Err(e) => {
-                let err_string = e.to_string();
-                eprintln!(
-                    "error: failed to fetch products for {}: {err_string}",
-                    brand.slug
-                );
-                scbdb_db::upsert_collection_run_brand(
-                    pool,
-                    run.id,
-                    brand.id,
-                    "failed",
-                    None,
-                    Some(&err_string),
-                )
-                .await?;
-                continue;
-            }
-        };
-
-        let mut brand_records: i32 = 0;
-
-        for raw_product in raw_products {
-            let normalized = match scbdb_scraper::normalize_product(raw_product, shop_url) {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::warn!(
-                        slug = %brand.slug,
-                        error = %e,
-                        "skipping product — normalization failed"
-                    );
-                    continue;
-                }
-            };
-
-            let product_id = scbdb_db::upsert_product(pool, brand.id, &normalized).await?;
-
-            for variant in &normalized.variants {
-                let variant_id = scbdb_db::upsert_variant(pool, product_id, variant).await?;
-                scbdb_db::insert_price_snapshot_if_changed(
-                    pool,
-                    variant_id,
-                    Some(run.id),
-                    &variant.price,
-                    variant.compare_at_price.as_deref(),
-                    &variant.currency_code,
-                    variant.source_url.as_deref(),
-                )
-                .await?;
-            }
-
-            brand_records = brand_records.saturating_add(1);
+    let collect_result: anyhow::Result<()> = async {
+        for brand in &brands {
+            let brand_records =
+                collect_brand_products(pool, &client, config, run.id, brand).await?;
+            total_records = total_records.saturating_add(brand_records);
         }
-
-        total_records = total_records.saturating_add(i64::from(brand_records));
-
-        scbdb_db::upsert_collection_run_brand(
-            pool,
-            run.id,
-            brand.id,
-            "succeeded",
-            Some(brand_records),
-            None,
-        )
-        .await?;
+        Ok(())
     }
+    .await;
 
-    let total_i32 = i32::try_from(total_records).unwrap_or(i32::MAX);
-    scbdb_db::complete_collection_run(pool, run.id, total_i32).await?;
-
-    println!("collected {total_records} products across {brand_count} brands");
-
-    Ok(())
+    match collect_result {
+        Ok(()) => {
+            if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
+                let message = format!("{err:#}");
+                fail_run_best_effort(pool, run.id, "collection", message).await;
+                return Err(err.into());
+            }
+            println!("collected {total_records} products across {brand_count} brands");
+            Ok(())
+        }
+        Err(err) => {
+            fail_run_best_effort(pool, run.id, "collection", format!("{err:#}")).await;
+            Err(err)
+        }
+    }
 }
 
 /// Capture price snapshots for all variants already in the database.
@@ -182,102 +310,45 @@ pub(crate) async fn run_collect_pricing(
     brand_filter: Option<&str>,
 ) -> anyhow::Result<()> {
     let brands = load_brands_for_collect(pool, brand_filter).await?;
+    if brands.is_empty() {
+        println!("no eligible brands found for pricing collection; skipping run creation");
+        return Ok(());
+    }
 
-    let client = scbdb_scraper::ShopifyClient::new(
-        config.scraper_request_timeout_secs,
-        &config.scraper_user_agent,
-    )
-    .map_err(|e| anyhow::anyhow!("failed to build Shopify client: {e}"))?;
+    let client = build_shopify_client(config)?;
 
     let run = scbdb_db::create_collection_run(pool, "pricing", "cli").await?;
     scbdb_db::start_collection_run(pool, run.id).await?;
 
-    let mut total_records: i64 = 0;
+    // `records_processed` is consistently the number of products processed.
+    let mut total_records: i32 = 0;
+    let mut total_snapshots: i32 = 0;
     let brand_count = brands.len();
 
-    for brand in &brands {
-        // SAFETY: load_brands_for_collect already filtered out brands without shop_url.
-        let shop_url = brand
-            .shop_url
-            .as_deref()
-            .expect("shop_url is Some after filter");
-
-        let raw_products = match client
-            .fetch_all_products(shop_url, 250, config.scraper_inter_request_delay_ms)
-            .await
-        {
-            Ok(products) => products,
-            Err(e) => {
-                let err_string = e.to_string();
-                eprintln!(
-                    "error: failed to fetch products for {}: {err_string}",
-                    brand.slug
-                );
-                scbdb_db::upsert_collection_run_brand(
-                    pool,
-                    run.id,
-                    brand.id,
-                    "failed",
-                    None,
-                    Some(&err_string),
-                )
-                .await?;
-                continue;
-            }
-        };
-
-        let mut brand_records: i32 = 0;
-
-        for raw_product in raw_products {
-            let normalized = match scbdb_scraper::normalize_product(raw_product, shop_url) {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::warn!(
-                        slug = %brand.slug,
-                        error = %e,
-                        "skipping product — normalization failed"
-                    );
-                    continue;
-                }
-            };
-
-            let product_id = scbdb_db::upsert_product(pool, brand.id, &normalized).await?;
-
-            for variant in &normalized.variants {
-                let variant_id = scbdb_db::upsert_variant(pool, product_id, variant).await?;
-                let inserted = scbdb_db::insert_price_snapshot_if_changed(
-                    pool,
-                    variant_id,
-                    Some(run.id),
-                    &variant.price,
-                    variant.compare_at_price.as_deref(),
-                    &variant.currency_code,
-                    variant.source_url.as_deref(),
-                )
-                .await?;
-                if inserted {
-                    brand_records = brand_records.saturating_add(1);
-                }
-            }
+    let collect_result: anyhow::Result<()> = async {
+        for brand in &brands {
+            let (brand_records, brand_snapshots) =
+                collect_brand_pricing(pool, &client, config, run.id, brand).await?;
+            total_records = total_records.saturating_add(brand_records);
+            total_snapshots = total_snapshots.saturating_add(brand_snapshots);
         }
-
-        total_records = total_records.saturating_add(i64::from(brand_records));
-
-        scbdb_db::upsert_collection_run_brand(
-            pool,
-            run.id,
-            brand.id,
-            "succeeded",
-            Some(brand_records),
-            None,
-        )
-        .await?;
+        Ok(())
     }
+    .await;
 
-    let total_i32 = i32::try_from(total_records).unwrap_or(i32::MAX);
-    scbdb_db::complete_collection_run(pool, run.id, total_i32).await?;
-
-    println!("captured {total_records} price snapshots across {brand_count} brands");
-
-    Ok(())
+    match collect_result {
+        Ok(()) => {
+            if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
+                let message = format!("{err:#}");
+                fail_run_best_effort(pool, run.id, "pricing", message).await;
+                return Err(err.into());
+            }
+            println!("captured {total_snapshots} price snapshots across {brand_count} brands");
+            Ok(())
+        }
+        Err(err) => {
+            fail_run_best_effort(pool, run.id, "pricing", format!("{err:#}")).await;
+            Err(err)
+        }
+    }
 }

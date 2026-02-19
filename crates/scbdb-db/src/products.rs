@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use serde_json::json;
 use sqlx::PgPool;
 
 use crate::DbError;
@@ -76,9 +77,8 @@ pub struct PriceSnapshotRow {
 /// Upserts a product row.
 ///
 /// Conflicts on `(brand_id, source_platform, source_product_id)` update
-/// `name`, `status`, and `updated_at` in place. The `handle` column is
-/// absent from the initial schema and is therefore excluded from this
-/// operation.
+/// `name`, `description`, `status`, `product_type`, `tags`, `handle`,
+/// `metadata`, and `updated_at` in place.
 ///
 /// Returns the internal `id` of the upserted row.
 ///
@@ -90,20 +90,39 @@ pub async fn upsert_product(
     brand_id: i64,
     product: &scbdb_core::NormalizedProduct,
 ) -> Result<i64, DbError> {
+    let metadata = json!({
+        "source_url": product.source_url,
+    });
+
     let id: i64 = sqlx::query_scalar::<_, i64>(
-        "INSERT INTO products (brand_id, source_platform, source_product_id, name, status) \
-         VALUES ($1, $2, $3, $4, $5) \
+        "INSERT INTO products \
+             (brand_id, source_platform, source_product_id, name, description, status, \
+              product_type, tags, handle, source_url, metadata) \
+         VALUES ($1, $2, $3, $4, $5, $6, \
+                 $7, $8, $9, $10, $11::jsonb) \
          ON CONFLICT (brand_id, source_platform, source_product_id) DO UPDATE SET \
-             name       = EXCLUDED.name, \
-             status     = EXCLUDED.status, \
-             updated_at = NOW() \
+             name         = EXCLUDED.name, \
+             description  = EXCLUDED.description, \
+             status       = EXCLUDED.status, \
+             product_type = EXCLUDED.product_type, \
+             tags         = EXCLUDED.tags, \
+             handle       = EXCLUDED.handle, \
+             source_url   = EXCLUDED.source_url, \
+             metadata     = EXCLUDED.metadata, \
+             updated_at   = NOW() \
          RETURNING id",
     )
     .bind(brand_id)
     .bind(&product.source_platform)
     .bind(&product.source_product_id)
     .bind(&product.name)
+    .bind(&product.description)
     .bind(&product.status)
+    .bind(&product.product_type)
+    .bind(&product.tags)
+    .bind(&product.handle)
+    .bind(&product.source_url)
+    .bind(metadata)
     .fetch_one(pool)
     .await?;
 
@@ -123,9 +142,7 @@ pub async fn upsert_product(
 /// Numeric fields (`dosage_mg`, `cbd_mg`, `size_value`) are bound as `f64`
 /// and cast to fixed-scale `NUMERIC` columns (`8,2`, `8,2`, and `10,2`)
 /// by the database engine. This is a documented precision boundary where
-/// scrape-time floating values are rounded on persistence. The `is_default`
-/// column is intentionally excluded from the `DO UPDATE` set — the default
-/// variant does not change after the initial insert.
+/// scrape-time floating values are rounded on persistence.
 ///
 /// Returns the internal `id` of the upserted row.
 ///
@@ -146,6 +163,7 @@ pub async fn upsert_variant(
          ON CONFLICT (product_id, source_variant_id) DO UPDATE SET \
              sku          = EXCLUDED.sku, \
              title        = EXCLUDED.title, \
+             is_default   = EXCLUDED.is_default, \
              is_available = EXCLUDED.is_available, \
              dosage_mg    = EXCLUDED.dosage_mg, \
              cbd_mg       = EXCLUDED.cbd_mg, \
@@ -205,8 +223,9 @@ pub async fn get_last_price_snapshot(
 /// Inserts a new price snapshot only if the price differs from the last one.
 ///
 /// The comparison is done by parsing `price` into a [`Decimal`] and comparing
-/// it to the `price` column of the most recent snapshot. If the values are
-/// equal the function returns `Ok(false)` without touching the database.
+/// it to the `price` column of the most recent snapshot, plus a compare-at
+/// comparison. If both values are unchanged, the function returns `Ok(false)`
+/// without touching the database.
 ///
 /// The `price` and `compare_at_price` strings are bound as `TEXT` and cast
 /// to `NUMERIC(10,2)` inside the SQL statement so that the database engine
@@ -233,10 +252,18 @@ pub async fn insert_price_snapshot_if_changed(
 ) -> Result<bool, DbError> {
     let new_price = Decimal::from_str(price)
         .map_err(|e| sqlx::Error::Protocol(format!("invalid price string '{price}': {e}")))?;
+    let new_compare_at = compare_at_price
+        .map(Decimal::from_str)
+        .transpose()
+        .map_err(|e| {
+            sqlx::Error::Protocol(format!(
+                "invalid compare_at_price string '{compare_at_price:?}': {e}"
+            ))
+        })?;
 
-    // Short-circuit if the price has not changed since the last snapshot.
+    // Short-circuit if both price and compare-at are unchanged.
     if let Some(last) = get_last_price_snapshot(pool, variant_id).await? {
-        if last.price == new_price {
+        if last.price == new_price && last.compare_at_price == new_compare_at {
             return Ok(false);
         }
     }

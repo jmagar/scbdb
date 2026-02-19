@@ -32,7 +32,7 @@ pub struct BrandRow {
 // Queries
 // ---------------------------------------------------------------------------
 
-/// Returns all active brands (`is_active = true`), ordered by name.
+/// Returns all active, non-deleted brands, ordered by name.
 ///
 /// # Errors
 ///
@@ -42,7 +42,7 @@ pub async fn list_active_brands(pool: &PgPool) -> Result<Vec<BrandRow>, DbError>
         "SELECT id, public_id, name, slug, relationship, tier, domain, shop_url, notes, \
                 is_active, created_at, updated_at, deleted_at \
          FROM brands \
-         WHERE is_active = true \
+         WHERE is_active = true AND deleted_at IS NULL \
          ORDER BY name",
     )
     .fetch_all(pool)
@@ -51,7 +51,7 @@ pub async fn list_active_brands(pool: &PgPool) -> Result<Vec<BrandRow>, DbError>
     Ok(rows)
 }
 
-/// Returns a single brand by slug, or `None` if not found.
+/// Returns a single active, non-deleted brand by slug, or `None` if not found.
 ///
 /// # Errors
 ///
@@ -61,7 +61,7 @@ pub async fn get_brand_by_slug(pool: &PgPool, slug: &str) -> Result<Option<Brand
         "SELECT id, public_id, name, slug, relationship, tier, domain, shop_url, notes, \
                 is_active, created_at, updated_at, deleted_at \
          FROM brands \
-         WHERE slug = $1",
+         WHERE slug = $1 AND is_active = true AND deleted_at IS NULL",
     )
     .bind(slug)
     .fetch_optional(pool)

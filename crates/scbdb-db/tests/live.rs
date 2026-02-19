@@ -28,7 +28,7 @@ async fn insert_test_brand(pool: &sqlx::PgPool, slug: &str, is_active: bool) -> 
     .bind(is_active)
     .fetch_one(pool)
     .await
-    .unwrap()
+    .unwrap_or_else(|e| panic!("insert_test_brand failed for slug '{slug}': {e}"))
 }
 
 fn make_normalized_product(source_product_id: &str) -> NormalizedProduct {
@@ -217,6 +217,52 @@ async fn product_upsert_updates_name_on_conflict(pool: sqlx::PgPool) {
     assert_eq!(name, "Updated Product Name");
 }
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn product_upsert_persists_additional_fields(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "cann-extra", true).await;
+    let mut product = make_normalized_product("PROD-EXTRA-001");
+    product.description = Some("A rich description".to_string());
+    product.product_type = Some("Beverage".to_string());
+    product.tags = vec!["sparkling".to_string(), "5mg".to_string()];
+    product.handle = Some("prod-extra-001".to_string());
+    product.source_url = Some("https://example.com/products/prod-extra-001".to_string());
+
+    upsert_product(&pool, brand_id, &product)
+        .await
+        .expect("upsert_product failed");
+
+    let row = sqlx::query_as::<
+        _,
+        (
+            Option<String>,
+            Option<String>,
+            Option<Vec<String>>,
+            Option<String>,
+            Option<String>,
+        ),
+    >(
+        "SELECT description, product_type, tags, handle, source_url \
+         FROM products WHERE brand_id = $1 AND source_product_id = $2",
+    )
+    .bind(brand_id)
+    .bind("PROD-EXTRA-001")
+    .fetch_one(&pool)
+    .await
+    .expect("fetch product row failed");
+
+    assert_eq!(row.0.as_deref(), Some("A rich description"));
+    assert_eq!(row.1.as_deref(), Some("Beverage"));
+    assert_eq!(
+        row.2,
+        Some(vec!["sparkling".to_string(), "5mg".to_string()])
+    );
+    assert_eq!(row.3.as_deref(), Some("prod-extra-001"));
+    assert_eq!(
+        row.4.as_deref(),
+        Some("https://example.com/products/prod-extra-001")
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Section 3: Variant Upsert
 // ---------------------------------------------------------------------------
@@ -272,6 +318,28 @@ async fn variant_upsert_creates_and_updates(pool: sqlx::PgPool) {
         count, 1,
         "exactly one variant row should exist after two upserts"
     );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn variant_upsert_updates_is_default_on_conflict(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "hiboy-default", true).await;
+    let product = make_normalized_product("PROD-DEFAULT-001");
+    let product_id = upsert_product(&pool, brand_id, &product).await.unwrap();
+
+    let mut variant = make_normalized_variant("VAR-DEFAULT-001");
+    variant.is_default = false;
+    let variant_id = upsert_variant(&pool, product_id, &variant).await.unwrap();
+
+    variant.is_default = true;
+    upsert_variant(&pool, product_id, &variant).await.unwrap();
+
+    let is_default: bool =
+        sqlx::query_scalar("SELECT is_default FROM product_variants WHERE id = $1")
+            .bind(variant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(is_default);
 }
 
 // ---------------------------------------------------------------------------
@@ -385,6 +453,47 @@ async fn price_snapshot_inserted_when_price_changes(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn price_snapshot_inserted_when_compare_at_price_changes(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "cann-sale", true).await;
+    let product = make_normalized_product("PROD-SALE-001");
+    let product_id = upsert_product(&pool, brand_id, &product).await.unwrap();
+    let variant = make_normalized_variant("VAR-SALE-001");
+    let variant_id = upsert_variant(&pool, product_id, &variant).await.unwrap();
+    let run = create_collection_run(&pool, "pricing", "cli")
+        .await
+        .unwrap();
+
+    let inserted_first = insert_price_snapshot_if_changed(
+        &pool,
+        variant_id,
+        Some(run.id),
+        "12.99",
+        Some("14.99"),
+        "USD",
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(inserted_first);
+
+    let inserted_second = insert_price_snapshot_if_changed(
+        &pool,
+        variant_id,
+        Some(run.id),
+        "12.99",
+        None,
+        "USD",
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(
+        inserted_second,
+        "changing compare_at_price should write a new snapshot"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn price_snapshot_allows_manual_capture_without_collection_run(pool: sqlx::PgPool) {
     let brand_id = insert_test_brand(&pool, "manual-snap", true).await;
     let product = make_normalized_product("PROD-MANUAL-001");
@@ -408,7 +517,7 @@ async fn price_snapshot_allows_manual_capture_without_collection_run(pool: sqlx:
 }
 
 // ---------------------------------------------------------------------------
-// Section 5: Brands Queries (RED phase — will fail until brands module exists)
+// Section 5: Brands Queries
 // ---------------------------------------------------------------------------
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -426,6 +535,21 @@ async fn list_active_brands_returns_only_active_brands(pool: sqlx::PgPool) {
         brands.iter().all(|b| b.is_active),
         "all returned brands must have is_active=true"
     );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_active_brands_excludes_soft_deleted_rows(pool: sqlx::PgPool) {
+    insert_test_brand(&pool, "active-soft-1", true).await;
+    let deleted_id = insert_test_brand(&pool, "active-soft-2", true).await;
+    sqlx::query("UPDATE brands SET deleted_at = NOW() WHERE id = $1")
+        .bind(deleted_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let brands = list_active_brands(&pool).await.unwrap();
+    assert!(brands.iter().all(|b| b.deleted_at.is_none()));
+    assert!(!brands.iter().any(|b| b.id == deleted_id));
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -448,4 +572,13 @@ async fn get_brand_by_slug_returns_none_when_not_found(pool: sqlx::PgPool) {
         .expect("get_brand_by_slug failed");
 
     assert!(result.is_none(), "expected None for unknown slug");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn get_brand_by_slug_returns_none_when_inactive(pool: sqlx::PgPool) {
+    insert_test_brand(&pool, "inactive-slug", false).await;
+    let result = get_brand_by_slug(&pool, "inactive-slug")
+        .await
+        .expect("get_brand_by_slug failed");
+    assert!(result.is_none(), "expected None for inactive brand");
 }
