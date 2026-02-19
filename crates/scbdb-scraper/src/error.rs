@@ -29,4 +29,7 @@ pub enum ScraperError {
         source_product_id: String,
         reason: String,
     },
+
+    #[error("pagination limit reached for {shop_url}: exceeded {max_pages} pages")]
+    PaginationLimit { shop_url: String, max_pages: usize },
 }

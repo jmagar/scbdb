@@ -5,6 +5,7 @@
 
 use scbdb_core::{NormalizedProduct, NormalizedVariant};
 
+use crate::client::extract_store_origin;
 use crate::error::ScraperError;
 use crate::parse::{parse_cbd_mg, parse_size, parse_thc_mg};
 use crate::types::{ShopifyProduct, ShopifyVariant};
@@ -26,9 +27,10 @@ pub fn normalize_product(
     }
 
     let source_product_id = product.id.to_string();
+    let origin = extract_store_origin(shop_url);
     let source_url = Some(format!(
         "{}/products/{}",
-        shop_url.trim_end_matches('/'),
+        origin.trim_end_matches('/'),
         product.handle
     ));
 
@@ -52,6 +54,16 @@ pub fn normalize_product(
             normalize_variant(variant, is_default, &source_product_id)
         })
         .collect::<Result<Vec<_>, _>>()?;
+
+    let default_count = variants.iter().filter(|v| v.is_default).count();
+    if default_count != 1 {
+        tracing::warn!(
+            source_product_id = %source_product_id,
+            default_count,
+            "expected exactly 1 default variant, got {}",
+            default_count
+        );
+    }
 
     Ok(NormalizedProduct {
         source_product_id,
@@ -167,6 +179,16 @@ mod tests {
     fn normalize_product_builds_source_url() {
         let product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
         let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+        assert_eq!(
+            normalized.source_url.as_deref(),
+            Some("https://drinkhi.com/products/hi-boy-blood-orange-5mg")
+        );
+    }
+
+    #[test]
+    fn normalize_product_builds_source_url_from_collection_path() {
+        let product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
+        let normalized = normalize_product(product, "https://drinkhi.com/collections/all").unwrap();
         assert_eq!(
             normalized.source_url.as_deref(),
             Some("https://drinkhi.com/products/hi-boy-blood-orange-5mg")

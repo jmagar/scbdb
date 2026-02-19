@@ -1,7 +1,5 @@
 //! Database operations for `products`, `product_variants`, and `price_snapshots`.
 
-use std::str::FromStr;
-
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde_json::json;
@@ -46,7 +44,11 @@ pub struct VariantRow {
     pub product_id: i64,
     pub source_variant_id: String,
     pub sku: Option<String>,
-    /// Nullable in schema (`TEXT` with no `NOT NULL`).
+    /// Variant title (e.g. "12oz / 5mg THC").
+    ///
+    /// Nullable in the schema (`TEXT` without `NOT NULL`); always populated via
+    /// the scraper path through `NormalizedVariant.title`. Direct row inserts
+    /// outside the scraper (e.g. seed data, migrations) may produce `NULL`.
     pub title: Option<String>,
     pub is_default: bool,
     /// Nullable in schema (`BOOLEAN` with no `NOT NULL`).
@@ -93,9 +95,7 @@ pub async fn upsert_product(
     brand_id: i64,
     product: &scbdb_core::NormalizedProduct,
 ) -> Result<i64, DbError> {
-    let metadata = json!({
-        "source_url": product.source_url,
-    });
+    let metadata = json!({});
 
     let id: i64 = sqlx::query_scalar::<_, i64>(
         "INSERT INTO products \
@@ -197,7 +197,8 @@ pub async fn upsert_variant(
 
 /// Returns the most recent price snapshot for a variant, if one exists.
 ///
-/// Ordered by `captured_at DESC` so that the first row is always the latest.
+/// Ordered by `captured_at DESC, id DESC` so that the first row is always the
+/// latest, even when multiple snapshots share the same timestamp.
 /// Used to detect whether the price has changed before inserting a new
 /// snapshot.
 ///
@@ -213,7 +214,7 @@ pub async fn get_last_price_snapshot(
                 price, compare_at_price, source_url \
          FROM price_snapshots \
          WHERE variant_id = $1 \
-         ORDER BY captured_at DESC \
+         ORDER BY captured_at DESC, id DESC \
          LIMIT 1",
     )
     .bind(variant_id)
@@ -225,10 +226,9 @@ pub async fn get_last_price_snapshot(
 
 /// Inserts a new price snapshot only if the price differs from the last one.
 ///
-/// The comparison is done by parsing `price` into a [`Decimal`] and comparing
-/// it to the `price` column of the most recent snapshot, plus a compare-at
-/// comparison. If both values are unchanged, the function returns `Ok(false)`
-/// without touching the database.
+/// Uses an atomic CTE to SELECT the last snapshot and conditionally INSERT in
+/// a single round-trip, eliminating the TOCTOU race that existed when the
+/// check and insert were separate statements.
 ///
 /// The `price` and `compare_at_price` strings are bound as `TEXT` and cast
 /// to `NUMERIC(10,2)` inside the SQL statement so that the database engine
@@ -242,8 +242,7 @@ pub async fn get_last_price_snapshot(
 ///
 /// # Errors
 ///
-/// Returns [`DbError::Sqlx`] wrapping a protocol error if `price` cannot be
-/// parsed as a decimal number, or if any database operation fails.
+/// Returns [`DbError::Sqlx`] if the database operation fails.
 pub async fn insert_price_snapshot_if_changed(
     pool: &PgPool,
     variant_id: i64,
@@ -253,30 +252,24 @@ pub async fn insert_price_snapshot_if_changed(
     currency_code: &str,
     source_url: Option<&str>,
 ) -> Result<bool, DbError> {
-    let new_price = Decimal::from_str(price)
-        .map_err(|e| sqlx::Error::Protocol(format!("invalid price string '{price}': {e}")))?;
-    let new_compare_at = compare_at_price
-        .map(Decimal::from_str)
-        .transpose()
-        .map_err(|e| {
-            sqlx::Error::Protocol(format!(
-                "invalid compare_at_price string '{compare_at_price:?}': {e}"
-            ))
-        })?;
-
-    // Short-circuit if both price and compare-at are unchanged.
-    if let Some(last) = get_last_price_snapshot(pool, variant_id).await? {
-        if last.price == new_price && last.compare_at_price == new_compare_at {
-            return Ok(false);
-        }
-    }
-
-    sqlx::query(
-        "INSERT INTO price_snapshots \
+    let rows_affected = sqlx::query(
+        "WITH last AS ( \
+             SELECT price, compare_at_price \
+             FROM price_snapshots \
+             WHERE variant_id = $1 \
+             ORDER BY captured_at DESC, id DESC \
+             LIMIT 1 \
+         ) \
+         INSERT INTO price_snapshots \
              (variant_id, collection_run_id, captured_at, currency_code, \
               price, compare_at_price, source_url) \
-         VALUES ($1, $2, NOW(), $3, \
-                 $4::numeric(10,2), $5::numeric(10,2), $6)",
+         SELECT $1, $2, NOW(), $3, \
+                $4::numeric(10,2), $5::numeric(10,2), $6 \
+         WHERE NOT EXISTS ( \
+             SELECT 1 FROM last \
+             WHERE last.price = $4::numeric(10,2) \
+               AND last.compare_at_price IS NOT DISTINCT FROM $5::numeric(10,2) \
+         )",
     )
     .bind(variant_id)
     .bind(collection_run_id)
@@ -285,7 +278,8 @@ pub async fn insert_price_snapshot_if_changed(
     .bind(compare_at_price)
     .bind(source_url)
     .execute(pool)
-    .await?;
+    .await?
+    .rows_affected();
 
-    Ok(true)
+    Ok(rows_affected > 0)
 }

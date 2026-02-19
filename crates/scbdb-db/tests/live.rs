@@ -10,8 +10,9 @@ use scbdb_core::{NormalizedProduct, NormalizedVariant};
 use scbdb_db::{
     complete_collection_run, create_collection_run, fail_collection_run,
     get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
-    insert_price_snapshot_if_changed, list_active_brands, list_bill_events, list_bills,
-    start_collection_run, upsert_bill, upsert_bill_event, upsert_product, upsert_variant,
+    get_last_price_snapshot, insert_price_snapshot_if_changed, list_active_brands,
+    list_bill_events, list_bills, start_collection_run, upsert_bill, upsert_bill_event,
+    upsert_product, upsert_variant,
 };
 
 // ---------------------------------------------------------------------------
@@ -154,6 +155,46 @@ async fn collection_run_start_fails_for_unknown_id(pool: sqlx::PgPool) {
             ..
         }
     ));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn collection_run_cannot_fail_directly_from_queued(pool: sqlx::PgPool) {
+    let run = create_collection_run(&pool, "products", "cli")
+        .await
+        .expect("create failed");
+
+    let err = fail_collection_run(&pool, run.id, "test error")
+        .await
+        .expect_err("expected error when failing a queued run");
+
+    assert!(
+        matches!(
+            err,
+            scbdb_db::DbError::InvalidCollectionRunTransition { .. }
+        ),
+        "expected InvalidCollectionRunTransition, got {err:?}"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn collection_run_failed_sets_completed_at(pool: sqlx::PgPool) {
+    let run = create_collection_run(&pool, "products", "cli")
+        .await
+        .expect("create failed");
+    start_collection_run(&pool, run.id)
+        .await
+        .expect("start failed");
+    fail_collection_run(&pool, run.id, "test failure")
+        .await
+        .expect("fail failed");
+
+    let fetched = get_collection_run(&pool, run.id).await.expect("get failed");
+
+    assert_eq!(fetched.status, "failed");
+    assert!(
+        fetched.completed_at.is_some(),
+        "completed_at should be set after fail"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -516,6 +557,50 @@ async fn price_snapshot_allows_manual_capture_without_collection_run(pool: sqlx:
             .await
             .unwrap();
     assert!(stored_run_id.is_none());
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn price_snapshot_get_last_is_deterministic_for_same_timestamp(pool: sqlx::PgPool) {
+    // Setup: create brand, product, variant
+    let brand_id = insert_test_brand(&pool, "cann-sort", true).await;
+    let product = make_normalized_product("PROD-SORT-001");
+    let product_id = upsert_product(&pool, brand_id, &product).await.unwrap();
+    let variant = make_normalized_variant("VAR-SORT-001");
+    let variant_id = upsert_variant(&pool, product_id, &variant).await.unwrap();
+
+    // Insert two rows with the same captured_at
+    let fixed_ts = "2026-01-01 00:00:00+00";
+    let id1: i64 = sqlx::query_scalar(
+        "INSERT INTO price_snapshots (variant_id, captured_at, currency_code, price) \
+         VALUES ($1, $2::timestamptz, 'USD', '5.00') RETURNING id",
+    )
+    .bind(variant_id)
+    .bind(fixed_ts)
+    .fetch_one(&pool)
+    .await
+    .expect("insert 1 failed");
+
+    let id2: i64 = sqlx::query_scalar(
+        "INSERT INTO price_snapshots (variant_id, captured_at, currency_code, price) \
+         VALUES ($1, $2::timestamptz, 'USD', '6.00') RETURNING id",
+    )
+    .bind(variant_id)
+    .bind(fixed_ts)
+    .fetch_one(&pool)
+    .await
+    .expect("insert 2 failed");
+
+    assert!(id2 > id1, "second insert should have higher id");
+
+    let last = get_last_price_snapshot(&pool, variant_id)
+        .await
+        .expect("query failed")
+        .expect("no snapshot found");
+
+    assert_eq!(
+        last.id, id2,
+        "should return the higher-id row when timestamps match"
+    );
 }
 
 // ---------------------------------------------------------------------------

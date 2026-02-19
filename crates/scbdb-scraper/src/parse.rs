@@ -4,6 +4,10 @@
 //! dependency-light. See [`crate::normalize`] for how they compose into full
 //! product normalization.
 
+/// Maximum byte distance between a numeric value and its THC/CBD label in a variant title.
+/// Covers patterns like "12.5 mg THC" with surrounding spaces and punctuation.
+const MG_LABEL_WINDOW: usize = 20;
+
 /// Attempts to parse a THC dosage value in milligrams from a variant title.
 ///
 /// Matching rules (case-insensitive):
@@ -15,9 +19,11 @@
 #[must_use]
 pub(crate) fn parse_thc_mg(title: &str) -> Option<f64> {
     let lower = title.to_lowercase();
-    parse_mg_with_label(&lower, "thc").or_else(|| {
-        // Bare "Nmg" with no CBD label: attribute to THC.
-        if lower.contains("cbd") {
+    parse_mg_with_label(&lower, "thc", Some("cbd")).or_else(|| {
+        // Bare "Nmg" with no CBD or THC-related label: attribute to THC.
+        // Suppress if "cbd" or any "thc" substring (e.g. "thcv", "thca") is present,
+        // since the bare mg value likely belongs to the labeled compound.
+        if lower.contains("cbd") || lower.contains("thc") {
             None
         } else {
             parse_bare_mg(&lower)
@@ -34,7 +40,7 @@ pub(crate) fn parse_thc_mg(title: &str) -> Option<f64> {
 #[must_use]
 pub(crate) fn parse_cbd_mg(title: &str) -> Option<f64> {
     let lower = title.to_lowercase();
-    parse_mg_with_label(&lower, "cbd")
+    parse_mg_with_label(&lower, "cbd", Some("thc"))
 }
 
 /// Attempts to parse a volume or pack size from a variant title.
@@ -60,39 +66,78 @@ pub(crate) fn parse_size(title: &str) -> Option<(f64, String)> {
 /// Handles: `"5mg thc"`, `"5 mg thc"`, `"thc 5mg"`, `"thc 5 mg"`.
 /// Input must be pre-lowercased.
 ///
+/// `competing_label` is an optional label for a different compound (e.g., `"cbd"`
+/// when searching for `"thc"`). When an mg value in the after-slice is immediately
+/// followed by the competing label, the value is attributed to that compound
+/// instead and skipped.
+///
 /// Strategy: split the window around the label.
 /// - **Before label** (e.g., `"6mg CBD"`): collect all mg values before the
 ///   label and return the *last* one (closest to the label).
 /// - **After label** (e.g., `"CBD 6mg"`): return the first mg value after
-///   the label.
+///   the label, unless a competing label claims it.
 ///
 /// This correctly handles combined titles like `"3mg THC, 6mg CBD"` where
 /// the before-label scan finds both 3mg and 6mg but returns 6mg (last/closest).
-fn parse_mg_with_label(lower: &str, label: &str) -> Option<f64> {
-    let window = 20usize;
+fn parse_mg_with_label(lower: &str, label: &str, competing_label: Option<&str>) -> Option<f64> {
     let mut search_from = 0usize;
 
-    loop {
-        let rel_pos = lower[search_from..].find(label)?;
-        let label_pos = search_from + rel_pos;
-
-        let before_start = label_pos.saturating_sub(window);
-        let after_end = (label_pos + label.len() + window).min(lower.len());
-
-        // Last mg before the label (closest to it).
-        let before_slice = &lower[before_start..label_pos];
-        if let Some(value) = all_mg_values(before_slice).into_iter().last() {
-            return Some(value);
+    let label_pos = loop {
+        match lower[search_from..].find(label) {
+            None => return None,
+            Some(rel_pos) => {
+                let abs_pos = search_from + rel_pos;
+                let before_ok = abs_pos == 0
+                    || !lower[..abs_pos]
+                        .chars()
+                        .last()
+                        .is_some_and(char::is_alphanumeric);
+                let after_end_pos = abs_pos + label.len();
+                let after_ok = after_end_pos >= lower.len()
+                    || !lower[after_end_pos..]
+                        .chars()
+                        .next()
+                        .is_some_and(char::is_alphanumeric);
+                if before_ok && after_ok {
+                    break abs_pos;
+                }
+                search_from = abs_pos + 1;
+            }
         }
+    };
 
-        // First mg after the label.
-        let after_slice = &lower[label_pos + label.len()..after_end];
-        if let Some(value) = extract_mg_value(after_slice) {
-            return Some(value);
-        }
+    // Snap window boundaries to valid UTF-8 char boundaries.
+    let candidate_start = label_pos.saturating_sub(MG_LABEL_WINDOW);
+    let before_start = (candidate_start..=label_pos)
+        .find(|&i| lower.is_char_boundary(i))
+        .unwrap_or(label_pos);
 
-        search_from = label_pos + label.len();
+    let candidate_end = (label_pos + label.len() + MG_LABEL_WINDOW).min(lower.len());
+    let after_end = (0..=candidate_end)
+        .rev()
+        .find(|&i| lower.is_char_boundary(i))
+        .unwrap_or(lower.len());
+
+    // Last mg before the label (closest to it).
+    let before_slice = &lower[before_start..label_pos];
+    if let Some(value) = all_mg_values(before_slice).into_iter().last() {
+        return Some(value);
     }
+
+    // First mg after the label — but skip if a competing label claims the value.
+    let after_slice = &lower[label_pos + label.len()..after_end];
+    if let Some(value) = extract_mg_value(after_slice) {
+        // If a competing label (e.g., "cbd" when we're looking for "thc") appears
+        // in the after-slice and is closer to the mg value than our label, the
+        // value belongs to the competitor. Example: "thc 5mg cbd" — the 5mg is CBD's.
+        let dominated_by_competitor =
+            competing_label.is_some_and(|comp| after_slice.contains(comp));
+        if !dominated_by_competitor {
+            return Some(value);
+        }
+    }
+
+    None
 }
 
 /// Parses a bare `"Nmg"` or `"N mg"` with no label required.
@@ -222,159 +267,5 @@ fn parse_size_unit(lower: &str, unit: &str) -> Option<(f64, String)> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    // -----------------------------------------------------------------------
-    // parse_thc_mg
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn thc_mg_explicit_label_no_space() {
-        assert_eq!(parse_thc_mg("5mg THC"), Some(5.0));
-    }
-
-    #[test]
-    fn thc_mg_explicit_label_with_space() {
-        assert_eq!(parse_thc_mg("5 mg THC"), Some(5.0));
-    }
-
-    #[test]
-    fn thc_mg_label_before_value() {
-        assert_eq!(parse_thc_mg("THC 10mg"), Some(10.0));
-    }
-
-    #[test]
-    fn thc_mg_label_before_value_with_space() {
-        assert_eq!(parse_thc_mg("THC 10 mg"), Some(10.0));
-    }
-
-    #[test]
-    fn thc_mg_bare_no_label() {
-        assert_eq!(parse_thc_mg("12oz / 5mg"), Some(5.0));
-    }
-
-    #[test]
-    fn thc_mg_bare_ignored_when_cbd_present() {
-        assert_eq!(parse_thc_mg("5mg THC, 2mg CBD"), Some(5.0));
-    }
-
-    #[test]
-    fn thc_mg_case_insensitive() {
-        assert_eq!(parse_thc_mg("10MG thc"), Some(10.0));
-    }
-
-    #[test]
-    fn thc_mg_decimal_value() {
-        assert_eq!(parse_thc_mg("2.5mg THC"), Some(2.5));
-    }
-
-    #[test]
-    fn thc_mg_not_present_returns_none() {
-        assert!(parse_thc_mg("Hi Boy").is_none());
-    }
-
-    #[test]
-    fn thc_mg_default_title_returns_none() {
-        assert!(parse_thc_mg("Default Title").is_none());
-    }
-
-    #[test]
-    fn thc_mg_complex_title() {
-        assert_eq!(parse_thc_mg("12oz / 5mg THC"), Some(5.0));
-    }
-
-    // -----------------------------------------------------------------------
-    // parse_cbd_mg
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn cbd_mg_explicit_label_no_space() {
-        assert_eq!(parse_cbd_mg("2mg CBD"), Some(2.0));
-    }
-
-    #[test]
-    fn cbd_mg_explicit_label_with_space() {
-        assert_eq!(parse_cbd_mg("2 mg CBD"), Some(2.0));
-    }
-
-    #[test]
-    fn cbd_mg_label_before_value() {
-        assert_eq!(parse_cbd_mg("CBD 6mg"), Some(6.0));
-    }
-
-    #[test]
-    fn cbd_mg_decimal_value() {
-        assert_eq!(parse_cbd_mg("1.5mg CBD"), Some(1.5));
-    }
-
-    #[test]
-    fn cbd_mg_case_insensitive() {
-        assert_eq!(parse_cbd_mg("2MG cbd"), Some(2.0));
-    }
-
-    #[test]
-    fn cbd_mg_not_present_returns_none() {
-        assert!(parse_cbd_mg("12oz / 5mg THC").is_none());
-    }
-
-    #[test]
-    fn cbd_mg_bare_mg_without_label_returns_none() {
-        assert!(parse_cbd_mg("5mg").is_none());
-    }
-
-    #[test]
-    fn cbd_mg_combined_title() {
-        // "3mg THC, 6mg CBD" — must return the CBD value (6mg), not the THC value (3mg).
-        assert_eq!(parse_cbd_mg("3mg THC, 6mg CBD"), Some(6.0));
-    }
-
-    // -----------------------------------------------------------------------
-    // parse_size
-    // -----------------------------------------------------------------------
-
-    #[test]
-    fn size_oz_no_space() {
-        assert_eq!(parse_size("12oz"), Some((12.0, "oz".to_owned())));
-    }
-
-    #[test]
-    fn size_oz_with_space() {
-        assert_eq!(parse_size("12 oz"), Some((12.0, "oz".to_owned())));
-    }
-
-    #[test]
-    fn size_oz_decimal() {
-        assert_eq!(parse_size("8.5oz"), Some((8.5, "oz".to_owned())));
-    }
-
-    #[test]
-    fn size_ml_no_space() {
-        assert_eq!(parse_size("355ml"), Some((355.0, "ml".to_owned())));
-    }
-
-    #[test]
-    fn size_ml_with_space() {
-        assert_eq!(parse_size("355 ml"), Some((355.0, "ml".to_owned())));
-    }
-
-    #[test]
-    fn size_case_insensitive() {
-        assert_eq!(parse_size("12OZ"), Some((12.0, "oz".to_owned())));
-    }
-
-    #[test]
-    fn size_within_complex_title() {
-        assert_eq!(parse_size("12oz / 5mg THC"), Some((12.0, "oz".to_owned())));
-    }
-
-    #[test]
-    fn size_not_present_returns_none() {
-        assert!(parse_size("Hi Boy").is_none());
-    }
-
-    #[test]
-    fn size_default_title_returns_none() {
-        assert!(parse_size("Default Title").is_none());
-    }
-}
+#[path = "parse_test.rs"]
+mod tests;

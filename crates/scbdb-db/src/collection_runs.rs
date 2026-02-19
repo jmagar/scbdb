@@ -194,7 +194,7 @@ pub async fn list_collection_runs(
         "SELECT id, public_id, run_type, trigger_source, status, \
                 started_at, completed_at, records_processed, error_message, created_at \
          FROM collection_runs \
-         ORDER BY created_at DESC \
+         ORDER BY created_at DESC, id DESC \
          LIMIT $1",
     )
     .bind(limit)
