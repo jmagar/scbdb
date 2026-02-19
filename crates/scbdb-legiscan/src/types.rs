@@ -80,10 +80,10 @@ pub struct BillProgress {
 }
 
 // ---------------------------------------------------------------------------
-// searchRaw
+// search
 // ---------------------------------------------------------------------------
 
-/// Wrapper for the `searchRaw` response.
+/// Wrapper for the `search` response.
 #[derive(Debug, Deserialize)]
 pub struct SearchResponse {
     pub searchresult: SearchResult,

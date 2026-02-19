@@ -87,8 +87,8 @@ impl LegiscanClient {
 
     /// Searches for bills by keyword and optional state filter.
     ///
-    /// Calls the `searchRaw` endpoint. When `state` is `None`, searches all
-    /// states.
+    /// Calls the `search` endpoint (50 results/page, full bill metadata).
+    /// When `state` is `None`, searches all states.
     ///
     /// # Errors
     ///
@@ -109,7 +109,7 @@ impl LegiscanClient {
             params.push(("state", &state_upper));
         }
 
-        let url = self.build_url("searchRaw", &params);
+        let url = self.build_url("search", &params);
         let body = self.request_json(&url).await?;
         Self::check_api_error(&body)?;
 

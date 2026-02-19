@@ -89,7 +89,7 @@ async fn search_bills_returns_results() {
     });
 
     Mock::given(method("GET"))
-        .and(query_param("op", "searchRaw"))
+        .and(query_param("op", "search"))
         .and(query_param("query", "hemp"))
         .and(query_param("state", "SC"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
