@@ -1,10 +1,7 @@
+use scbdb_core::AppConfig;
 use sqlx::{postgres::PgPoolOptions, PgPool};
-use std::{env, time::Duration};
+use std::time::Duration;
 use thiserror::Error;
-
-const DEFAULT_MAX_CONNECTIONS: u32 = 10;
-const DEFAULT_MIN_CONNECTIONS: u32 = 1;
-const DEFAULT_ACQUIRE_TIMEOUT_SECS: u64 = 10;
 
 // Path relative to crates/scbdb-db/Cargo.toml; resolves to <workspace-root>/migrations/
 static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!("../../migrations");
@@ -19,23 +16,20 @@ pub struct PoolConfig {
 impl Default for PoolConfig {
     fn default() -> Self {
         Self {
-            max_connections: DEFAULT_MAX_CONNECTIONS,
-            min_connections: DEFAULT_MIN_CONNECTIONS,
-            acquire_timeout_secs: DEFAULT_ACQUIRE_TIMEOUT_SECS,
+            max_connections: 10,
+            min_connections: 1,
+            acquire_timeout_secs: 10,
         }
     }
 }
 
 impl PoolConfig {
     #[must_use]
-    pub fn from_env() -> Self {
+    pub fn from_app_config(config: &AppConfig) -> Self {
         Self {
-            max_connections: read_u32("SCBDB_DB_MAX_CONNECTIONS", DEFAULT_MAX_CONNECTIONS),
-            min_connections: read_u32("SCBDB_DB_MIN_CONNECTIONS", DEFAULT_MIN_CONNECTIONS),
-            acquire_timeout_secs: read_u64(
-                "SCBDB_DB_ACQUIRE_TIMEOUT_SECS",
-                DEFAULT_ACQUIRE_TIMEOUT_SECS,
-            ),
+            max_connections: config.db_max_connections,
+            min_connections: config.db_min_connections,
+            acquire_timeout_secs: config.db_acquire_timeout_secs,
         }
     }
 }
@@ -46,6 +40,15 @@ pub enum DbError {
     MissingDatabaseUrl,
     #[error("record not found")]
     NotFound,
+    #[error(
+        "invalid collection run state transition for id {id}: expected status '{expected_status}'"
+    )]
+    InvalidCollectionRunTransition {
+        id: i64,
+        expected_status: &'static str,
+    },
+    #[error(transparent)]
+    Config(#[from] scbdb_core::ConfigError),
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
     #[error(transparent)]
@@ -70,12 +73,12 @@ pub async fn connect_pool(database_url: &str, config: PoolConfig) -> Result<PgPo
 ///
 /// # Errors
 ///
-/// Returns [`DbError::MissingDatabaseUrl`] if `DATABASE_URL` is unset, or
+/// Returns [`DbError::Config`] if configuration is missing/invalid, or
 /// [`DbError::Sqlx`] if the connection cannot be established.
 pub async fn connect_pool_from_env() -> Result<PgPool, DbError> {
-    let database_url = env::var("DATABASE_URL").map_err(|_| DbError::MissingDatabaseUrl)?;
-    let config = PoolConfig::from_env();
-    connect_pool(&database_url, config)
+    let app_config = scbdb_core::load_app_config_from_env()?;
+    let pool_config = PoolConfig::from_app_config(&app_config);
+    connect_pool(&app_config.database_url, pool_config)
         .await
         .map_err(DbError::from)
 }
@@ -90,19 +93,11 @@ pub async fn connect_pool_from_env() -> Result<PgPool, DbError> {
 pub async fn run_migrations(pool: &PgPool) -> Result<usize, sqlx::migrate::MigrateError> {
     // Count applied migrations before running. The _sqlx_migrations table may not
     // exist yet on a fresh database; treat absence as zero applied.
-    let applied_before: i64 =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM _sqlx_migrations WHERE success = true")
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
+    let applied_before = applied_migrations_count(pool).await?;
 
     MIGRATOR.run(pool).await?;
 
-    let applied_after: i64 =
-        sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM _sqlx_migrations WHERE success = true")
-            .fetch_one(pool)
-            .await
-            .unwrap_or(0);
+    let applied_after = applied_migrations_count(pool).await?;
 
     let delta = (applied_after - applied_before).max(0);
     Ok(usize::try_from(delta).unwrap_or(0))
@@ -130,18 +125,16 @@ pub async fn health_check(pool: &PgPool) -> Result<(), DbError> {
     Ok(())
 }
 
-fn read_u32(var: &str, default: u32) -> u32 {
-    env::var(var)
-        .ok()
-        .and_then(|v| v.parse::<u32>().ok())
-        .unwrap_or(default)
-}
-
-fn read_u64(var: &str, default: u64) -> u64 {
-    env::var(var)
-        .ok()
-        .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(default)
+async fn applied_migrations_count(pool: &PgPool) -> Result<i64, sqlx::migrate::MigrateError> {
+    let query = "SELECT COUNT(*) FROM _sqlx_migrations WHERE success = true";
+    match sqlx::query_scalar::<_, i64>(query).fetch_one(pool).await {
+        Ok(count) => Ok(count),
+        Err(sqlx::Error::Database(db_err)) if db_err.code().as_deref() == Some("42P01") => {
+            // Fresh DB before first migration run: migration table does not exist yet.
+            Ok(0)
+        }
+        Err(err) => Err(sqlx::migrate::MigrateError::Execute(err)),
+    }
 }
 
 #[cfg(test)]
@@ -152,9 +145,9 @@ mod tests {
     fn pool_config_has_sane_defaults() {
         let config = PoolConfig::default();
 
-        assert_eq!(config.max_connections, DEFAULT_MAX_CONNECTIONS);
-        assert_eq!(config.min_connections, DEFAULT_MIN_CONNECTIONS);
-        assert_eq!(config.acquire_timeout_secs, DEFAULT_ACQUIRE_TIMEOUT_SECS);
+        assert_eq!(config.max_connections, 10);
+        assert_eq!(config.min_connections, 1);
+        assert_eq!(config.acquire_timeout_secs, 10);
     }
 }
 

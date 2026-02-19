@@ -107,6 +107,12 @@ fn validate_brands(brands_file: &BrandsFile) -> Result<(), ConfigError> {
         }
 
         let slug = brand.slug();
+        if slug.is_empty() {
+            return Err(ConfigError::Validation(format!(
+                "brand '{}' produces an empty slug; use at least one ASCII letter or digit",
+                brand.name
+            )));
+        }
         if !seen_slugs.insert(slug.clone()) {
             return Err(ConfigError::Validation(format!(
                 "duplicate brand slug: '{}' (from brand '{}')",
@@ -286,6 +292,22 @@ mod tests {
     }
 
     #[test]
+    fn validate_rejects_empty_slug() {
+        let brands_file = BrandsFile {
+            brands: vec![BrandConfig {
+                name: "---".to_string(),
+                relationship: Relationship::Competitor,
+                tier: 1,
+                domain: None,
+                shop_url: None,
+                notes: None,
+            }],
+        };
+        let err = validate_brands(&brands_file).unwrap_err();
+        assert!(err.to_string().contains("empty slug"));
+    }
+
+    #[test]
     fn load_brands_from_real_file() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
@@ -300,6 +322,23 @@ mod tests {
         assert!(result.is_ok(), "failed to load brands.yaml: {result:?}");
         let brands_file = result.unwrap();
         assert!(!brands_file.brands.is_empty());
+        let high_rise = brands_file
+            .brands
+            .iter()
+            .find(|b| b.name == "High Rise")
+            .expect("expected High Rise in brands.yaml");
+        assert_eq!(high_rise.tier, 2);
+        assert_eq!(high_rise.relationship, Relationship::Portfolio);
+        assert_eq!(high_rise.slug(), "high-rise");
+
+        let cann = brands_file
+            .brands
+            .iter()
+            .find(|b| b.name == "Cann")
+            .expect("expected Cann in brands.yaml");
+        assert_eq!(cann.tier, 1);
+        assert_eq!(cann.relationship, Relationship::Competitor);
+        assert_eq!(cann.slug(), "cann");
     }
 
     #[test]

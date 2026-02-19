@@ -121,6 +121,39 @@ async fn collection_run_lifecycle_queued_to_failed(pool: sqlx::PgPool) {
     assert_eq!(fetched.error_message.as_deref(), Some("network error"));
 }
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn collection_run_cannot_complete_directly_from_queued(pool: sqlx::PgPool) {
+    let run = create_collection_run(&pool, "products", "cli")
+        .await
+        .expect("create_collection_run failed");
+
+    let err = complete_collection_run(&pool, run.id, 1)
+        .await
+        .expect_err("completing a queued run should fail");
+
+    assert!(matches!(
+        err,
+        scbdb_db::DbError::InvalidCollectionRunTransition {
+            expected_status: "running",
+            ..
+        }
+    ));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn collection_run_start_fails_for_unknown_id(pool: sqlx::PgPool) {
+    let err = start_collection_run(&pool, 999_999)
+        .await
+        .expect_err("starting an unknown run should fail");
+    assert!(matches!(
+        err,
+        scbdb_db::DbError::InvalidCollectionRunTransition {
+            expected_status: "queued",
+            ..
+        }
+    ));
+}
+
 // ---------------------------------------------------------------------------
 // Section 2: Product Upsert Idempotency
 // ---------------------------------------------------------------------------
@@ -256,16 +289,30 @@ async fn price_snapshot_not_inserted_when_price_unchanged(pool: sqlx::PgPool) {
         .await
         .unwrap();
 
-    let inserted_first =
-        insert_price_snapshot_if_changed(&pool, variant_id, run.id, "12.99", None, "USD", None)
-            .await
-            .expect("first insert failed");
+    let inserted_first = insert_price_snapshot_if_changed(
+        &pool,
+        variant_id,
+        Some(run.id),
+        "12.99",
+        None,
+        "USD",
+        None,
+    )
+    .await
+    .expect("first insert failed");
     assert!(inserted_first, "first snapshot should be inserted");
 
-    let inserted_second =
-        insert_price_snapshot_if_changed(&pool, variant_id, run.id, "12.99", None, "USD", None)
-            .await
-            .expect("second insert failed");
+    let inserted_second = insert_price_snapshot_if_changed(
+        &pool,
+        variant_id,
+        Some(run.id),
+        "12.99",
+        None,
+        "USD",
+        None,
+    )
+    .await
+    .expect("second insert failed");
     assert!(
         !inserted_second,
         "same price should NOT insert a second snapshot"
@@ -295,16 +342,30 @@ async fn price_snapshot_inserted_when_price_changes(pool: sqlx::PgPool) {
         .await
         .unwrap();
 
-    let inserted_first =
-        insert_price_snapshot_if_changed(&pool, variant_id, run.id, "12.99", None, "USD", None)
-            .await
-            .unwrap();
+    let inserted_first = insert_price_snapshot_if_changed(
+        &pool,
+        variant_id,
+        Some(run.id),
+        "12.99",
+        None,
+        "USD",
+        None,
+    )
+    .await
+    .unwrap();
     assert!(inserted_first);
 
-    let inserted_second =
-        insert_price_snapshot_if_changed(&pool, variant_id, run.id, "14.99", None, "USD", None)
-            .await
-            .unwrap();
+    let inserted_second = insert_price_snapshot_if_changed(
+        &pool,
+        variant_id,
+        Some(run.id),
+        "14.99",
+        None,
+        "USD",
+        None,
+    )
+    .await
+    .unwrap();
     assert!(
         inserted_second,
         "changed price SHOULD insert a new snapshot"
@@ -321,6 +382,29 @@ async fn price_snapshot_inserted_when_price_changes(pool: sqlx::PgPool) {
         count, 2,
         "two snapshots should exist after two different-price inserts"
     );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn price_snapshot_allows_manual_capture_without_collection_run(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "manual-snap", true).await;
+    let product = make_normalized_product("PROD-MANUAL-001");
+    let product_id = upsert_product(&pool, brand_id, &product).await.unwrap();
+    let variant = make_normalized_variant("VAR-MANUAL-001");
+    let variant_id = upsert_variant(&pool, product_id, &variant).await.unwrap();
+
+    let inserted =
+        insert_price_snapshot_if_changed(&pool, variant_id, None, "12.99", None, "USD", None)
+            .await
+            .expect("manual insert failed");
+    assert!(inserted);
+
+    let stored_run_id: Option<i64> =
+        sqlx::query_scalar("SELECT collection_run_id FROM price_snapshots WHERE variant_id = $1")
+            .bind(variant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(stored_run_id.is_none());
 }
 
 // ---------------------------------------------------------------------------

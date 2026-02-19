@@ -11,7 +11,16 @@ bootstrap:
     @echo "Starting database..."
     just db-up
     @echo "Waiting for postgres to be ready..."
-    @until docker inspect --format='{{{{.State.Health.Status}}}}' scbdb-postgres 2>/dev/null | grep -q "healthy"; do sleep 1; done
+    @status=""; \
+    for i in $$(seq 1 60); do \
+      status="$$(docker inspect --format='{{{{.State.Health.Status}}}}' scbdb-postgres 2>/dev/null || true)"; \
+      if [ "$$status" = "healthy" ]; then break; fi; \
+      sleep 1; \
+    done; \
+    if [ "$$status" != "healthy" ]; then \
+      echo "error: postgres did not become healthy within 60s (last status: $$status)"; \
+      exit 1; \
+    fi
     @echo "Running migrations..."
     just migrate
     @echo "Verifying database health..."

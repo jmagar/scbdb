@@ -31,6 +31,7 @@ pub async fn seed_brands(pool: &PgPool, brands: &[BrandConfig]) -> Result<usize,
                  domain = EXCLUDED.domain, \
                  shop_url = EXCLUDED.shop_url, \
                  notes = EXCLUDED.notes, \
+                 is_active = EXCLUDED.is_active, \
                  updated_at = NOW()",
         )
         .bind(&brand.name)

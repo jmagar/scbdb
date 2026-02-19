@@ -132,7 +132,7 @@ pub(crate) async fn run_collect_products(
                 scbdb_db::insert_price_snapshot_if_changed(
                     pool,
                     variant_id,
-                    run.id,
+                    Some(run.id),
                     &variant.price,
                     variant.compare_at_price.as_deref(),
                     &variant.currency_code,
@@ -248,7 +248,7 @@ pub(crate) async fn run_collect_pricing(
                 let inserted = scbdb_db::insert_price_snapshot_if_changed(
                     pool,
                     variant_id,
-                    run.id,
+                    Some(run.id),
                     &variant.price,
                     variant.compare_at_price.as_deref(),
                     &variant.currency_code,

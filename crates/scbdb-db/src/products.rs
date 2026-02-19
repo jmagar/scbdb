@@ -121,10 +121,11 @@ pub async fn upsert_product(
 /// `updated_at` in place.
 ///
 /// Numeric fields (`dosage_mg`, `cbd_mg`, `size_value`) are bound as `f64`
-/// and cast to `NUMERIC` by the database engine via an inline `::numeric`
-/// cast in the SQL. The `is_default` column is intentionally excluded from
-/// the `DO UPDATE` set — the default variant does not change after the initial
-/// insert.
+/// and cast to fixed-scale `NUMERIC` columns (`8,2`, `8,2`, and `10,2`)
+/// by the database engine. This is a documented precision boundary where
+/// scrape-time floating values are rounded on persistence. The `is_default`
+/// column is intentionally excluded from the `DO UPDATE` set — the default
+/// variant does not change after the initial insert.
 ///
 /// Returns the internal `id` of the upserted row.
 ///
@@ -214,6 +215,9 @@ pub async fn get_last_price_snapshot(
 /// Returns `true` if a new snapshot was inserted, `false` if the price was
 /// unchanged.
 ///
+/// `collection_run_id` is optional to support ad-hoc/manual snapshot capture
+/// outside an orchestrated collection run.
+///
 /// # Errors
 ///
 /// Returns [`DbError::Sqlx`] wrapping a protocol error if `price` cannot be
@@ -221,7 +225,7 @@ pub async fn get_last_price_snapshot(
 pub async fn insert_price_snapshot_if_changed(
     pool: &PgPool,
     variant_id: i64,
-    collection_run_id: i64,
+    collection_run_id: Option<i64>,
     price: &str,
     compare_at_price: Option<&str>,
     currency_code: &str,

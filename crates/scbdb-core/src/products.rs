@@ -65,10 +65,18 @@ pub struct NormalizedVariant {
     /// `true` for the Shopify position-1 variant (the storefront default).
     pub is_default: bool,
     /// THC dose in milligrams, parsed from the variant title (e.g. `"5mg"` → `5.0`).
+    ///
+    /// Boundary note: this is a scrape-time `f64` convenience type. Persistence
+    /// converts to `NUMERIC(8,2)` in the DB layer, so values are rounded to two
+    /// decimal places at write time.
     pub dosage_mg: Option<f64>,
     /// CBD dose in milligrams, parsed from the variant title (e.g. `"2mg CBD"` → `2.0`).
+    ///
+    /// Boundary note: converted to `NUMERIC(8,2)` when persisted.
     pub cbd_mg: Option<f64>,
     /// Numeric container size, parsed from the variant title (e.g. `"12oz"` → `12.0`).
+    ///
+    /// Boundary note: converted to `NUMERIC(10,2)` when persisted.
     pub size_value: Option<f64>,
     /// Unit for `size_value`, parsed from the variant title (e.g. `"oz"`).
     pub size_unit: Option<String>,

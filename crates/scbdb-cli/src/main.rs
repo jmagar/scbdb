@@ -1,6 +1,7 @@
 mod collect;
 
 use clap::{Parser, Subcommand};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
 #[command(name = "scbdb-cli")]
@@ -61,7 +62,11 @@ enum DbCommands {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt::init();
+    let env_filter = EnvFilter::try_from_default_env().or_else(|_| {
+        let level = std::env::var("SCBDB_LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+        EnvFilter::try_new(level)
+    })?;
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
     let cli = Cli::parse();
     match cli.command {
@@ -120,11 +125,7 @@ async fn run_db_seed() -> anyhow::Result<()> {
         eprintln!("error: failed to load brands config: {e}");
         std::process::exit(1);
     });
-    let pool_config = scbdb_db::PoolConfig {
-        max_connections: config.db_max_connections,
-        min_connections: config.db_min_connections,
-        acquire_timeout_secs: config.db_acquire_timeout_secs,
-    };
+    let pool_config = scbdb_db::PoolConfig::from_app_config(&config);
     let pool = scbdb_db::connect_pool(&config.database_url, pool_config)
         .await
         .unwrap_or_else(|e| {
@@ -162,6 +163,15 @@ async fn connect_or_exit() -> sqlx::PgPool {
             }
             scbdb_db::DbError::NotFound => {
                 eprintln!("error: unexpected not-found during connect");
+            }
+            scbdb_db::DbError::Config(cfg_err) => {
+                eprintln!("error: invalid configuration: {cfg_err}");
+                eprintln!("hint: copy .env.example to .env and fill required values");
+            }
+            scbdb_db::DbError::InvalidCollectionRunTransition { id, expected_status } => {
+                eprintln!(
+                    "error: unexpected collection run state for id {id}: expected '{expected_status}'"
+                );
             }
         }
         std::process::exit(1);

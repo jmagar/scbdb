@@ -1896,7 +1896,6 @@ dependencies = [
  "scbdb-core",
  "sqlx",
  "thiserror",
- "tracing",
  "uuid",
 ]
 

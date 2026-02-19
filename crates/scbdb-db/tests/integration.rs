@@ -1,18 +1,36 @@
 //! Offline unit tests for scbdb-db pool configuration and row types.
 //! These tests do not require a live database connection.
 
+use scbdb_core::{AppConfig, Environment};
 use scbdb_db::{CollectionRunRow, PoolConfig, ProductRow};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 
 #[test]
-fn pool_config_from_env_uses_defaults_when_vars_unset() {
-    // When SCBDB_DB_* env vars are absent, from_env() must return the same
-    // values as default(). The SCBDB_DB_* vars are never set by CI or the
-    // test harness, so these assertions are unconditional.
-    let from_env = PoolConfig::from_env();
-    let default = PoolConfig::default();
-    assert_eq!(from_env.max_connections, default.max_connections);
-    assert_eq!(from_env.min_connections, default.min_connections);
-    assert_eq!(from_env.acquire_timeout_secs, default.acquire_timeout_secs);
+fn pool_config_from_app_config_uses_core_values() {
+    let app_config = AppConfig {
+        database_url: "postgres://example".to_string(),
+        env: Environment::Test,
+        bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3000),
+        log_level: "info".to_string(),
+        brands_path: PathBuf::from("./config/brands.yaml"),
+        api_key_hash_salt: "salt".to_string(),
+        legiscan_api_key: None,
+        db_max_connections: 42,
+        db_min_connections: 7,
+        db_acquire_timeout_secs: 9,
+        scraper_request_timeout_secs: 30,
+        scraper_user_agent: "ua".to_string(),
+        scraper_max_concurrent_brands: 1,
+        scraper_inter_request_delay_ms: 250,
+        scraper_max_retries: 3,
+        scraper_retry_backoff_base_secs: 5,
+    };
+
+    let pool_config = PoolConfig::from_app_config(&app_config);
+    assert_eq!(pool_config.max_connections, 42);
+    assert_eq!(pool_config.min_connections, 7);
+    assert_eq!(pool_config.acquire_timeout_secs, 9);
 }
 
 /// Compile-time smoke test: confirm that [`CollectionRunRow`] has all expected

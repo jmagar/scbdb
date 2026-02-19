@@ -7,9 +7,9 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::Serialize;
 use sqlx::PgPool;
-use std::net::SocketAddr;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
+use tracing_subscriber::EnvFilter;
 
 use crate::middleware::{request_id, RequestId};
 
@@ -74,7 +74,7 @@ impl axum::response::IntoResponse for ApiError {
         let status = match self.error.code.as_str() {
             "not_found" => axum::http::StatusCode::NOT_FOUND,
             "unauthorized" => axum::http::StatusCode::UNAUTHORIZED,
-            "bad_request" => axum::http::StatusCode::BAD_REQUEST,
+            "bad_request" | "validation_error" => axum::http::StatusCode::BAD_REQUEST,
             _ => axum::http::StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()
@@ -133,18 +133,20 @@ async fn health(
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
-    tracing_subscriber::fmt::init();
+    let config = scbdb_core::load_app_config()?;
+    let env_filter = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new(config.log_level.clone()))?;
+    tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
-    let pool = scbdb_db::connect_pool_from_env().await?;
+    let pool_config = scbdb_db::PoolConfig::from_app_config(&config);
+    let pool = scbdb_db::connect_pool(&config.database_url, pool_config).await?;
     scbdb_db::run_migrations(&pool).await?;
 
     let _scheduler = scheduler::build_scheduler().await?;
 
     let app = build_app(AppState { pool });
 
-    let bind_addr = std::env::var("SCBDB_BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:3000".to_string());
-    let addr: SocketAddr = bind_addr.parse()?;
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    let listener = tokio::net::TcpListener::bind(config.bind_addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
 }
@@ -209,5 +211,11 @@ mod tests {
         assert_eq!(json["error"]["code"], "validation_error");
         assert_eq!(json["error"]["message"], "invalid input");
         assert_eq!(json["meta"]["request_id"], "err-id-456");
+    }
+
+    #[test]
+    fn api_error_validation_error_maps_to_bad_request() {
+        let response = ApiError::new("req-1", "validation_error", "invalid input").into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     }
 }

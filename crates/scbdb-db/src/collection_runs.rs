@@ -81,14 +81,21 @@ pub async fn create_collection_run(
 ///
 /// Returns [`DbError::Sqlx`] if the update fails.
 pub async fn start_collection_run(pool: &PgPool, id: i64) -> Result<(), DbError> {
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE collection_runs \
          SET status = 'running', started_at = NOW() \
-         WHERE id = $1",
+         WHERE id = $1 AND status = 'queued'",
     )
     .bind(id)
     .execute(pool)
     .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(DbError::InvalidCollectionRunTransition {
+            id,
+            expected_status: "queued",
+        });
+    }
 
     Ok(())
 }
@@ -103,15 +110,22 @@ pub async fn complete_collection_run(
     id: i64,
     records_processed: i32,
 ) -> Result<(), DbError> {
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE collection_runs \
          SET status = 'succeeded', completed_at = NOW(), records_processed = $1 \
-         WHERE id = $2",
+         WHERE id = $2 AND status = 'running'",
     )
     .bind(records_processed)
     .bind(id)
     .execute(pool)
     .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(DbError::InvalidCollectionRunTransition {
+            id,
+            expected_status: "running",
+        });
+    }
 
     Ok(())
 }
@@ -126,15 +140,22 @@ pub async fn fail_collection_run(
     id: i64,
     error_message: &str,
 ) -> Result<(), DbError> {
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE collection_runs \
          SET status = 'failed', completed_at = NOW(), error_message = $1 \
-         WHERE id = $2",
+         WHERE id = $2 AND status = 'running'",
     )
     .bind(error_message)
     .bind(id)
     .execute(pool)
     .await?;
+
+    if result.rows_affected() == 0 {
+        return Err(DbError::InvalidCollectionRunTransition {
+            id,
+            expected_status: "running",
+        });
+    }
 
     Ok(())
 }
