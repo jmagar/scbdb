@@ -10,6 +10,7 @@ use std::future::Future;
 use std::pin::Pin;
 
 use clap::Subcommand;
+use futures::stream::{self, StreamExt};
 
 use crate::fail_run_best_effort;
 
@@ -122,15 +123,26 @@ where
     let mut failed_brands: usize = 0;
     let brand_count = brands.len();
 
-    for b in brands {
-        match process_brand(pool, &client, config, run.id, b).await {
+    let max_concurrent = config.scraper_max_concurrent_brands.max(1);
+
+    let results: Vec<(&scbdb_db::BrandRow, BrandOutcome)> = stream::iter(brands)
+        .map(|b| {
+            let fut = process_brand(pool, &client, config, run.id, b);
+            async move { (b, fut.await) }
+        })
+        .buffer_unordered(max_concurrent)
+        .collect()
+        .await;
+
+    for (b, outcome) in &results {
+        match outcome {
             BrandOutcome::Ok {
                 records,
                 extra,
                 succeeded,
             } => {
-                total_records = total_records.saturating_add(records);
-                total_extra = total_extra.saturating_add(extra);
+                total_records = total_records.saturating_add(*records);
+                total_extra = total_extra.saturating_add(*extra);
                 if !succeeded {
                     failed_brands += 1;
                 }

@@ -20,6 +20,8 @@ pub struct NormalizedProduct {
     pub status: String,
     /// Canonical storefront URL, e.g. `"https://drinkhi.com/products/hi-boy-blood-orange-5mg"`.
     pub source_url: Option<String>,
+    /// Vendor / brand name as configured in Shopify (e.g., `"CANN"`).
+    pub vendor: Option<String>,
     pub variants: Vec<NormalizedVariant>,
 }
 
@@ -115,6 +117,7 @@ mod tests {
             handle: Some("hi-boy-blood-orange-5mg".to_string()),
             status: "active".to_string(),
             source_url: Some("https://drinkhi.com/products/hi-boy-blood-orange-5mg".to_string()),
+            vendor: None,
             variants,
         }
     }

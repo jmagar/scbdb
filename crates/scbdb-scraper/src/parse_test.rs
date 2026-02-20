@@ -184,3 +184,33 @@ fn thc_mg_label_before_value_cbd_precedes_value_suppressed() {
     // "THC CBD 5mg" — CBD appears *before* the value; the 5mg belongs to CBD, not THC.
     assert!(parse_thc_mg("THC CBD 5mg").is_none());
 }
+
+// -----------------------------------------------------------------------
+// parse_dosage_from_html
+// -----------------------------------------------------------------------
+
+#[test]
+fn html_dosage_finds_thc_in_brez_style() {
+    assert_eq!(
+        parse_dosage_from_html("<p>3mg micronized THC, 6mg CBD per can</p>"),
+        Some(3.0)
+    );
+}
+
+#[test]
+fn html_dosage_returns_none_for_empty() {
+    assert_eq!(parse_dosage_from_html(""), None);
+}
+
+#[test]
+fn html_dosage_strips_tags_correctly() {
+    assert_eq!(
+        parse_dosage_from_html("<strong>5mg</strong> THC"),
+        Some(5.0)
+    );
+}
+
+#[test]
+fn html_dosage_returns_none_when_no_mg() {
+    assert_eq!(parse_dosage_from_html("<p>A refreshing beverage</p>"), None);
+}

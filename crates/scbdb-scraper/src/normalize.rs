@@ -7,7 +7,7 @@ use scbdb_core::{NormalizedProduct, NormalizedVariant};
 
 use crate::client::extract_store_origin;
 use crate::error::ScraperError;
-use crate::parse::{parse_cbd_mg, parse_size, parse_thc_mg};
+use crate::parse::{parse_cbd_mg, parse_dosage_from_html, parse_size, parse_thc_mg};
 use crate::types::{ShopifyProduct, ShopifyVariant};
 
 /// Normalizes a raw [`ShopifyProduct`] into a [`NormalizedProduct`].
@@ -37,6 +37,13 @@ pub fn normalize_product(
     // Normalize product_type: treat empty string as absent.
     let product_type = product.product_type.filter(|s| !s.is_empty());
 
+    // Best-effort dosage fallback from body_html for brands where variant
+    // titles lack mg values (e.g., BREZ: "3mg micronized THC, 6mg CBD").
+    let html_dosage_fallback: Option<f64> = product
+        .body_html
+        .as_deref()
+        .and_then(parse_dosage_from_html);
+
     // The position-1 variant is the storefront default. If no position data
     // exists, or if position data exists but no variant claims position 1
     // (e.g., a variant was deleted), fall back to the first variant by index.
@@ -54,7 +61,12 @@ pub fn normalize_product(
             } else {
                 idx == 0
             };
-            normalize_variant(variant, is_default, &source_product_id)
+            normalize_variant(
+                variant,
+                is_default,
+                &source_product_id,
+                html_dosage_fallback,
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -78,6 +90,7 @@ pub fn normalize_product(
         handle: Some(product.handle),
         status: product.status.unwrap_or_else(|| "active".to_string()),
         source_url,
+        vendor: product.vendor,
         variants,
     })
 }
@@ -91,6 +104,7 @@ fn normalize_variant(
     variant: ShopifyVariant,
     is_default: bool,
     source_product_id: &str,
+    html_dosage_fallback: Option<f64>,
 ) -> Result<NormalizedVariant, ScraperError> {
     // Validate price is non-empty and parseable as a numeric value.
     // Shopify always sets this field, but guard defensively — a malformed
@@ -112,7 +126,8 @@ fn normalize_variant(
     }
 
     // Parse dosage and size from the title before moving it into the struct.
-    let dosage_mg = parse_thc_mg(&variant.title);
+    // Fall back to HTML body dosage when the variant title has no mg value.
+    let dosage_mg = parse_thc_mg(&variant.title).or(html_dosage_fallback);
     let cbd_mg = parse_cbd_mg(&variant.title);
     let (size_value, size_unit) = parse_size(&variant.title).unzip();
 

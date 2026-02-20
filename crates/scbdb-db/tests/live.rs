@@ -45,6 +45,7 @@ fn make_normalized_product(source_product_id: &str) -> NormalizedProduct {
         handle: Some("test-product".to_string()),
         status: "active".to_string(),
         source_url: None,
+        vendor: None,
         variants: vec![make_normalized_variant("VAR-001")],
     }
 }

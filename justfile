@@ -33,6 +33,22 @@ bootstrap:
 seed:
     cargo run --bin scbdb-cli -- db seed
 
+# Collect full product catalog from all brands
+collect-products:
+    cargo run --bin scbdb-cli -- collect products
+
+# Collect product catalog for a single brand (usage: just collect-brand <slug>)
+collect-brand brand:
+    cargo run --bin scbdb-cli -- collect products --brand {{brand}}
+
+# Capture price snapshots for all brands
+collect-pricing:
+    cargo run --bin scbdb-cli -- collect pricing
+
+# Dry-run product collection (preview only, no DB writes)
+collect-dry:
+    cargo run --bin scbdb-cli -- collect products --dry-run
+
 dev:
     @echo "Starting local dependencies..."
     docker compose up -d postgres

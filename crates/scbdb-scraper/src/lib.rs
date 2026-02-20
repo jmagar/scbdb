@@ -3,6 +3,7 @@ pub mod error;
 pub mod normalize;
 pub mod pagination;
 pub(crate) mod parse;
+pub(crate) mod parse_helpers;
 pub(crate) mod rate_limit;
 pub mod types;
 

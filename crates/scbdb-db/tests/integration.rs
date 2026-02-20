@@ -78,6 +78,7 @@ fn product_row_has_expected_fields() {
         status: Some("active".to_string()),
         handle: None,
         source_url: None,
+        vendor: None,
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
