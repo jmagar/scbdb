@@ -53,20 +53,23 @@ brands:
   - name: Uncle Arnie's
     relationship: competitor
     tier: 1
-    domain: drinkunclearnies.com
-    shop_url: https://drinkunclearnies.com/collections/all
+    domain: unclearnies.com
+    shop_url: https://unclearnies.com
     notes: >
       High-dose leader. #1 cannabis beverage in IL dispensaries. $7.5M
       Series A, Boston Beer Co. founder on board. 100% YoY growth.
+      drinkunclearnies.com is defunct; store lives at unclearnies.com.
 
   - name: Keef Brands
     relationship: competitor
     tier: 1
     domain: keefbrands.com
-    shop_url: https://keefbrands.com/collections/all
+    shop_url: null
     notes: >
       Dispensary + hemp dual play. 70+ SKUs, 14 states. Deploys branded
       retail fridges. $18.9M sales Jan–Aug 2024.
+      keefbrands.com and keefbrandshemp.com both return 404 on products.json —
+      store is password-protected or non-standard Shopify. Skipping DTC scrape.
 
   - name: Cantrip
     relationship: competitor
@@ -80,10 +83,12 @@ brands:
     relationship: competitor
     tier: 1
     domain: wanabrands.com
-    shop_url: https://wanabrands.com/collections/all
+    shop_url: null
     notes: >
       Established edibles brand expanding into beverages. Multi-state
       presence. Boulder, CO HQ.
+      wanabrands.com does not expose products.json — sells via dispensaries
+      and third-party marketplaces (shopwanderous.com). No DTC Shopify store.
 
   # ── Tier 2 — Fast-Growing / Regional ──────────────────────────────────────────
   # Product catalog ingestion; financial monitoring on quarterly basis.
@@ -110,19 +115,22 @@ brands:
     relationship: competitor
     tier: 2
     domain: drinkdelta.com
-    shop_url: https://drinkdelta.com/shop
+    shop_url: null
     notes: >
       5/10/20mg tiers. Also has a Cannabis Spirit bottle. 2:1 THC:CBD ratio
-      on some SKUs.
+      on some SKUs. drinkdelta.com/products.json returns 404 — likely custom
+      or headless storefront, not standard Shopify. Skipping DTC scrape.
 
   - name: Find Wunder
     relationship: competitor
     tier: 2
     domain: findwunder.com
-    shop_url: https://findwunder.com/shop
+    shop_url: null
     notes: >
       Also distributed by United in GA — overlap brand. Italian soda
       positioning. VC-backed, clean sparkling water positioning.
+      findwunder.com does not expose products.json — non-standard Shopify
+      or headless storefront. Skipping DTC scrape.
 
   - name: Green Monke
     relationship: competitor
@@ -172,10 +180,12 @@ brands:
   - name: Mary Jones
     relationship: competitor
     tier: 2
-    domain: drinkmaryjones.com
-    shop_url: https://drinkmaryjones.com/collections/all
+    domain: maryjones.com
+    shop_url: null
     notes: >
       Retro soda branding, conventional retail push.
+      drinkmaryjones.com 404s; maryjones.com returns error page — likely
+      retail-only distribution, no active DTC Shopify store.
 
   - name: Dad Grass
     relationship: competitor
@@ -199,31 +209,35 @@ brands:
   - name: Adaptaphoria
     relationship: competitor
     tier: 3
-    domain: null
-    shop_url: null
+    domain: adaptaphoria.com
+    shop_url: https://adaptaphoria.com
     notes: >
-      Functional wellness + THC.
+      Functional wellness + THC. Confirmed Shopify store at adaptaphoria.com.
 
   - name: Señorita Drinks
     relationship: competitor
     tier: 3
-    domain: null
-    shop_url: null
+    domain: senoritadrinks.com
+    shop_url: https://senoritadrinks.com
     notes: >
-      THC margaritas, agave-based cocktail format.
+      THC margaritas, agave-based cocktail format. Confirmed Shopify store
+      at senoritadrinks.com.
 
   - name: Recess
     relationship: competitor
     tier: 3
     domain: takearecess.com
-    shop_url: https://takearecess.com/collections/all
+    shop_url: null
     notes: >
-      Mainstream CBD sparkling water, major retail.
+      Mainstream CBD sparkling water, major retail. takearecess.com
+      products.json redirects to a landing page — headless/custom storefront,
+      not standard Shopify. Skipping DTC scrape.
 
   - name: Buzzn
     relationship: competitor
     tier: 3
-    domain: null
-    shop_url: null
+    domain: drinkbuzzn.com
+    shop_url: https://drinkbuzzn.com
     notes: >
-      Minimalist seltzer, clean microdosing.
+      Minimalist seltzer, clean microdosing. Confirmed Shopify store at
+      drinkbuzzn.com.
