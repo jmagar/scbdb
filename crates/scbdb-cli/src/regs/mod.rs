@@ -34,9 +34,10 @@ pub enum RegsCommands {
         max_pages: u32,
 
         /// Hard ceiling on `LegiScan` API requests for this run.
-        /// Protects the 30 000/month quota. A full sweep of 8 keywords × 2
-        /// states × 3 pages + ~250 bill fetches uses ≈ 300 requests.
-        #[arg(long, default_value = "300")]
+        /// Protects the 30 000/month quota. Default of 5 000 supports daily
+        /// runs (~150/month remaining for ad-hoc use). Each search page and
+        /// each `getBill` call counts as one request.
+        #[arg(long, default_value = "5000")]
         max_requests: u32,
 
         /// Preview what would be ingested without writing to the database

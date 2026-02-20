@@ -136,7 +136,7 @@ fn parses_regs_ingest_defaults() {
             command: RegsCommands::Ingest {
                 dry_run: false,
                 max_pages: 3,
-                max_requests: 300,
+                max_requests: 5000,
                 ..
             }
         })
