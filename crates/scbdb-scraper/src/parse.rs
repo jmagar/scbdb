@@ -120,6 +120,14 @@ fn parse_mg_with_label(lower: &str, label: &str, competing_label: Option<&str>) 
 
     // Last mg before the label (closest to it).
     let before_slice = &lower[before_start..label_pos];
+
+    // If the word immediately preceding the label is a negation (e.g., "No THC"),
+    // the compound is explicitly absent and carries no dosage value.
+    let last_word_before = before_slice.split_whitespace().next_back().unwrap_or("");
+    if matches!(last_word_before, "no" | "non" | "zero" | "without" | "free") {
+        return None;
+    }
+
     if let Some(value) = all_mg_values(before_slice).into_iter().last() {
         return Some(value);
     }

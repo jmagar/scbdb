@@ -228,24 +228,21 @@ impl ShopifyClient {
         let origin = extract_store_origin(shop_url);
         match page_info {
             Some(cursor) => {
-                match reqwest::Url::parse(&format!("{origin}/products.json")) {
-                    Ok(mut url) => {
-                        url.query_pairs_mut()
-                            .append_pair("limit", &limit.to_string())
-                            .append_pair("page_info", cursor);
-                        url.to_string()
-                    }
-                    Err(_) => {
-                        // Fallback: build the URL manually if the origin is not
-                        // parseable (e.g. no scheme). The cursor value comes from
-                        // Shopify's own API and is base64-safe, so unencoded is
-                        // acceptable as a last resort.
-                        tracing::warn!(
-                            shop_url,
-                            "shop URL origin is not a valid URL base; using unencoded cursor"
-                        );
-                        format!("{origin}/products.json?limit={limit}&page_info={cursor}")
-                    }
+                if let Ok(mut url) = reqwest::Url::parse(&format!("{origin}/products.json")) {
+                    url.query_pairs_mut()
+                        .append_pair("limit", &limit.to_string())
+                        .append_pair("page_info", cursor);
+                    url.to_string()
+                } else {
+                    // Fallback: build the URL manually if the origin is not
+                    // parseable (e.g. no scheme). The cursor value comes from
+                    // Shopify's own API and is base64-safe, so unencoded is
+                    // acceptable as a last resort.
+                    tracing::warn!(
+                        shop_url,
+                        "shop URL origin is not a valid URL base; using unencoded cursor"
+                    );
+                    format!("{origin}/products.json?limit={limit}&page_info={cursor}")
                 }
             }
             None => format!("{origin}/products.json?limit={limit}"),
@@ -271,83 +268,5 @@ fn extract_domain(shop_url: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn products_url_without_cursor() {
-        let url = ShopifyClient::products_url("https://drinkcann.com/collections/all", 250, None);
-        assert_eq!(url, "https://drinkcann.com/products.json?limit=250");
-    }
-
-    #[test]
-    fn products_url_with_cursor() {
-        let url = ShopifyClient::products_url(
-            "https://drinkcann.com/collections/all",
-            250,
-            Some("eyJsYXN0X2lkIjo2fQ"),
-        );
-        assert_eq!(
-            url,
-            "https://drinkcann.com/products.json?limit=250&page_info=eyJsYXN0X2lkIjo2fQ"
-        );
-    }
-
-    #[test]
-    fn products_url_strips_trailing_slash() {
-        let url = ShopifyClient::products_url("https://drinkcann.com/", 50, None);
-        assert_eq!(url, "https://drinkcann.com/products.json?limit=50");
-    }
-
-    #[test]
-    fn products_url_bare_domain() {
-        let url = ShopifyClient::products_url("https://drinkcann.com", 250, None);
-        assert_eq!(url, "https://drinkcann.com/products.json?limit=250");
-    }
-
-    #[test]
-    fn extract_store_origin_strips_path() {
-        assert_eq!(
-            extract_store_origin("https://drinkcann.com/collections/all"),
-            "https://drinkcann.com"
-        );
-    }
-
-    #[test]
-    fn extract_store_origin_bare_domain() {
-        assert_eq!(
-            extract_store_origin("https://drinkcann.com"),
-            "https://drinkcann.com"
-        );
-    }
-
-    #[test]
-    fn extract_store_origin_trailing_slash() {
-        assert_eq!(
-            extract_store_origin("https://drinkcann.com/"),
-            "https://drinkcann.com"
-        );
-    }
-
-    #[test]
-    fn extract_domain_strips_scheme() {
-        assert_eq!(extract_domain("https://drinkcann.com"), "drinkcann.com");
-        assert_eq!(
-            extract_domain("http://shop.example.com"),
-            "shop.example.com"
-        );
-    }
-
-    #[test]
-    fn extract_domain_handles_path() {
-        assert_eq!(
-            extract_domain("https://drinkcann.com/products"),
-            "drinkcann.com"
-        );
-    }
-
-    #[test]
-    fn extract_domain_fallback_no_scheme() {
-        assert_eq!(extract_domain("drinkcann.com"), "drinkcann.com");
-    }
-}
+#[path = "client_test.rs"]
+mod tests;
