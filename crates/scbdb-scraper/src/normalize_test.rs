@@ -169,6 +169,22 @@ fn normalize_product_preserves_vendor_from_shopify() {
 }
 
 #[test]
+fn normalize_product_title_dosage_fallback_when_no_body_html() {
+    // Better Than Booze pattern: dosage is in the product title ("2MG THC + 6MG CBD
+    // Lemon Drop Martini"), variant titles are pack counts ("12-Pack"). When
+    // body_html is absent, the title fallback should supply dosage_mg.
+    let mut product = make_shopify_product(vec![make_shopify_variant(1, "12-Pack", Some(1))]);
+    product.title = "2MG THC + 6MG CBD Lemon Drop Martini".to_owned();
+    product.body_html = None; // no HTML to fall back to
+    let normalized = normalize_product(product, "https://drinkbetterthanbooze.com").unwrap();
+    assert_eq!(
+        normalized.variants[0].dosage_mg,
+        Some(2.0),
+        "dosage should be extracted from product title when body_html is absent"
+    );
+}
+
+#[test]
 fn normalize_html_dosage_fallback_applies_uniformly_to_all_variants() {
     // When variant titles are bare names with no mg values, the dosage
     // extracted from body_html is applied to every variant. This is correct

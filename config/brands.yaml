@@ -198,13 +198,6 @@ brands:
   # ── Tier 3 — Niche / Watch List ───────────────────────────────────────────────
   # Periodic news monitoring only.
 
-  - name: Calexo
-    relationship: competitor
-    tier: 3
-    domain: drinkcalexo.com
-    shop_url: https://drinkcalexo.com/collections/all
-    notes: >
-      Upscale/premium seltzer.
 
   - name: Adaptaphoria
     relationship: competitor

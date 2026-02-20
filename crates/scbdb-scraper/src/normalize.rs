@@ -37,12 +37,23 @@ pub fn normalize_product(
     // Normalize product_type: treat empty string as absent.
     let product_type = product.product_type.filter(|s| !s.is_empty());
 
-    // Best-effort dosage fallback from body_html for brands where variant
-    // titles lack mg values (e.g., BREZ: "3mg micronized THC, 6mg CBD").
+    // Best-effort dosage fallback chain (applied uniformly to all variants
+    // when a variant's own title yields no dosage value):
+    //
+    // 1. body_html — works for brands like BREZ that embed dosage in
+    //    product descriptions ("3mg micronized THC, 6mg CBD per can").
+    // 2. product title — works for brands like Better Than Booze that encode
+    //    dosage in the product name ("2MG THC + 6MG CBD Lemon Drop Martini")
+    //    but not in individual variant titles ("12-Pack", "24-Pack").
+    //
+    // The same single-dose limitation as html_dosage_fallback applies: if a
+    // product has multiple dosage strengths across variants with bare titles,
+    // the first parseable THC value from the fallback is attributed to all.
     let html_dosage_fallback: Option<f64> = product
         .body_html
         .as_deref()
-        .and_then(parse_dosage_from_html);
+        .and_then(parse_dosage_from_html)
+        .or_else(|| parse_thc_mg(&product.title));
 
     // The position-1 variant is the storefront default. If no position data
     // exists, or if position data exists but no variant claims position 1
