@@ -1,11 +1,5 @@
 # CLAUDE.md
 
-## Document Metadata
-
-- Version: 1.2
-- Status: Active
-- Last Updated (EST): 09:00:00 | 02/19/2026 EST
-
 ## Project Identity
 
 SCBDB is a self-hosted competitive intelligence and regulatory tracking platform for hemp-derived THC beverages.
@@ -17,6 +11,18 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 - DB: PostgreSQL + sqlx migrations
 - Frontend: React 19 + TypeScript + Vite
 - Styling/UI: Tailwind v4 + shadcn/ui
+
+## Crate Map
+
+| Crate | Type | Responsibility |
+|-------|------|----------------|
+| `scbdb-cli` | bin | clap CLI — `collect`, `regs`, `db` subcommands |
+| `scbdb-server` | bin | Axum HTTP server — REST API + scheduler |
+| `scbdb-core` | lib | Shared domain types, models, error types |
+| `scbdb-db` | lib | sqlx queries, migrations, DB access layer |
+| `scbdb-scraper` | lib | Shopify `products.json` collector + retry/backoff |
+| `scbdb-legiscan` | lib | LegiScan API client + bill ingestion |
+| `scbdb-sentiment` | lib | Market sentiment pipeline |
 
 ## Product Scope
 
@@ -59,6 +65,14 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 | `just test` | Rust + web tests |
 | `just migrate-status` | Current migration state |
 | `cargo clippy --workspace -- -D warnings` | Clippy strict (CI-equivalent) |
+| `just build` | Build workspace artifacts |
+| `just format` | Apply formatters (cargo fmt + web) |
+| `just migrate` | Apply pending migrations |
+| `just seed` | Seed brands from `config/brands.yaml` |
+| `just db-up` / `just db-down` | Start / stop PostgreSQL container |
+| `just db-reset` | Destroy and recreate PostgreSQL data (destructive) |
+| `just hooks` | Install lefthook git hooks |
+| `just bootstrap` | Full environment setup: db-up → migrate → ping → seed |
 
 ## Operational Defaults
 
@@ -69,6 +83,45 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 | DB host port | `15432` (avoid conflict with system postgres) |
 | DB container | `scbdb-postgres` |
 | Required env vars | `POSTGRES_PASSWORD`, `DATABASE_URL` |
+
+## Quick Start
+
+```bash
+cp .env.example .env          # set POSTGRES_PASSWORD + LEGISCAN_API_KEY
+just bootstrap                 # db-up → wait → migrate → ping → seed
+just dev                       # start postgres + web dev server
+```
+
+## CLI Subcommand Reference
+
+```bash
+# Product collection
+scbdb-cli collect products                     # collect all brands
+scbdb-cli collect products --brand <slug>      # single brand
+scbdb-cli collect products --dry-run           # preview without DB writes
+scbdb-cli collect pricing                      # capture price snapshots
+scbdb-cli collect pricing --brand <slug>       # single brand
+
+# Regulatory tracking
+scbdb-cli regs ingest [--state SC] [--keyword hemp] [--dry-run]
+scbdb-cli regs status [--state SC] [--limit 20]
+scbdb-cli regs timeline --state SC --bill HB1234
+scbdb-cli regs report [--state SC]
+
+# Database management
+scbdb-cli db ping         # verify DB connection
+scbdb-cli db migrate      # apply pending migrations
+scbdb-cli db seed         # seed brands from config/brands.yaml
+```
+
+## Codebase Gotchas
+
+- **Tower middleware order** — In `ServiceBuilder`, the LAST `.layer()` is outermost (runs first). Add `request_id` after `TraceLayer`, not before.
+- **LegiScan `search` response** — Returns numbered JSON objects `{"0":{...},"1":{...}}`, not a Vec. Deserialize as `HashMap<String, Value>` with `#[serde(flatten)]`, filter numeric keys. Same pattern as `MasterListData`.
+- **sqlx + `SELECT 1`** — PostgreSQL `int4` maps to `i32`, not `i64`. Use `query_scalar::<_, i32>`.
+- **`dotenvy` policy** — Library crates must NOT call `dotenvy::dotenv()`. Only binary entrypoints (`scbdb-cli`, `scbdb-server`) load `.env`.
+- **`api_key_hash_salt`** — `AppConfig.api_key_hash_salt` is `Option<String>`. CLI commands don't need it; server code must validate `is_some()` before use.
+- **Git hooks** — pre-commit runs `cargo fmt`; pre-push runs `cargo test` + `cargo clippy -D warnings`. Run `just check` and `just test` before pushing to avoid failed pushes.
 
 ## Documentation Workflow
 
