@@ -74,8 +74,8 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
 - `GET /brands`
   - Filters: `relationship`, `tier`, `is_active`, `q`.
 - `GET /brands/{brand_id}`
-- `POST /brands`
-- `PATCH /brands/{brand_id}`
+- `POST /brands` *(Post-MVP — server is read-only in MVP scope)*
+- `PATCH /brands/{brand_id}` *(Post-MVP — server is read-only in MVP scope)*
 
 ### Products
 
@@ -95,11 +95,11 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
 
 - `GET /collection-runs`
   - Filters: `run_type`, `status`, `from`, `to`.
-- `POST /collection-runs/products`
+- `POST /collection-runs/products` *(Post-MVP — server is read-only in MVP scope; use CLI for collection)*
   - Triggers product collection.
-- `POST /collection-runs/pricing`
+- `POST /collection-runs/pricing` *(Post-MVP — server is read-only in MVP scope; use CLI for collection)*
   - Triggers pricing snapshot collection.
-- `POST /collection-runs/regs`
+- `POST /collection-runs/regs` *(Post-MVP — server is read-only in MVP scope; use CLI for collection)*
   - Triggers legislative collection.
 
 ### Regulatory

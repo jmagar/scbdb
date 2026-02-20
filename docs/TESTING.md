@@ -196,7 +196,7 @@ cargo test -p scbdb-scraper
 cargo test -p scbdb-scraper -- test_name
 
 # frontend
-cd web && npm test
+cd web && pnpm test
 
 # everything (via justfile)
 just test

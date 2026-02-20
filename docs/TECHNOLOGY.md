@@ -79,7 +79,7 @@
 ## Linting
 
 - **clippy** — Rust linter, run with `-D warnings` (all warnings are errors)
-- **ESLint 9+** (flat config) — TypeScript/React linter with `eslint-plugin-react-hooks` and `eslint-plugin-jsx-a11y`
+- **ESLint 9+** (flat config) — TypeScript/React linter with `eslint-plugin-react-hooks` (5+) and `eslint-plugin-jsx-a11y`
 
 ## Type Checking
 
@@ -115,7 +115,7 @@
 
 ## Containerization
 
-- **Docker Compose** — Local development environment. Runs PostgreSQL  with a single `docker compose up`. No manual database installation required.
+- **Docker Compose** — Local development environment. Runs PostgreSQL with a single `docker compose up`. No manual database installation required.
 - **Dockerfile** — Multi-stage build for the Rust backend: build stage compiles release binaries, runtime stage uses a minimal base image. Frontend is built separately and served as static assets.
 
 ## CI/CD

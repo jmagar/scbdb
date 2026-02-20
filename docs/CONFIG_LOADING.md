@@ -10,7 +10,7 @@
 
 - Single, predictable configuration flow across CLI and server.
 - Strong validation at startup.
-- Explicit precedence with no hidden defaults.
+- Explicit precedence with all defaults documented.
 
 ## Sources
 
@@ -27,6 +27,7 @@
 
 ## Required Environment Variables
 
+- `POSTGRES_PASSWORD`
 - `DATABASE_URL`
 - `SCBDB_ENV` (`development`, `test`, `production`)
 - `SCBDB_API_KEY_HASH_SALT`

@@ -10,11 +10,11 @@ This file is the index for execution phases. Detailed implementation content liv
 
 ## Phase Documents
 
-1. `mvp_phases/phase-1-foundation.md`
-2. `mvp_phases/phase-2-collection-cli.md`
-3. `mvp_phases/phase-3-regulatory-tracking.md`
-4. `mvp_phases/phase-4-sentiment-pipeline.md`
-5. `mvp_phases/phase-5-api-dashboard.md`
+1. [mvp_phases/phase-1-foundation.md](mvp_phases/phase-1-foundation.md)
+2. [mvp_phases/phase-2-collection-cli.md](mvp_phases/phase-2-collection-cli.md)
+3. [mvp_phases/phase-3-regulatory-tracking.md](mvp_phases/phase-3-regulatory-tracking.md)
+4. [mvp_phases/phase-4-sentiment-pipeline.md](mvp_phases/phase-4-sentiment-pipeline.md)
+5. [mvp_phases/phase-5-api-dashboard.md](mvp_phases/phase-5-api-dashboard.md)
 
 ## Scope Guardrails
 

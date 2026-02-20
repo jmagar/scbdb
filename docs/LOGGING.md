@@ -86,6 +86,8 @@ export class ErrorBoundary extends Component<Props, State> {
 }
 ```
 
+**React 19 note:** React 19 introduced the `onCaughtError`, `onUncaughtError`, and `onRecoverableError` callbacks on `createRoot`. These allow centralized error reporting at the root level without requiring a class-based Error Boundary component. For new error reporting integrations, prefer passing `onCaughtError` to `createRoot` over adding logging directly in `componentDidCatch`.
+
 ## Logging & Tracing
 
 ### Rust — tracing

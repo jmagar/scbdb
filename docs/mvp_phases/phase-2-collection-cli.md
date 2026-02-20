@@ -71,7 +71,7 @@ Implement CLI-driven product and pricing collection workflows.
 | `pagination.rs` | `extract_next_cursor()` — parses `Link` header for next page cursor |
 | `normalize.rs` | `normalize_product()` — maps Shopify types → `scbdb_core::NormalizedProduct` |
 | `error.rs` | `ScraperError` enum |
-| `rate_limit.rs` | *(Phase 2 stub — backoff logic to be added if 429 handling proves insufficient)* |
+| `rate_limit.rs` | `retry_with_backoff` — exponential backoff retry executor; classifies `RateLimited` and `Http` errors as retriable, all others as non-retriable |
 
 ## Persistence Layer (`scbdb-db`)
 
@@ -89,7 +89,7 @@ New modules: `collection_runs.rs` and `products.rs`. Functions to implement:
 
 ## CLI Contract
 
-```
+```bash
 scbdb-cli collect products              # collect all active brands
 scbdb-cli collect products --brand cann # collect single brand by slug
 scbdb-cli collect products --dry-run    # preview without DB writes

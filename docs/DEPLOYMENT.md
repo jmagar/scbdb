@@ -23,7 +23,7 @@ Define the deployment and operations baseline for self-hosted SCBDB environments
 2. Build container images.
 3. Apply database migrations.
 4. Deploy updated containers.
-5. Run smoke checks (`/health`, DB connectivity, auth checks).
+5. Run smoke checks (`/api/v1/health`, DB connectivity, auth checks).
 
 ## Configuration and Secrets
 

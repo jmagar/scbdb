@@ -96,8 +96,13 @@ cargo run --bin scbdb-cli -- collect products --dry-run             # preview wi
 cargo run --bin scbdb-cli -- collect pricing                        # capture pricing snapshots
 cargo run --bin scbdb-cli -- collect pricing --brand <SLUG>         # restrict to one brand
 
-# Not yet implemented (stubs that exit with an error)
-# cargo run --bin scbdb-cli -- regs    # regulatory tracking (Phase 3)
+# Regulatory tracking (Phase 3 — fully implemented)
+cargo run --bin scbdb-cli -- regs ingest    # ingest bills from LegiScan into DB
+cargo run --bin scbdb-cli -- regs status    # show current bill statuses
+cargo run --bin scbdb-cli -- regs timeline  # show bill event timeline
+cargo run --bin scbdb-cli -- regs report    # generate regulatory summary report
+
+# Not yet implemented (stub that exits with an error)
 # cargo run --bin scbdb-cli -- report  # reports and exports (Phase 5)
 ```
 

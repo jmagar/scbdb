@@ -43,7 +43,7 @@ All code must be small, focused modules. No monolithic files. Every module has a
 
 Each library crate follows the same internal layout:
 
-```
+```text
 crates/scbdb-scraper/src/
   lib.rs              # public re-exports only
   client.rs           # HTTP client construction
@@ -72,7 +72,7 @@ pub use normalize::normalize_product;
 
 Components, hooks, and utilities each get their own file. No barrel files that re-export everything — import from the specific module.
 
-```
+```text
 web/src/
   components/
     products/
@@ -177,7 +177,7 @@ export function ProductGrid({ products }: Props) {
 
 Data tables collapse to card layouts on mobile. Never force horizontal scroll on small screens for primary data.
 
-```
+```text
 web/src/
   components/
     data-display/
@@ -209,7 +209,7 @@ export function ResponsiveTable<T>({ data, columns, renderCard }: Props<T>) {
 
 Bottom nav on mobile, sidebar on desktop. One component per pattern, composed in the layout.
 
-```
+```text
 web/src/
   components/
     layout/
@@ -241,7 +241,7 @@ export function AppShell({ children }: Props) {
 - `Popover` panels should be full-width on mobile (`w-screen sm:w-auto`).
 - Keep each shadcn wrapper in its own file — don't build a mega-component.
 
-```
+```text
 web/src/
   hooks/
     useMediaQuery.ts
@@ -264,7 +264,7 @@ web/src/
 - Images: use `srcSet` / `sizes` for responsive images. Serve WebP with AVIF fallback.
 - Keep the initial JS bundle under 200KB gzipped. Code-split by route.
 
-```
+```text
 web/src/
   components/
     common/
@@ -313,21 +313,33 @@ Install: `brew install lefthook` (macOS) or `cargo install lefthook` or download
 pre-commit:
   parallel: true
   commands:
-    rust-fmt:
-      glob: "*.rs"
+    check-file-size:
+      run: scripts/check-file-size.sh
+      fail_text: "Split large files into focused modules before committing."
+    cargo-fmt:
+      glob: "**/*.rs"
       run: cargo fmt --all -- --check
-    rust-clippy:
-      glob: "*.rs"
+      fail_text: "Run 'just format' to fix Rust formatting."
+    web-format:
+      glob: "web/**/*.{ts,tsx,css}"
+      run: pnpm --dir web format:check
+      fail_text: "Run 'just format' to fix web formatting."
+
+pre-push:
+  parallel: true
+  commands:
+    cargo-clippy:
+      glob: "**/*.rs"
       run: cargo clippy --workspace -- -D warnings
-    ts-lint:
-      glob: "*.{ts,tsx}"
-      run: cd web && npx eslint .
-    ts-typecheck:
-      glob: "*.{ts,tsx}"
-      run: cd web && npx tsc --noEmit
-    prettier:
-      glob: "*.{ts,tsx,json,md,css}"
-      run: npx prettier --check .
+      fail_text: "Run 'just check' to see clippy details."
+    cargo-test:
+      glob: "**/*.rs"
+      run: cargo test --workspace
+      fail_text: "All tests must pass before pushing."
+    web-typecheck:
+      glob: "web/**/*.{ts,tsx}"
+      run: pnpm --dir web typecheck
+      fail_text: "Fix TypeScript errors before pushing."
 ```
 
 After cloning the repo, run `lefthook install` to set up the hooks. This is a one-time step.
@@ -355,7 +367,7 @@ docker compose down
 docker compose down -v
 ```
 
-`DATABASE_URL` in `.env` should point to the Docker Compose PostgreSQL instance: `postgres://scbdb:scbdb@localhost:5432/scbdb`
+`DATABASE_URL` in `.env` should point to the Docker Compose PostgreSQL instance: `postgres://scbdb:scbdb@localhost:15432/scbdb`
 
 ### Environment Variables
 
@@ -363,7 +375,7 @@ Copy `.env.example` to `.env` and fill in required values:
 
 ```sh
 SCBDB_ENV=development
-DATABASE_URL=postgres://scbdb:scbdb@localhost:5432/scbdb
+DATABASE_URL=postgres://scbdb:scbdb@localhost:15432/scbdb
 SCBDB_API_KEY_HASH_SALT=<change-me>
 SCBDB_BIND_ADDR=0.0.0.0:3000
 SCBDB_LOG_LEVEL=info
@@ -399,7 +411,7 @@ sqlx migrate info
 - Migrations are **append-only**. Never edit a migration that has been applied to any environment.
 - Each migration file is a single `.sql` file with plain SQL. No Rust code in migrations.
 - Destructive changes (dropping columns/tables) require a two-step migration: first deprecate, then remove in a later migration.
-- `DATABASE_URL` must be set in `.env` for sqlx to connect. Format: `postgres://user:pass@localhost:5432/scbdb`
+- `DATABASE_URL` must be set in `.env` for sqlx to connect. Format: `postgres://user:pass@localhost:15432/scbdb`
 
 ## Error Handling & Logging
 
