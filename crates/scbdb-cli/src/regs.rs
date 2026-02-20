@@ -202,8 +202,8 @@ pub(crate) async fn run_regs_status(
     println!("{header}");
     for bill in &bills {
         let last_action = fmt_date(bill.last_action_date);
-        let title_display = if bill.title.len() > 50 {
-            format!("{}...", &bill.title[..50])
+        let title_display = if bill.title.chars().count() > 50 {
+            format!("{}...", bill.title.chars().take(50).collect::<String>())
         } else {
             bill.title.clone()
         };
@@ -267,11 +267,16 @@ pub(crate) async fn run_regs_report(
     pool: &sqlx::PgPool,
     state_filter: Option<&str>,
 ) -> anyhow::Result<()> {
-    let bills = scbdb_db::list_bills(pool, state_filter, 100).await?;
+    const REPORT_LIMIT: i64 = 100;
+    let bills = scbdb_db::list_bills(pool, state_filter, REPORT_LIMIT).await?;
 
     if bills.is_empty() {
         println!("no bills to report");
         return Ok(());
+    }
+
+    if bills.len() as i64 >= REPORT_LIMIT {
+        eprintln!("warning: report limit of {REPORT_LIMIT} reached — some bills may be omitted");
     }
 
     let now = Utc::now().format("%Y-%m-%d %H:%M UTC");
@@ -314,7 +319,8 @@ pub(crate) async fn run_regs_report(
             for event in &events {
                 let date = fmt_date(event.event_date);
                 let chamber = event.chamber.as_deref().unwrap_or("\u{2014}");
-                println!("| {date} | {chamber} | {} |", event.description);
+                let description = event.description.replace('|', "\\|");
+                println!("| {date} | {chamber} | {description} |");
             }
         }
 

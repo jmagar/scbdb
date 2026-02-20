@@ -127,11 +127,23 @@ fn parse_mg_with_label(lower: &str, label: &str, competing_label: Option<&str>) 
     // First mg after the label — but skip if a competing label claims the value.
     let after_slice = &lower[label_pos + label.len()..after_end];
     if let Some(value) = extract_mg_value(after_slice) {
-        // If a competing label (e.g., "cbd" when we're looking for "thc") appears
-        // in the after-slice and is closer to the mg value than our label, the
-        // value belongs to the competitor. Example: "thc 5mg cbd" — the 5mg is CBD's.
-        let dominated_by_competitor =
-            competing_label.is_some_and(|comp| after_slice.contains(comp));
+        // The value is dominated by the competitor only when the competing label
+        // appears *before* the mg value in the after-slice. This preserves correct
+        // attribution for titles like "THC 5mg, CBD 3mg" where CBD appears after
+        // the THC mg value and should not suppress the THC reading.
+        //
+        // Example: "thc 5mg cbd" → after "thc": " 5mg cbd" → CBD at pos 5, mg
+        // starts at pos 1 → NOT dominated → 5mg belongs to THC (correct).
+        // Example: "thc cbd 5mg" → after "thc": " cbd 5mg" → CBD at pos 1, mg
+        // starts at pos 5 → dominated → skip (5mg belongs to CBD).
+        let dominated_by_competitor = competing_label.is_some_and(|comp| {
+            after_slice.find(comp).is_some_and(|comp_pos| {
+                let mg_start = after_slice
+                    .bytes()
+                    .position(|b| b.is_ascii_digit() || b == b'.');
+                mg_start.is_some_and(|mp| comp_pos < mp)
+            })
+        });
         if !dominated_by_competitor {
             return Some(value);
         }

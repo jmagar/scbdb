@@ -228,12 +228,25 @@ impl ShopifyClient {
         let origin = extract_store_origin(shop_url);
         match page_info {
             Some(cursor) => {
-                let mut url = reqwest::Url::parse(&format!("{origin}/products.json"))
-                    .expect("store origin is always a valid URL base");
-                url.query_pairs_mut()
-                    .append_pair("limit", &limit.to_string())
-                    .append_pair("page_info", cursor);
-                url.to_string()
+                match reqwest::Url::parse(&format!("{origin}/products.json")) {
+                    Ok(mut url) => {
+                        url.query_pairs_mut()
+                            .append_pair("limit", &limit.to_string())
+                            .append_pair("page_info", cursor);
+                        url.to_string()
+                    }
+                    Err(_) => {
+                        // Fallback: build the URL manually if the origin is not
+                        // parseable (e.g. no scheme). The cursor value comes from
+                        // Shopify's own API and is base64-safe, so unencoded is
+                        // acceptable as a last resort.
+                        tracing::warn!(
+                            shop_url,
+                            "shop URL origin is not a valid URL base; using unencoded cursor"
+                        );
+                        format!("{origin}/products.json?limit={limit}&page_info={cursor}")
+                    }
+                }
             }
             None => format!("{origin}/products.json?limit={limit}"),
         }

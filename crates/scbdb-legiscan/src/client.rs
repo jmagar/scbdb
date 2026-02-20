@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use reqwest::Client;
+use reqwest::{Client, Url};
 
 use crate::error::LegiscanError;
 use crate::types::{
@@ -24,7 +24,7 @@ const DEFAULT_BASE_URL: &str = "https://api.legiscan.com/";
 pub struct LegiscanClient {
     client: Client,
     api_key: String,
-    base_url: String,
+    base_url: Url,
 }
 
 impl LegiscanClient {
@@ -43,7 +43,8 @@ impl LegiscanClient {
     /// # Errors
     ///
     /// Returns [`LegiscanError::Http`] if the underlying `reqwest::Client`
-    /// cannot be constructed.
+    /// cannot be constructed, or [`LegiscanError::ApiError`] if `base_url`
+    /// is not a valid URL.
     pub fn with_base_url(
         api_key: &str,
         timeout_secs: u64,
@@ -54,10 +55,18 @@ impl LegiscanClient {
             .connect_timeout(Duration::from_secs(10))
             .user_agent("scbdb/0.1 (regulatory-tracking)")
             .build()?;
+
+        // Normalise: ensure the base URL ends with exactly one slash so that
+        // query_pairs_mut writes to the root path rather than replacing the last
+        // path segment.
+        let normalised = format!("{}/", base_url.trim_end_matches('/'));
+        let base_url = Url::parse(&normalised)
+            .map_err(|e| LegiscanError::ApiError(format!("invalid base URL '{base_url}': {e}")))?;
+
         Ok(Self {
             client,
             api_key: api_key.to_owned(),
-            base_url: base_url.trim_end_matches('/').to_owned(),
+            base_url,
         })
     }
 
@@ -68,7 +77,7 @@ impl LegiscanClient {
     /// # Errors
     ///
     /// - [`LegiscanError::ApiError`] if the API returns an error status.
-    /// - [`LegiscanError::Http`] on network failure.
+    /// - [`LegiscanError::Http`] on network failure or non-2xx HTTP status.
     /// - [`LegiscanError::Deserialize`] if the response does not match the
     ///   expected shape.
     pub async fn get_bill(&self, bill_id: i64) -> Result<BillDetail, LegiscanError> {
@@ -93,7 +102,7 @@ impl LegiscanClient {
     /// # Errors
     ///
     /// - [`LegiscanError::ApiError`] if the API returns an error status.
-    /// - [`LegiscanError::Http`] on network failure.
+    /// - [`LegiscanError::Http`] on network failure or non-2xx HTTP status.
     /// - [`LegiscanError::Deserialize`] if the response does not match the
     ///   expected shape.
     pub async fn search_bills(
@@ -115,7 +124,7 @@ impl LegiscanClient {
 
         let envelope: ApiResponse<SearchResponse> =
             serde_json::from_value(body).map_err(|e| LegiscanError::Deserialize {
-                context: format!("searchRaw(query={query})"),
+                context: format!("search(query={query})"),
                 source: e,
             })?;
 
@@ -127,7 +136,7 @@ impl LegiscanClient {
     /// # Errors
     ///
     /// - [`LegiscanError::ApiError`] if the API returns an error status.
-    /// - [`LegiscanError::Http`] on network failure.
+    /// - [`LegiscanError::Http`] on network failure or non-2xx HTTP status.
     /// - [`LegiscanError::Deserialize`] if the response does not match the
     ///   expected shape.
     pub async fn get_session_list(&self, state: &str) -> Result<Vec<SessionInfo>, LegiscanError> {
@@ -155,7 +164,7 @@ impl LegiscanClient {
     /// # Errors
     ///
     /// - [`LegiscanError::ApiError`] if the API returns an error status.
-    /// - [`LegiscanError::Http`] on network failure.
+    /// - [`LegiscanError::Http`] on network failure or non-2xx HTTP status.
     /// - [`LegiscanError::Deserialize`] if the top-level response does not
     ///   match the expected shape.
     pub async fn get_master_list(
@@ -184,21 +193,34 @@ impl LegiscanClient {
         Ok((data.session, entries))
     }
 
-    /// Builds the full request URL with query parameters.
-    fn build_url(&self, op: &str, extra: &[(&str, &str)]) -> String {
-        let mut url = format!("{}/?key={}&op={}", self.base_url, self.api_key, op);
-        for (k, v) in extra {
-            url.push('&');
-            url.push_str(k);
-            url.push('=');
-            url.push_str(v);
+    /// Builds the full request URL with properly percent-encoded query parameters.
+    ///
+    /// Clones the stored base URL and appends `key`, `op`, and any additional
+    /// parameters via [`Url::query_pairs_mut`], ensuring all values are safely
+    /// encoded.
+    fn build_url(&self, op: &str, extra: &[(&str, &str)]) -> Url {
+        let mut url = self.base_url.clone();
+        {
+            let mut pairs = url.query_pairs_mut();
+            pairs.append_pair("key", &self.api_key);
+            pairs.append_pair("op", op);
+            for (k, v) in extra {
+                pairs.append_pair(k, v);
+            }
         }
         url
     }
 
-    /// Sends a GET request and parses the response body as JSON.
-    async fn request_json(&self, url: &str) -> Result<serde_json::Value, LegiscanError> {
-        let response = self.client.get(url).send().await?;
+    /// Sends a GET request, asserts a 2xx HTTP status, and parses the response
+    /// body as JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`LegiscanError::Http`] on network failure or a non-2xx status.
+    /// Returns [`LegiscanError::Deserialize`] if the body is not valid JSON.
+    async fn request_json(&self, url: &Url) -> Result<serde_json::Value, LegiscanError> {
+        let response = self.client.get(url.clone()).send().await?;
+        let response = response.error_for_status()?;
         let body = response.text().await?;
         serde_json::from_str(&body).map_err(|e| LegiscanError::Deserialize {
             context: url.to_string(),
@@ -236,7 +258,7 @@ mod tests {
         let client = test_client("https://api.legiscan.com");
         let url = client.build_url("getBill", &[("id", "42")]);
         assert_eq!(
-            url,
+            url.as_str(),
             "https://api.legiscan.com/?key=test-key&op=getBill&id=42"
         );
     }
@@ -244,10 +266,20 @@ mod tests {
     #[test]
     fn build_url_strips_trailing_slash() {
         let client = test_client("https://api.legiscan.com/");
-        let url = client.build_url("searchRaw", &[("query", "hemp"), ("state", "SC")]);
+        let url = client.build_url("search", &[("query", "hemp"), ("state", "SC")]);
         assert_eq!(
-            url,
-            "https://api.legiscan.com/?key=test-key&op=searchRaw&query=hemp&state=SC"
+            url.as_str(),
+            "https://api.legiscan.com/?key=test-key&op=search&query=hemp&state=SC"
+        );
+    }
+
+    #[test]
+    fn build_url_encodes_special_characters() {
+        let client = test_client("https://api.legiscan.com");
+        let url = client.build_url("search", &[("query", "hemp & cbd")]);
+        assert!(
+            url.as_str().contains("hemp+%26+cbd") || url.as_str().contains("hemp%20%26%20cbd"),
+            "query param should be percent-encoded: {url}"
         );
     }
 }

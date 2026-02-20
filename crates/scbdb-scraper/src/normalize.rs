@@ -83,8 +83,7 @@ pub fn normalize_product(
 ///
 /// # Errors
 ///
-/// Returns [`ScraperError::Normalization`] if required fields cannot be
-/// interpreted (currently none — all failures are soft/optional).
+/// Returns [`ScraperError::Normalization`] if `variant.price` is empty.
 fn normalize_variant(
     variant: ShopifyVariant,
     is_default: bool,
