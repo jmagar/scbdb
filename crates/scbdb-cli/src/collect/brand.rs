@@ -120,7 +120,7 @@ pub(super) async fn collect_brand_core(
 
     // Normalize all products first, then persist in a single block so DB
     // errors are captured per-brand rather than propagated.
-    let normalized_products: Vec<_> = raw_products
+    let normalized_all: Vec<_> = raw_products
         .into_iter()
         .filter_map(
             |raw_product| match scbdb_scraper::normalize_product(raw_product, shop_url) {
@@ -135,6 +135,29 @@ pub(super) async fn collect_brand_core(
                 }
             },
         )
+        .collect();
+
+    // Filter to beverage products only: keep products where at least one
+    // variant has a dosage (mg) or size (oz/ml) value. This excludes merch,
+    // accessories, gift cards, insurance, and other non-beverage items that
+    // Shopify stores publish alongside their drink catalogs.
+    let normalized_products: Vec<_> = normalized_all
+        .into_iter()
+        .filter(|p| {
+            let keep = p
+                .variants
+                .iter()
+                .any(|v| v.dosage_mg.is_some() || v.size_value.is_some());
+            if !keep {
+                tracing::debug!(
+                    brand = %brand.slug,
+                    product_id = %p.source_product_id,
+                    name = %p.name,
+                    "dropping non-beverage product — no dosage or size on any variant"
+                );
+            }
+            keep
+        })
         .collect();
 
     match persist_normalized_products(pool, brand.id, run_id, &normalized_products).await {
