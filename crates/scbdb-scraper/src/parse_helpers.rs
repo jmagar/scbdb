@@ -10,7 +10,7 @@
 ///
 /// 40 bytes covers patterns like:
 /// - `"12.5 mg THC"` (compact, typical variant title)
-/// - `"5mg Rapid Onset Emulsion THC"` (Adaptaphoria body_html: ~30 chars)
+/// - `"5mg Rapid Onset Emulsion THC"` (Adaptaphoria `body_html`: ~30 chars)
 /// - `"2MG THC + 6MG CBD"` (Better Than Booze product names)
 const MG_LABEL_WINDOW: usize = 40;
 
