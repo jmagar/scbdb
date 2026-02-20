@@ -93,6 +93,7 @@ where
     let db_acquire_timeout_secs = parse_u64("SCBDB_DB_ACQUIRE_TIMEOUT_SECS", "10")?;
 
     let scraper_request_timeout_secs = parse_u64("SCBDB_SCRAPER_REQUEST_TIMEOUT_SECS", "30")?;
+    let legiscan_request_timeout_secs = parse_u64("SCBDB_LEGISCAN_REQUEST_TIMEOUT_SECS", "30")?;
     let scraper_user_agent = or_default(
         "SCBDB_SCRAPER_USER_AGENT",
         "scbdb/0.1 (product-intelligence)",
@@ -123,6 +124,7 @@ where
         db_min_connections,
         db_acquire_timeout_secs,
         scraper_request_timeout_secs,
+        legiscan_request_timeout_secs,
         scraper_user_agent,
         scraper_max_concurrent_brands,
         scraper_inter_request_delay_ms,

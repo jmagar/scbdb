@@ -78,6 +78,7 @@ async fn run_collect_products_dry_run_writes_zero_db_rows(pool: sqlx::PgPool) {
         db_min_connections: 1,
         db_acquire_timeout_secs: 10,
         scraper_request_timeout_secs: 30,
+        legiscan_request_timeout_secs: 30,
         scraper_user_agent: "scbdb/0.1 (test)".to_string(),
         scraper_max_concurrent_brands: 1,
         scraper_inter_request_delay_ms: 0,

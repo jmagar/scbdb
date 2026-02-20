@@ -108,6 +108,9 @@ pub(crate) async fn run_regs_report(
         eprintln!("warning: report limit of {REPORT_LIMIT} reached — some bills may be omitted");
     }
 
+    let bill_ids: Vec<i64> = bills.iter().map(|b| b.id).collect();
+    let mut events_by_bill = scbdb_db::list_bill_events_batch(pool, &bill_ids).await?;
+
     let now = Utc::now().format("%Y-%m-%d %H:%M UTC");
     let jurisdiction = state_filter.unwrap_or("All");
 
@@ -138,18 +141,19 @@ pub(crate) async fn run_regs_report(
             println!();
         }
 
-        let mut events = scbdb_db::list_bill_events(pool, bill.id).await?;
-        if !events.is_empty() {
-            events.reverse();
-            println!("### Timeline");
-            println!();
-            println!("| Date | Chamber | Action |");
-            println!("|------|---------|--------|");
-            for event in &events {
-                let date = super::fmt_date(event.event_date);
-                let chamber = event.chamber.as_deref().unwrap_or("\u{2014}");
-                let description = event.description.replace('|', "\\|");
-                println!("| {date} | {chamber} | {description} |");
+        if let Some(mut events) = events_by_bill.remove(&bill.id) {
+            if !events.is_empty() {
+                events.reverse();
+                println!("### Timeline");
+                println!();
+                println!("| Date | Chamber | Action |");
+                println!("|------|---------|--------|");
+                for event in &events {
+                    let date = super::fmt_date(event.event_date);
+                    let chamber = event.chamber.as_deref().unwrap_or("\u{2014}");
+                    let description = event.description.replace('|', "\\|");
+                    println!("| {date} | {chamber} | {description} |");
+                }
             }
         }
 

@@ -84,9 +84,9 @@ async fn search_bills_returns_results() {
         "status": "OK",
         "searchresult": {
             "summary": {
-                "page": 1,
-                "range": 50,
-                "relevancy": 100,
+                "page": "1 of 1",
+                "range": "1 - 1",
+                "relevancy": "100%",
                 "count": 1
             },
             "0": {

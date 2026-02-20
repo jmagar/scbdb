@@ -80,7 +80,7 @@ crates/scbdb-sentiment/src/
 
 | Component | Config Var | Value |
 |-----------|-----------|-------|
-| TEI (embeddings) | `SENTIMENT_TEI_URL` | `http://100.74.16.82:52000` |
+| TEI (embeddings) | `SENTIMENT_TEI_URL` | `http://localhost:52000` |
 | Qdrant (vectors) | `SENTIMENT_QDRANT_URL` | `http://localhost:53333` |
 | Qdrant collection | `SENTIMENT_QDRANT_COLLECTION` | `scbdb_sentiment` |
 | Reddit OAuth | `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET` | — |
@@ -156,5 +156,5 @@ scbdb-cli sentiment report
 
 # Infrastructure checks
 curl http://localhost:53333/collections/scbdb_sentiment
-curl -X POST http://100.74.16.82:52000/embed -H 'Content-Type: application/json' -d '{"inputs":["test"]}'
+curl -X POST http://localhost:52000/embed -H 'Content-Type: application/json' -d '{"inputs":["test"]}'
 ```

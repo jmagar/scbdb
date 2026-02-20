@@ -85,6 +85,7 @@ fn build_app_config_succeeds_with_all_required_vars() {
     assert_eq!(cfg.db_acquire_timeout_secs, 10);
     assert!(cfg.legiscan_api_key.is_none());
     assert_eq!(cfg.scraper_request_timeout_secs, 30);
+    assert_eq!(cfg.legiscan_request_timeout_secs, 30);
     assert_eq!(cfg.scraper_user_agent, "scbdb/0.1 (product-intelligence)");
     assert_eq!(cfg.scraper_max_concurrent_brands, 1);
     assert_eq!(cfg.scraper_inter_request_delay_ms, 250);
@@ -115,6 +116,32 @@ fn parse_environment_scraper_request_timeout_secs_invalid() {
     assert!(
         matches!(result, Err(ConfigError::InvalidEnvVar { ref var, .. }) if var == "SCBDB_SCRAPER_REQUEST_TIMEOUT_SECS"),
         "expected InvalidEnvVar(SCBDB_SCRAPER_REQUEST_TIMEOUT_SECS), got: {result:?}"
+    );
+}
+
+#[test]
+fn legiscan_request_timeout_secs_default() {
+    let map = full_env();
+    let cfg = build_app_config(lookup_from_map(&map)).unwrap();
+    assert_eq!(cfg.legiscan_request_timeout_secs, 30);
+}
+
+#[test]
+fn legiscan_request_timeout_secs_override() {
+    let mut map = full_env();
+    map.insert("SCBDB_LEGISCAN_REQUEST_TIMEOUT_SECS", "45");
+    let cfg = build_app_config(lookup_from_map(&map)).unwrap();
+    assert_eq!(cfg.legiscan_request_timeout_secs, 45);
+}
+
+#[test]
+fn legiscan_request_timeout_secs_invalid() {
+    let mut map = full_env();
+    map.insert("SCBDB_LEGISCAN_REQUEST_TIMEOUT_SECS", "not-a-number");
+    let result = build_app_config(lookup_from_map(&map));
+    assert!(
+        matches!(result, Err(ConfigError::InvalidEnvVar { ref var, .. }) if var == "SCBDB_LEGISCAN_REQUEST_TIMEOUT_SECS"),
+        "expected InvalidEnvVar(SCBDB_LEGISCAN_REQUEST_TIMEOUT_SECS), got: {result:?}"
     );
 }
 

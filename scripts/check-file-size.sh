@@ -24,7 +24,7 @@ is_test_file() {
 rs_production_lines() {
     local f="$1"
     local test_line
-    test_line=$(grep -n '^#\[cfg(test)\]' "$f" | head -1 | cut -d: -f1)
+    test_line=$(grep -n '^#\[cfg(test)\]' "$f" | head -1 | cut -d: -f1 || true)
     if [[ -n "$test_line" ]]; then
         echo $(( test_line - 1 ))
     else

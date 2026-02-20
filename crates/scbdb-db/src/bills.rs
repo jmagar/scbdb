@@ -71,13 +71,11 @@ pub async fn upsert_bill(
     session: Option<&str>,
     source_url: Option<&str>,
 ) -> Result<i64, DbError> {
-    let public_id = Uuid::new_v4();
-
     let id = sqlx::query_scalar::<_, i64>(
         "INSERT INTO bills \
-             (public_id, jurisdiction, session, bill_number, title, summary, \
+             (jurisdiction, session, bill_number, title, summary, \
               status, status_date, introduced_date, last_action_date, source_url) \
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
          ON CONFLICT (jurisdiction, bill_number) DO UPDATE SET \
              session          = EXCLUDED.session, \
              title            = EXCLUDED.title, \
@@ -89,7 +87,6 @@ pub async fn upsert_bill(
              updated_at       = NOW() \
          RETURNING id",
     )
-    .bind(public_id)
     .bind(jurisdiction)
     .bind(session)
     .bind(bill_number)
@@ -224,4 +221,33 @@ pub async fn list_bill_events(pool: &PgPool, bill_id: i64) -> Result<Vec<BillEve
     .await?;
 
     Ok(rows)
+}
+
+/// Returns events for multiple bills in a single query, grouped by `bill_id`.
+///
+/// Each bill's events are ordered by `event_date DESC NULLS LAST`.
+///
+/// # Errors
+///
+/// Returns [`DbError::Sqlx`] if the query fails.
+pub async fn list_bill_events_batch(
+    pool: &PgPool,
+    bill_ids: &[i64],
+) -> Result<std::collections::HashMap<i64, Vec<BillEventRow>>, DbError> {
+    let rows = sqlx::query_as::<_, BillEventRow>(
+        "SELECT id, bill_id, event_date, event_type, chamber, description, source_url, created_at \
+         FROM bill_events \
+         WHERE bill_id = ANY($1::bigint[]) \
+         ORDER BY bill_id, event_date DESC NULLS LAST",
+    )
+    .bind(bill_ids)
+    .fetch_all(pool)
+    .await?;
+
+    let mut map: std::collections::HashMap<i64, Vec<BillEventRow>> =
+        std::collections::HashMap::new();
+    for row in rows {
+        map.entry(row.bill_id).or_default().push(row);
+    }
+    Ok(map)
 }

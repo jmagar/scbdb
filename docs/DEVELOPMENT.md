@@ -261,7 +261,7 @@ web/src/
 
 - Lazy-load below-the-fold content with `React.lazy` + `Suspense`.
 - Virtualize long lists (product catalogs, bill lists) — don't render 500 DOM nodes on a phone.
-- Images: use `srcSet` / `sizes` for responsive images. Serve WebP with AVIF fallback.
+- Images: use `srcSet` / `sizes` for responsive images. Serve AVIF with WebP fallback.
 - Keep the initial JS bundle under 200KB gzipped. Code-split by route.
 
 ```text

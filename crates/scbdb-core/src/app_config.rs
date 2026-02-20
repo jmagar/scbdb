@@ -31,6 +31,7 @@ pub struct AppConfig {
     pub db_min_connections: u32,
     pub db_acquire_timeout_secs: u64,
     pub scraper_request_timeout_secs: u64,
+    pub legiscan_request_timeout_secs: u64,
     pub scraper_user_agent: String,
     pub scraper_max_concurrent_brands: usize,
     pub scraper_inter_request_delay_ms: u64,
@@ -60,6 +61,10 @@ impl std::fmt::Debug for AppConfig {
             .field(
                 "scraper_request_timeout_secs",
                 &self.scraper_request_timeout_secs,
+            )
+            .field(
+                "legiscan_request_timeout_secs",
+                &self.legiscan_request_timeout_secs,
             )
             .field("scraper_user_agent", &self.scraper_user_agent)
             .field(

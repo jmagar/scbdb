@@ -62,6 +62,14 @@ impl TeiClient {
                 .await
                 .map_err(|e| SentimentError::Tei(format!("TEI response parse error: {e}")))?;
 
+            if embeddings.len() != chunk.len() {
+                return Err(SentimentError::Tei(format!(
+                    "TEI returned {} embeddings for {} inputs",
+                    embeddings.len(),
+                    chunk.len()
+                )));
+            }
+
             all_embeddings.extend(embeddings);
         }
 

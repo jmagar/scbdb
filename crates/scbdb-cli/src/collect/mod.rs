@@ -6,6 +6,9 @@
 
 mod brand;
 
+use std::future::Future;
+use std::pin::Pin;
+
 use clap::Subcommand;
 
 use crate::fail_run_best_effort;
@@ -68,6 +71,107 @@ pub(crate) async fn load_brands_for_collect(
     }
 }
 
+/// Outcome of processing a single brand: primary `records`, secondary `extra`
+/// count (e.g. price snapshots), and a `succeeded` flag for partial-failure
+/// tracking. `Err` wraps unexpected per-brand errors.
+enum BrandOutcome {
+    Ok {
+        records: i32,
+        extra: i32,
+        succeeded: bool,
+    },
+    Err(anyhow::Error),
+}
+
+/// Aggregated totals returned by [`run_collection`]: primary `records` count
+/// and secondary `extra` count (unused for product runs).
+struct CollectionTotals {
+    records: i32,
+    extra: i32,
+}
+
+/// Shared orchestration skeleton for collection runs (create → start → loop
+/// → complete/fail). `process_brand` receives `(pool, client, config,
+/// run_id, brand)` and returns a `BrandOutcome`.
+async fn run_collection<F>(
+    pool: &sqlx::PgPool,
+    config: &scbdb_core::AppConfig,
+    brands: &[scbdb_db::BrandRow],
+    collection_type: &'static str,
+    process_brand: F,
+) -> anyhow::Result<CollectionTotals>
+where
+    F: for<'a> Fn(
+        &'a sqlx::PgPool,
+        &'a scbdb_scraper::ShopifyClient,
+        &'a scbdb_core::AppConfig,
+        i64,
+        &'a scbdb_db::BrandRow,
+    ) -> Pin<Box<dyn Future<Output = BrandOutcome> + 'a>>,
+{
+    let client = brand::build_shopify_client(config)?;
+
+    let run = scbdb_db::create_collection_run(pool, collection_type, "cli").await?;
+    if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
+        fail_run_best_effort(pool, run.id, collection_type, format!("{e:#}")).await;
+        return Err(e.into());
+    }
+
+    let mut total_records: i32 = 0;
+    let mut total_extra: i32 = 0;
+    let mut failed_brands: usize = 0;
+    let brand_count = brands.len();
+
+    for b in brands {
+        match process_brand(pool, &client, config, run.id, b).await {
+            BrandOutcome::Ok {
+                records,
+                extra,
+                succeeded,
+            } => {
+                total_records = total_records.saturating_add(records);
+                total_extra = total_extra.saturating_add(extra);
+                if !succeeded {
+                    failed_brands += 1;
+                }
+            }
+            BrandOutcome::Err(e) => {
+                tracing::error!(
+                    brand = %b.slug,
+                    error = %e,
+                    "unexpected error collecting {collection_type}"
+                );
+                failed_brands += 1;
+            }
+        }
+    }
+
+    if failed_brands > 0 {
+        tracing::warn!(
+            failed_brands,
+            total_brands = brand_count,
+            "some brands failed during collection"
+        );
+    }
+
+    if failed_brands == brand_count {
+        let message = format!("all {failed_brands} brands failed collection");
+        fail_run_best_effort(pool, run.id, collection_type, message.clone()).await;
+        anyhow::bail!("{message}");
+    }
+
+    if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
+        let message = format!("{err:#}");
+        fail_run_best_effort(pool, run.id, collection_type, message).await;
+        return Err(err.into());
+    }
+
+    Ok(CollectionTotals {
+        records: total_records,
+        extra: total_extra,
+    })
+}
+
 /// Collect full product catalog and variant data from Shopify storefronts,
 /// persisting products, variants, and initial price snapshots to the database.
 ///
@@ -101,53 +205,31 @@ pub(crate) async fn run_collect_products(
         return Ok(());
     }
 
-    let client = brand::build_shopify_client(config)?;
-
-    let run = scbdb_db::create_collection_run(pool, "products", "cli").await?;
-    if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
-        fail_run_best_effort(pool, run.id, "products", format!("{e:#}")).await;
-        return Err(e.into());
-    }
-
-    let mut total_records: i32 = 0;
-    let mut failed_brands: usize = 0;
     let brand_count = brands.len();
-
-    for b in &brands {
-        match brand::collect_brand_products(pool, &client, config, run.id, b).await {
-            Ok((brand_records, succeeded)) => {
-                total_records = total_records.saturating_add(brand_records);
-                if !succeeded {
-                    failed_brands += 1;
+    let totals = run_collection(
+        pool,
+        config,
+        &brands,
+        "products",
+        |pool, client, config, run_id, b| {
+            Box::pin(async move {
+                match brand::collect_brand_products(pool, client, config, run_id, b).await {
+                    Ok((brand_records, succeeded)) => BrandOutcome::Ok {
+                        records: brand_records,
+                        extra: 0,
+                        succeeded,
+                    },
+                    Err(e) => BrandOutcome::Err(e),
                 }
-            }
-            Err(e) => {
-                tracing::error!(brand = %b.slug, error = %e, "unexpected error collecting products");
-                failed_brands += 1;
-            }
-        }
-    }
+            })
+        },
+    )
+    .await?;
 
-    if failed_brands > 0 {
-        tracing::warn!(
-            failed_brands,
-            total_brands = brand_count,
-            "some brands failed during collection"
-        );
-    }
-
-    if failed_brands == brand_count {
-        let message = format!("all {failed_brands} brands failed collection");
-        fail_run_best_effort(pool, run.id, "products", message.clone()).await;
-        anyhow::bail!("{message}");
-    }
-
-    if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
-        let message = format!("{err:#}");
-        fail_run_best_effort(pool, run.id, "products", message).await;
-        return Err(err.into());
-    }
-    println!("collected {total_records} products across {brand_count} brands");
+    println!(
+        "collected {} products across {brand_count} brands",
+        totals.records
+    );
     Ok(())
 }
 
@@ -176,62 +258,33 @@ pub(crate) async fn run_collect_pricing(
         return Ok(());
     }
 
-    let client = brand::build_shopify_client(config)?;
-
-    let run = scbdb_db::create_collection_run(pool, "pricing", "cli").await?;
-    if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
-        fail_run_best_effort(pool, run.id, "pricing", format!("{e:#}")).await;
-        return Err(e.into());
-    }
-
-    // `records_processed` is consistently the number of products processed.
-    let mut total_records: i32 = 0;
-    let mut total_snapshots: i32 = 0;
-    let mut failed_brands: usize = 0;
     let brand_count = brands.len();
-
-    for b in &brands {
-        match brand::collect_brand_pricing(pool, &client, config, run.id, b).await {
-            Ok((brand_records, brand_snapshots, succeeded)) => {
-                total_records = total_records.saturating_add(brand_records);
-                total_snapshots = total_snapshots.saturating_add(brand_snapshots);
-                if !succeeded {
-                    failed_brands += 1;
+    let totals = run_collection(
+        pool,
+        config,
+        &brands,
+        "pricing",
+        |pool, client, config, run_id, b| {
+            Box::pin(async move {
+                match brand::collect_brand_pricing(pool, client, config, run_id, b).await {
+                    Ok((brand_records, brand_snapshots, succeeded)) => BrandOutcome::Ok {
+                        records: brand_records,
+                        extra: brand_snapshots,
+                        succeeded,
+                    },
+                    Err(e) => BrandOutcome::Err(e),
                 }
-            }
-            Err(e) => {
-                tracing::error!(brand = %b.slug, error = %e, "unexpected error collecting pricing");
-                failed_brands += 1;
-            }
-        }
-    }
+            })
+        },
+    )
+    .await?;
 
-    if failed_brands > 0 {
-        tracing::warn!(
-            failed_brands,
-            total_brands = brand_count,
-            "some brands failed during collection"
-        );
-    }
-
-    if failed_brands == brand_count {
-        let message = format!("all {failed_brands} brands failed collection");
-        fail_run_best_effort(pool, run.id, "pricing", message.clone()).await;
-        anyhow::bail!("{message}");
-    }
-
-    if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
-        let message = format!("{err:#}");
-        fail_run_best_effort(pool, run.id, "pricing", message).await;
-        return Err(err.into());
-    }
-    println!("captured {total_snapshots} price snapshots across {brand_count} brands");
+    println!(
+        "captured {} price snapshots across {brand_count} brands",
+        totals.extra
+    );
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
 
 #[cfg(test)]
 #[path = "collect_test.rs"]

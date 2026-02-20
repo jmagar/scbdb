@@ -223,8 +223,10 @@ CREATE INDEX idx_sentiment_snapshots_brand_captured ON sentiment_snapshots (bran
 
 ### Planned Post-MVP / Future Work
 
-- Any Spider/Qdrant/TEI-related schema extensions beyond vector dedup
+- Any Spider-related schema extensions
+- Qdrant/TEI schema extensions beyond the current vector dedup in Phase 4
 
 ## Notes
 
-- Spider/Qdrant/TEI integration for semantic search beyond dedup will add additional schema later as needed.
+- Qdrant and TEI are integrated in Phase 4 for sentiment signal dedup and embedding storage. Future semantic search capabilities beyond dedup may add additional schema as needed.
+- Spider integration for non-Shopify crawling will add schema later as needed.

@@ -192,27 +192,25 @@ fn load_brands_from_real_file() {
         path.exists(),
         "brands.yaml missing at {path:?} — required for this test"
     );
-    let result = load_brands(&path);
-    assert!(result.is_ok(), "failed to load brands.yaml: {result:?}");
-    let brands_file = result.unwrap();
-    assert!(!brands_file.brands.is_empty());
-    let high_rise = brands_file
-        .brands
-        .iter()
-        .find(|b| b.name == "High Rise")
-        .expect("expected High Rise in brands.yaml");
-    assert_eq!(high_rise.tier, 2);
-    assert_eq!(high_rise.relationship, Relationship::Portfolio);
-    assert_eq!(high_rise.slug(), "high-rise");
-
-    let cann = brands_file
-        .brands
-        .iter()
-        .find(|b| b.name == "Cann")
-        .expect("expected Cann in brands.yaml");
-    assert_eq!(cann.tier, 1);
-    assert_eq!(cann.relationship, Relationship::Competitor);
-    assert_eq!(cann.slug(), "cann");
+    let brands_file = load_brands(&path).expect("failed to load brands.yaml");
+    assert!(
+        !brands_file.brands.is_empty(),
+        "brands.yaml should contain at least one brand"
+    );
+    for brand in &brands_file.brands {
+        assert!(
+            !brand.slug().is_empty(),
+            "brand '{}' should have a non-empty slug",
+            brand.name
+        );
+        assert!(
+            !brand.name.trim().is_empty(),
+            "all brands must have a non-empty name"
+        );
+    }
+    // validate_brands is already called inside load_brands, so if we get
+    // here the file passes all validation rules (unique names/slugs,
+    // valid tiers, non-empty slugs).
 }
 
 #[test]

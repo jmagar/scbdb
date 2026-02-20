@@ -40,11 +40,14 @@
 - **Custom Shopify scraper** — Purpose-built HTTP client that pulls `products.json` from Shopify storefronts and normalizes the response into the internal product schema
 - **LegiScan API** — Legislative data extraction for cannabis-related bills and votes
 
+## Sentiment Infrastructure (Phase 4)
+
+- **Qdrant** — semantic vector index for signal dedup and future similarity search (`scbdb_sentiment` collection)
+- **TEI** — embedding generation service (Qwen3-Embedding-0.6B, 1024-dim vectors)
+
 ## Post-MVP Planned Components
 
 - **Spider** — fallback crawling for non-Shopify sources
-- **Qdrant** — semantic vector retrieval index
-- **TEI** — embedding generation service
 
 ## Analysis
 

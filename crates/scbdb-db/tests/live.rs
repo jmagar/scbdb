@@ -670,6 +670,26 @@ async fn get_brand_by_slug_returns_none_when_inactive(pool: sqlx::PgPool) {
     assert!(result.is_none(), "expected None for inactive brand");
 }
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn get_brand_by_slug_excludes_soft_deleted(pool: sqlx::PgPool) {
+    // Insert an active brand, then soft-delete it by setting deleted_at.
+    let slug = "soft-deleted-brand";
+    insert_test_brand(&pool, slug, true).await;
+    sqlx::query("UPDATE brands SET deleted_at = NOW() WHERE slug = $1")
+        .bind(slug)
+        .execute(&pool)
+        .await
+        .expect("failed to soft-delete brand");
+
+    let result = get_brand_by_slug(&pool, slug)
+        .await
+        .expect("get_brand_by_slug failed");
+    assert!(
+        result.is_none(),
+        "expected None for soft-deleted brand, got Some"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Section 6: Bills and Bill Events
 // ---------------------------------------------------------------------------

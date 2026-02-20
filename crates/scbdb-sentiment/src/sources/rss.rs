@@ -37,6 +37,8 @@ pub(crate) fn parse_rss_feed(
     xml: &str,
     brand_slug: &str,
 ) -> Result<Vec<SentimentSignal>, SentimentError> {
+    const MAX_SIGNALS: usize = 25;
+
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 
@@ -83,6 +85,9 @@ pub(crate) fn parse_rss_feed(
                             brand_slug: brand_slug.to_string(),
                             score: 0.0,
                         });
+                        if signals.len() >= MAX_SIGNALS {
+                            break;
+                        }
                     }
                 }
             }

@@ -53,13 +53,18 @@ The system helps the team answer four recurring questions:
 - Alerting and notification automation.
 - Multi-state expansion beyond configured targets.
 
-### 3.3 Post-MVP Planned Components
+### 3.3 Sentiment Infrastructure (Phase 4)
+
+The following components are integrated in the Phase 4 sentiment pipeline:
+
+- Qdrant (semantic vector index for signal dedup and future similarity search)
+- TEI (embedding generation via Qwen3-Embedding-0.6B)
+
+### 3.4 Post-MVP Planned Components
 
 The following components remain part of the long-term product strategy and are intentionally deferred until after MVP is stable:
 
 - Spider (fallback crawling for non-Shopify sources)
-- Qdrant (semantic retrieval index)
-- TEI (embedding generation)
 
 ## 4. User Personas
 
@@ -157,4 +162,5 @@ Execution phases are split into dedicated docs and tracked independently:
 
 - `config/brands.yaml` is the single brand registry (no separate competitor file).
 - Brand relationship is data-driven and can support white-label usage.
-- Spider/Qdrant/TEI remain in roadmap but not MVP implementation scope.
+- Qdrant/TEI are integrated in Phase 4 for sentiment signal dedup and embedding storage.
+- Spider remains in roadmap but not MVP implementation scope.

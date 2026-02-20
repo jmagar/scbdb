@@ -26,7 +26,7 @@ pub(crate) async fn run_regs_ingest(
         .as_deref()
         .ok_or_else(|| anyhow::anyhow!("LEGISCAN_API_KEY is not set; cannot run regs ingest"))?;
 
-    let client = LegiscanClient::new(api_key, config.scraper_request_timeout_secs)
+    let client = LegiscanClient::new(api_key, config.legiscan_request_timeout_secs)
         .map_err(|e| anyhow::anyhow!("failed to build LegiScan client: {e}"))?;
 
     let keyword = keyword.unwrap_or("hemp");

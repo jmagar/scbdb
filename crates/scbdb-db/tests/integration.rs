@@ -24,6 +24,7 @@ fn pool_config_from_app_config_uses_core_values() {
         db_min_connections: 7,
         db_acquire_timeout_secs: 9,
         scraper_request_timeout_secs: 30,
+        legiscan_request_timeout_secs: 30,
         scraper_user_agent: "ua".to_string(),
         scraper_max_concurrent_brands: 1,
         scraper_inter_request_delay_ms: 250,

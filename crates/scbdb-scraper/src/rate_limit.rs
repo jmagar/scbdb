@@ -77,11 +77,11 @@ where
                     return Err(err);
                 }
 
-                // Exponential backoff: base * 2^attempt seconds.
+                // Exponential backoff: base * 2^attempt seconds, with ±25% jitter.
                 // For rate-limited responses, honour the server-supplied Retry-After
                 // value as a floor so we never retry sooner than the server asked.
                 let computed = backoff_base_secs.saturating_mul(1u64 << attempt.min(62));
-                let delay_secs = if let ScraperError::RateLimited {
+                let base_delay = if let ScraperError::RateLimited {
                     retry_after_secs, ..
                 } = &err
                 {
@@ -89,6 +89,15 @@ where
                 } else {
                     computed
                 };
+
+                // Apply ±25% jitter to spread out retries and avoid thundering herd.
+                let jitter_factor = rand::random::<f64>() * 0.5 + 0.75; // [0.75, 1.25)
+                #[allow(
+                    clippy::cast_possible_truncation,
+                    clippy::cast_sign_loss,
+                    clippy::cast_precision_loss
+                )]
+                let delay_secs = (base_delay as f64 * jitter_factor) as u64;
 
                 tracing::warn!(
                     attempt,

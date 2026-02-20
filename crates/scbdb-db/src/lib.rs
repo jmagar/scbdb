@@ -153,8 +153,8 @@ pub mod seed;
 pub mod sentiment;
 
 pub use bills::{
-    get_bill_by_jurisdiction_number, list_bill_events, list_bills, upsert_bill, upsert_bill_event,
-    BillEventRow, BillRow,
+    get_bill_by_jurisdiction_number, list_bill_events, list_bill_events_batch, list_bills,
+    upsert_bill, upsert_bill_event, BillEventRow, BillRow,
 };
 pub use brands::{get_brand_by_slug, list_active_brands, BrandRow};
 pub use collection_runs::{

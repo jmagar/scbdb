@@ -149,13 +149,18 @@ Pipeline for aggregating and scoring market sentiment signals alongside product 
 > and storage schema for the sentiment pipeline are not yet defined. See
 > [MVP.md](MVP.md) and [phase-4-sentiment-pipeline.md](mvp_phases/phase-4-sentiment-pipeline.md) for open design items.
 
+### Phase 4 Infrastructure
+
+The following components are integrated in the Phase 4 sentiment pipeline:
+
+- **Qdrant** vector index — signal dedup and future semantic search (`scbdb_sentiment` collection)
+- **TEI** embedding generation — Qwen3-Embedding-0.6B, 1024-dimensional vectors
+
 ### Post-MVP Components
 
 The following components are part of the roadmap but out of MVP scope:
 
-- Spider fallback crawler
-- Qdrant vector index
-- TEI embedding generation pipeline
+- Spider fallback crawler for non-Shopify sources
 
 ## Frontend (`web/`)
 

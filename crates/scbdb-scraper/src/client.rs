@@ -182,6 +182,11 @@ impl ShopifyClient {
     /// `inter_request_delay_ms` is the delay in milliseconds between page requests
     /// (applied after every page except the first).
     ///
+    /// **All-or-nothing semantics**: on any page failure (network error, rate limit,
+    /// pagination limit), already-fetched products from earlier pages are discarded
+    /// and the error is returned. This is intentional — partial product lists would
+    /// produce incorrect deltas when compared against the previous full snapshot.
+    ///
     /// # Errors
     ///
     /// Propagates any error from [`Self::fetch_products_page`].

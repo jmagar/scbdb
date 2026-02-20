@@ -19,5 +19,6 @@ This file is the index for execution phases. Detailed implementation content liv
 ## Scope Guardrails
 
 - MVP execution is CLI-first.
-- Spider, Qdrant, and TEI are planned post-MVP capabilities.
+- Qdrant and TEI are integrated in Phase 4 for sentiment signal dedup and embedding storage.
+- Spider remains a planned post-MVP capability.
 - `config/brands.yaml` is the single brand registry for both portfolio and competitor brands.

@@ -30,7 +30,8 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 - Brand relationship model: `portfolio` or `competitor`
 - Tier model: `1`, `2`, `3`
 - Core capabilities: product intelligence, pricing history, regulatory tracking, reporting
-- Post-MVP roadmap: Spider, Qdrant, TEI
+- Phase 4 infrastructure: Qdrant (signal dedup), TEI (embeddings)
+- Post-MVP roadmap: Spider
 
 ## Canonical Docs
 
