@@ -37,7 +37,7 @@ pub struct ProductRow {
 
 /// A row from the `product_variants` table.
 ///
-/// `is_available` and `title` are nullable in the initial schema.
+/// `title` is nullable; `is_available` is `NOT NULL DEFAULT TRUE` as of migration 500.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct VariantRow {
     pub id: i64,
@@ -51,8 +51,7 @@ pub struct VariantRow {
     /// outside the scraper (e.g. seed data, migrations) may produce `NULL`.
     pub title: Option<String>,
     pub is_default: bool,
-    /// Nullable in schema (`BOOLEAN` with no `NOT NULL`).
-    pub is_available: Option<bool>,
+    pub is_available: bool,
     pub dosage_mg: Option<Decimal>,
     pub cbd_mg: Option<Decimal>,
     pub size_value: Option<Decimal>,
