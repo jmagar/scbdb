@@ -24,7 +24,7 @@ pub enum ConfigError {
     },
 
     #[error("failed to parse brands file: {0}")]
-    BrandsFileParse(#[source] serde_yaml::Error),
+    BrandsFileParse(#[source] serde_yml::Error),
 
     #[error("validation error: {0}")]
     Validation(String),

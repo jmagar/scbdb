@@ -25,8 +25,8 @@ pre-push:
 
     cargo-test:
       glob: "**/*.rs"
-      run: cargo test --workspace
-      fail_text: "All tests must pass before pushing."
+      run: cargo test --workspace --lib
+      fail_text: "All unit tests must pass before pushing. Integration tests require a running DB — run 'just test' manually."
 
     web-typecheck:
       glob: "web/**/*.{ts,tsx}"

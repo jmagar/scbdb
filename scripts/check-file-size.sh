@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # ── Thresholds (lines) ────────────────────────────────────────────────────────
-MAX_RS=400   # Rust source modules
+MAX_RS=300   # Rust source modules
 MAX_TS=300   # TypeScript source files
 
 is_test_file() {

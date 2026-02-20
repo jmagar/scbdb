@@ -56,11 +56,11 @@ jobs:
         id: cache-sqlx
         with:
           path: ~/.cargo/bin/sqlx
-          key: sqlx-cli-${{ runner.os }}-v0.8
+          key: sqlx-cli-${{ runner.os }}-v0.8.5
 
       - name: Install sqlx-cli
         if: steps.cache-sqlx.outputs.cache-hit != 'true'
-        run: cargo install sqlx-cli --no-default-features --features postgres,rustls
+        run: cargo install sqlx-cli --version 0.8.5 --no-default-features --features postgres,rustls
       - name: Run migrations
         run: sqlx migrate run
       - name: Run tests
@@ -79,7 +79,7 @@ jobs:
           node-version: 24
           cache: pnpm
       - name: Install
-        run: pnpm install --frozen-lockfile=false
+        run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm --dir web typecheck
       - name: Lint
