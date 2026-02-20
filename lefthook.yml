@@ -1,0 +1,44 @@
+pre-commit:
+  parallel: true
+  commands:
+    check-file-size:
+      run: scripts/check-file-size.sh
+      fail_text: "Split large files into focused modules before committing."
+
+    cargo-fmt:
+      glob: "**/*.rs"
+      run: cargo fmt --all -- --check
+      fail_text: "Run 'just format' to fix Rust formatting."
+
+    web-format:
+      glob: "web/**/*.{ts,tsx,css}"
+      run: |
+        if command -v pnpm > /dev/null 2>&1; then
+          pnpm --dir web format:check
+        else
+          echo "pnpm not found — skipping web format check"
+        fi
+      fail_text: "Run 'just format' to fix web formatting."
+
+pre-push:
+  parallel: true
+  commands:
+    cargo-clippy:
+      glob: "**/*.rs"
+      run: cargo clippy --workspace -- -D warnings
+      fail_text: "Run 'just check' to see clippy details."
+
+    cargo-test:
+      glob: "**/*.rs"
+      run: cargo test --workspace --lib
+      fail_text: "All unit tests must pass before pushing. Integration tests require a running DB — run 'just test' manually."
+
+    web-typecheck:
+      glob: "web/**/*.{ts,tsx}"
+      run: |
+        if command -v pnpm > /dev/null 2>&1; then
+          pnpm --dir web typecheck
+        else
+          echo "pnpm not found — skipping web typecheck"
+        fi
+      fail_text: "Fix TypeScript errors before pushing."

@@ -1,3 +1,14 @@
+# Extraction Prompt Schema
+
+## Document Metadata
+
+- Version: 1.0
+- Status: Active
+- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+
+## Schema Definitions
+
+```yaml
 schema_prompt_full: > Extract all beverage products
   from this page. Return JSON: {"brand_name": string
   (brand name exactly as displayed), "products":
@@ -46,3 +57,4 @@ schema_prompt_lite: > Extract all beverage products
   "price_usd": number or null, "pack_size": number or
   null, "available": boolean}]}. Only extract what is
   explicitly on the page.
+```

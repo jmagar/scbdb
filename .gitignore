@@ -1,0 +1,46 @@
+# Build/cache artifacts
+.cache
+.firecrawl
+node_modules
+dist
+coverage
+target
+
+# Rust-specific artifacts
+*.rs.bk
+*.profraw
+*.profdata
+tarpaulin-report.html
+lcov.info
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+.venv
+.mypy_cache
+.ruff_cache
+.pytest_cache
+.coverage
+
+# Tool/IDE artifacts
+.1code
+.serena
+.emdash.json
+
+# Secrets
+.env
+.env.local
+.env.production
+.env.development
+.env.*.local
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# docs session artifacts
+docs/plans
+docs/sessions
+docs/reports
