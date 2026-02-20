@@ -97,9 +97,22 @@ pub fn normalize_product(
 
 /// Normalizes a raw [`ShopifyVariant`] into a [`NormalizedVariant`].
 ///
+/// The `html_dosage_fallback` is the dosage extracted from the parent
+/// product's `body_html` (computed once in [`normalize_product`]). It is
+/// applied uniformly to **all** variants of the product when a variant's
+/// title yields no dosage value.
+///
+/// **Limitation:** this fallback assumes every variant of a product has the
+/// same dosage — which holds for single-dose brands like BREZ but will
+/// produce incorrect data for products that offer multiple dosage strengths
+/// across variants with bare titles (e.g., "Hi Boy" / "Hi'er Boy" paired
+/// with `body_html` that mentions both 5mg and 10mg). For such products the
+/// first parseable THC value in the HTML will be attributed to all variants.
+///
 /// # Errors
 ///
-/// Returns [`ScraperError::Normalization`] if `variant.price` is empty.
+/// Returns [`ScraperError::Normalization`] if `variant.price` is empty or
+/// not parseable as a number.
 fn normalize_variant(
     variant: ShopifyVariant,
     is_default: bool,

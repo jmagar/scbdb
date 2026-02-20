@@ -159,3 +159,35 @@ fn normalize_variant_parses_dosage_from_title() {
     assert_eq!(normalized.variants[0].size_value, Some(12.0));
     assert_eq!(normalized.variants[0].size_unit.as_deref(), Some("oz"));
 }
+
+#[test]
+fn normalize_product_preserves_vendor_from_shopify() {
+    // make_shopify_product sets vendor: Some("Hi") — assert it flows through.
+    let product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(normalized.vendor.as_deref(), Some("Hi"));
+}
+
+#[test]
+fn normalize_html_dosage_fallback_applies_uniformly_to_all_variants() {
+    // When variant titles are bare names with no mg values, the dosage
+    // extracted from body_html is applied to every variant. This is correct
+    // for single-dose products (like BREZ) but is a known limitation for
+    // multi-dose products — see normalize_variant doc for details.
+    let mut product = make_shopify_product(vec![
+        make_shopify_variant(1, "Hi Boy", Some(1)),
+        make_shopify_variant(2, "Hi'er Boy", Some(2)),
+    ]);
+    product.body_html = Some("<p>3mg micronized THC per can</p>".to_owned());
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.variants[0].dosage_mg,
+        Some(3.0),
+        "first variant should receive html_dosage_fallback"
+    );
+    assert_eq!(
+        normalized.variants[1].dosage_mg,
+        Some(3.0),
+        "second variant also receives the same html_dosage_fallback — uniform behavior"
+    );
+}

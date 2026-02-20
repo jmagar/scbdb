@@ -8,7 +8,7 @@
 /// Maximum byte distance between a numeric value and its THC/CBD label in a
 /// variant title. Covers patterns like "12.5 mg THC" with surrounding spaces
 /// and punctuation.
-pub(crate) const MG_LABEL_WINDOW: usize = 20;
+const MG_LABEL_WINDOW: usize = 20;
 
 /// Parses a dosage value where `label` (e.g., `"thc"` or `"cbd"`) appears
 /// either immediately before or after the `mg` number.
@@ -122,7 +122,7 @@ pub(crate) fn parse_bare_mg(lower: &str) -> Option<f64> {
 
 /// Returns all `Nmg` values found in `s` in left-to-right order.
 /// Input must be pre-lowercased.
-pub(crate) fn all_mg_values(s: &str) -> Vec<f64> {
+fn all_mg_values(s: &str) -> Vec<f64> {
     let bytes = s.as_bytes();
     let len = bytes.len();
     let mut values = Vec::new();
@@ -164,7 +164,7 @@ pub(crate) fn all_mg_values(s: &str) -> Vec<f64> {
 /// Scans `s` for the first occurrence of a number (integer or decimal)
 /// optionally followed by whitespace and then `"mg"`. Returns the parsed
 /// `f64` value or `None`.
-pub(crate) fn extract_mg_value(s: &str) -> Option<f64> {
+fn extract_mg_value(s: &str) -> Option<f64> {
     let bytes = s.as_bytes();
     let len = bytes.len();
     let mut i = 0usize;

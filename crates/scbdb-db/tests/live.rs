@@ -236,6 +236,53 @@ async fn product_upsert_is_idempotent(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn product_upsert_persists_vendor_field(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "cann-vendor", true).await;
+    let mut product = make_normalized_product("PROD-VENDOR-001");
+    product.vendor = Some("CANN".to_string());
+
+    upsert_product(&pool, brand_id, &product)
+        .await
+        .expect("first upsert_product failed");
+
+    let vendor: Option<String> = sqlx::query_scalar(
+        "SELECT vendor FROM products WHERE brand_id = $1 AND source_product_id = $2",
+    )
+    .bind(brand_id)
+    .bind("PROD-VENDOR-001")
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        vendor.as_deref(),
+        Some("CANN"),
+        "vendor should be persisted"
+    );
+
+    // Verify vendor is updated on conflict (not ignored).
+    product.vendor = Some("CANN Beverages".to_string());
+    upsert_product(&pool, brand_id, &product)
+        .await
+        .expect("second upsert_product failed");
+
+    let updated_vendor: Option<String> = sqlx::query_scalar(
+        "SELECT vendor FROM products WHERE brand_id = $1 AND source_product_id = $2",
+    )
+    .bind(brand_id)
+    .bind("PROD-VENDOR-001")
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        updated_vendor.as_deref(),
+        Some("CANN Beverages"),
+        "vendor should be overwritten on conflict"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn product_upsert_updates_name_on_conflict(pool: sqlx::PgPool) {
     let brand_id = insert_test_brand(&pool, "cann-2", true).await;
 

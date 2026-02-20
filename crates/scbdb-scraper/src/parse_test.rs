@@ -214,3 +214,15 @@ fn html_dosage_strips_tags_correctly() {
 fn html_dosage_returns_none_when_no_mg() {
     assert_eq!(parse_dosage_from_html("<p>A refreshing beverage</p>"), None);
 }
+
+#[test]
+fn html_dosage_thc_found_when_cbd_text_comes_first() {
+    // When CBD appears before THC in body_html text, the THC value is still
+    // returned because parse_thc_mg uses the "closest before-label" window —
+    // all mg values before the THC label are collected and the last (closest)
+    // is chosen, which in "6mg CBD, 3mg THC" is 3mg.
+    assert_eq!(
+        parse_dosage_from_html("<p>6mg CBD, 3mg THC per can</p>"),
+        Some(3.0)
+    );
+}
