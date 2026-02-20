@@ -25,7 +25,7 @@ pub struct AppConfig {
     pub bind_addr: SocketAddr,
     pub log_level: String,
     pub brands_path: PathBuf,
-    pub api_key_hash_salt: String,
+    pub api_key_hash_salt: Option<String>,
     pub legiscan_api_key: Option<String>,
     pub db_max_connections: u32,
     pub db_min_connections: u32,

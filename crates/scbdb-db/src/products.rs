@@ -111,7 +111,6 @@ pub async fn upsert_product(
              tags         = EXCLUDED.tags, \
              handle       = EXCLUDED.handle, \
              source_url   = EXCLUDED.source_url, \
-             metadata     = EXCLUDED.metadata, \
              updated_at   = NOW() \
          RETURNING id",
     )

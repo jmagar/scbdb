@@ -115,7 +115,7 @@ pub async fn run_migrations(pool: &PgPool) -> Result<usize, sqlx::migrate::Migra
 ///
 /// Returns [`sqlx::Error`] if the query fails.
 pub async fn ping(pool: &PgPool) -> Result<(), sqlx::Error> {
-    sqlx::query_scalar::<_, i64>("SELECT 1")
+    sqlx::query_scalar::<_, i32>("SELECT 1")
         .fetch_one(pool)
         .await?;
     Ok(())

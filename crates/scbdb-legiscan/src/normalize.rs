@@ -57,8 +57,18 @@ pub fn parse_date(s: &str) -> Option<NaiveDate> {
 /// suitable for database persistence.
 #[must_use]
 pub fn normalize_bill(detail: &BillDetail) -> NormalizedBill {
-    let introduced_date = detail.history.first().and_then(|h| parse_date(&h.date));
-    let last_action_date = detail.history.last().and_then(|h| parse_date(&h.date));
+    // Use chronological min/max rather than array first/last: the API does not
+    // guarantee that history entries are in date order.
+    let introduced_date = detail
+        .history
+        .iter()
+        .filter_map(|h| parse_date(&h.date))
+        .min();
+    let last_action_date = detail
+        .history
+        .iter()
+        .filter_map(|h| parse_date(&h.date))
+        .max();
     let status_date = detail.status_date.as_deref().and_then(parse_date);
     let session = detail.session.as_ref().map(|s| s.session_name.clone());
 

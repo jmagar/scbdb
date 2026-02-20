@@ -59,17 +59,6 @@ fn build_app_config_fails_without_database_url() {
 }
 
 #[test]
-fn build_app_config_fails_without_api_key_hash_salt() {
-    let mut map: HashMap<&str, &str> = HashMap::new();
-    map.insert("DATABASE_URL", "postgres://user:pass@localhost/testdb");
-    let result = build_app_config(lookup_from_map(&map));
-    assert!(
-        matches!(result, Err(ConfigError::MissingEnvVar(ref v)) if v == "SCBDB_API_KEY_HASH_SALT"),
-        "expected MissingEnvVar(SCBDB_API_KEY_HASH_SALT), got: {result:?}"
-    );
-}
-
-#[test]
 fn build_app_config_fails_with_invalid_bind_addr() {
     let mut map = full_env();
     map.insert("SCBDB_BIND_ADDR", "not-a-socket-addr");
@@ -88,7 +77,7 @@ fn build_app_config_succeeds_with_all_required_vars() {
     let cfg = result.unwrap();
     assert_eq!(cfg.env, Environment::Development);
     assert_eq!(cfg.database_url, "postgres://user:pass@localhost/testdb");
-    assert_eq!(cfg.api_key_hash_salt, "test-salt");
+    assert_eq!(cfg.api_key_hash_salt, Some("test-salt".to_string()));
     assert_eq!(cfg.bind_addr.to_string(), "0.0.0.0:3000");
     assert_eq!(cfg.log_level, "info");
     assert_eq!(cfg.db_max_connections, 10);

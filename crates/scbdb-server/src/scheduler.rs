@@ -17,7 +17,7 @@ use tokio_cron_scheduler::{JobScheduler, JobSchedulerError};
 /// started.
 pub async fn build_scheduler() -> Result<JobScheduler, JobSchedulerError> {
     let scheduler = JobScheduler::new().await?;
-    // Phase 2: register collection jobs here.
+    // Register scheduled collection jobs here when server-driven scheduling is implemented.
     scheduler.start().await?;
     Ok(scheduler)
 }

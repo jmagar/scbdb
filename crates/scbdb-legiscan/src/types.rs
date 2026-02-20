@@ -90,11 +90,16 @@ pub struct SearchResponse {
 }
 
 /// The inner search result containing summary metadata and matching bills.
+///
+/// The `LegiScan` `search` endpoint returns bills as numbered string keys
+/// (`"0"`, `"1"`, …) alongside the `summary` key — matching the `getMasterList`
+/// envelope shape. `results` captures all remaining keys via `#[serde(flatten)]`;
+/// callers must filter numeric keys and deserialize each value individually.
 #[derive(Debug, Deserialize)]
 pub struct SearchResult {
     pub summary: SearchSummary,
-    #[serde(default)]
-    pub results: Vec<BillSearchItem>,
+    #[serde(flatten)]
+    pub results: HashMap<String, serde_json::Value>,
 }
 
 /// Pagination and relevance metadata from a search response.

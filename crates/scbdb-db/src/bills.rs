@@ -110,11 +110,12 @@ pub async fn upsert_bill(
 // bill_events operations
 // ---------------------------------------------------------------------------
 
-/// Inserts a bill event if an identical row does not already exist.
+/// Inserts a bill event, silently skipping duplicates.
 ///
-/// Deduplication is based on `(bill_id, description, event_date)` using
-/// `IS NOT DISTINCT FROM` to correctly handle `NULL` dates. If a matching
-/// row already exists, the insert is silently skipped.
+/// Deduplication is based on `(bill_id, description, event_date)` via the
+/// `idx_bill_events_dedup` unique index (created with `NULLS NOT DISTINCT`
+/// so rows with a NULL event_date are treated as equal). The `ON CONFLICT DO
+/// NOTHING` form is atomic; the previous `WHERE NOT EXISTS` form was not.
 ///
 /// # Errors
 ///
@@ -130,12 +131,8 @@ pub async fn upsert_bill_event(
 ) -> Result<(), DbError> {
     sqlx::query(
         "INSERT INTO bill_events (bill_id, event_date, event_type, chamber, description, source_url) \
-         SELECT $1, $2, $3, $4, $5, $6 \
-         WHERE NOT EXISTS ( \
-             SELECT 1 FROM bill_events \
-             WHERE bill_id = $1 AND description = $5 \
-               AND event_date IS NOT DISTINCT FROM $2 \
-         )",
+         VALUES ($1, $2, $3, $4, $5, $6) \
+         ON CONFLICT (bill_id, description, event_date) DO NOTHING",
     )
     .bind(bill_id)
     .bind(event_date)

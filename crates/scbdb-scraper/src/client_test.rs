@@ -2,7 +2,8 @@ use super::*;
 
 #[test]
 fn products_url_without_cursor() {
-    let url = ShopifyClient::products_url("https://drinkcann.com/collections/all", 250, None);
+    let url =
+        ShopifyClient::products_url("https://drinkcann.com/collections/all", 250, None).unwrap();
     assert_eq!(url, "https://drinkcann.com/products.json?limit=250");
 }
 
@@ -12,7 +13,8 @@ fn products_url_with_cursor() {
         "https://drinkcann.com/collections/all",
         250,
         Some("eyJsYXN0X2lkIjo2fQ"),
-    );
+    )
+    .unwrap();
     assert_eq!(
         url,
         "https://drinkcann.com/products.json?limit=250&page_info=eyJsYXN0X2lkIjo2fQ"
@@ -21,14 +23,25 @@ fn products_url_with_cursor() {
 
 #[test]
 fn products_url_strips_trailing_slash() {
-    let url = ShopifyClient::products_url("https://drinkcann.com/", 50, None);
+    let url = ShopifyClient::products_url("https://drinkcann.com/", 50, None).unwrap();
     assert_eq!(url, "https://drinkcann.com/products.json?limit=50");
 }
 
 #[test]
 fn products_url_bare_domain() {
-    let url = ShopifyClient::products_url("https://drinkcann.com", 250, None);
+    let url = ShopifyClient::products_url("https://drinkcann.com", 250, None).unwrap();
     assert_eq!(url, "https://drinkcann.com/products.json?limit=250");
+}
+
+#[test]
+fn products_url_rejects_invalid_origin() {
+    let result = ShopifyClient::products_url("not-a-url", 250, None);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(
+        matches!(err, ScraperError::InvalidShopUrl { .. }),
+        "expected InvalidShopUrl, got: {err:?}"
+    );
 }
 
 #[test]

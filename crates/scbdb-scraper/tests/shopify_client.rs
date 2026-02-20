@@ -359,3 +359,77 @@ async fn fetch_all_products_retries_after_429_and_succeeds() {
     );
     assert_eq!(products[0].id, 42, "expected product id 42");
 }
+
+// ---------------------------------------------------------------------------
+// Test 9 – retry exhaustion returns Err
+// ---------------------------------------------------------------------------
+
+/// Verifies that when all retries are exhausted (server always returns 429),
+/// `fetch_all_products` returns the final `RateLimited` error instead of
+/// silently succeeding or hanging.
+#[tokio::test]
+async fn fetch_all_products_returns_error_after_exhausting_retries() {
+    let server = MockServer::start().await;
+
+    // Server always returns 429 with Retry-After: 0 so the test doesn't sleep.
+    Mock::given(method("GET"))
+        .and(path("/products.json"))
+        .respond_with(ResponseTemplate::new(429).insert_header("Retry-After", "0"))
+        .expect(2) // 1 initial + 1 retry = 2 total requests
+        .mount(&server)
+        .await;
+
+    // max_retries=1, backoff_base_secs=0 → 2 total attempts, no sleeping.
+    let client = test_client_with_retries(1, 0);
+    let result = client.fetch_all_products(&server.uri(), 250, 0).await;
+
+    assert!(
+        result.is_err(),
+        "expected Err after exhausting retries, got: {result:?}"
+    );
+    assert!(
+        matches!(result.unwrap_err(), ScraperError::RateLimited { .. }),
+        "expected ScraperError::RateLimited after retry exhaustion"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Test 10 – 5xx is retried and succeeds after transient failure
+// ---------------------------------------------------------------------------
+
+/// Verifies that a 503 response is retried (now that 5xx is retriable) and
+/// the client recovers when the server responds with 200 on the next attempt.
+#[tokio::test]
+async fn fetch_all_products_retries_after_503_and_succeeds() {
+    let server = MockServer::start().await;
+
+    // First request returns 503 (served once).
+    Mock::given(method("GET"))
+        .and(path("/products.json"))
+        .respond_with(ResponseTemplate::new(503))
+        .up_to_n_times(1)
+        .mount(&server)
+        .await;
+
+    // Second request returns 200 with one product.
+    Mock::given(method("GET"))
+        .and(path("/products.json"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&one_product_json(77)))
+        .mount(&server)
+        .await;
+
+    let client = test_client_with_retries(1, 0);
+    let result = client.fetch_all_products(&server.uri(), 250, 0).await;
+
+    assert!(
+        result.is_ok(),
+        "expected Ok after 503 retry, got: {result:?}"
+    );
+    let products = result.unwrap();
+    assert_eq!(
+        products.len(),
+        1,
+        "expected 1 product after successful retry"
+    );
+    assert_eq!(products[0].id, 77, "expected product id 77");
+}

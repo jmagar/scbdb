@@ -102,7 +102,7 @@ pub(super) async fn collect_brand_core(
         Ok(products) => products,
         Err(e) => {
             let err_string = e.to_string();
-            tracing::warn!(
+            tracing::error!(
                 brand = %brand.slug,
                 error = %err_string,
                 "failed to fetch products for brand"
@@ -150,7 +150,7 @@ pub(super) async fn collect_brand_core(
         Ok(counts) => Ok(Some(counts)),
         Err(e) => {
             let err_string = format!("{e:#}");
-            tracing::warn!(
+            tracing::error!(
                 brand = %brand.slug,
                 error = %err_string,
                 "db error persisting brand products"
@@ -176,18 +176,22 @@ pub(super) async fn collect_brand_core(
     }
 }
 
+/// Returns `(records_count, brand_succeeded)`.
+///
+/// When `brand_succeeded` is `false`, the brand's failure has already been
+/// recorded in `collection_run_brands` and the returned count is `0`.
 pub(super) async fn collect_brand_products(
     pool: &sqlx::PgPool,
     client: &scbdb_scraper::ShopifyClient,
     config: &scbdb_core::AppConfig,
     run_id: i64,
     brand: &scbdb_db::BrandRow,
-) -> anyhow::Result<i32> {
+) -> anyhow::Result<(i32, bool)> {
     let Some((brand_products, _brand_snapshots)) =
         collect_brand_core(pool, client, config, run_id, brand).await?
     else {
         // Core already recorded the failure in collection_run_brands.
-        return Ok(0);
+        return Ok((0, false));
     };
 
     if let Err(e) = scbdb_db::upsert_collection_run_brand(
@@ -202,12 +206,14 @@ pub(super) async fn collect_brand_products(
     {
         tracing::error!(
             brand = %brand.slug,
+            run_id,
             error = %e,
-            "failed to record brand success"
+            "product data saved but failed to record brand success in collection_run_brands — audit trail incomplete"
         );
+        return Err(e.into());
     }
 
-    Ok(brand_products)
+    Ok((brand_products, true))
 }
 
 /// Collect brand pricing snapshot data.
@@ -216,18 +222,23 @@ pub(super) async fn collect_brand_products(
 /// encountered, then captures price snapshots for all variants. New products
 /// are persisted as a side effect so that pricing data is never lost when a
 /// brand adds products between collection runs.
+///
+/// Returns `(products_count, snapshots_count, brand_succeeded)`.
+///
+/// When `brand_succeeded` is `false`, the brand's failure has already been
+/// recorded in `collection_run_brands` and both returned counts are `0`.
 pub(super) async fn collect_brand_pricing(
     pool: &sqlx::PgPool,
     client: &scbdb_scraper::ShopifyClient,
     config: &scbdb_core::AppConfig,
     run_id: i64,
     brand: &scbdb_db::BrandRow,
-) -> anyhow::Result<(i32, i32)> {
+) -> anyhow::Result<(i32, i32, bool)> {
     let Some((brand_products, brand_snapshots)) =
         collect_brand_core(pool, client, config, run_id, brand).await?
     else {
         // Core already recorded the failure in collection_run_brands.
-        return Ok((0, 0));
+        return Ok((0, 0, false));
     };
 
     if let Err(e) = scbdb_db::upsert_collection_run_brand(
@@ -242,10 +253,12 @@ pub(super) async fn collect_brand_pricing(
     {
         tracing::error!(
             brand = %brand.slug,
+            run_id,
             error = %e,
-            "failed to record brand success"
+            "pricing data saved but failed to record brand success in collection_run_brands — audit trail incomplete"
         );
+        return Err(e.into());
     }
 
-    Ok((brand_products, brand_snapshots))
+    Ok((brand_products, brand_snapshots, true))
 }

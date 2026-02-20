@@ -3,13 +3,13 @@ use crate::ConfigError;
 
 /// Load application configuration from environment variables.
 ///
-/// Calls `dotenvy::dotenv().ok()` to load `.env` files before reading env vars.
+/// Does NOT load `.env` files — binary entrypoints (CLI, server) are responsible
+/// for calling `dotenvy::dotenv().ok()` before invoking this function.
 ///
 /// # Errors
 ///
 /// Returns `ConfigError` if required env vars are missing or values are invalid.
 pub fn load_app_config() -> Result<AppConfig, ConfigError> {
-    dotenvy::dotenv().ok();
     load_app_config_from_env()
 }
 
@@ -79,7 +79,7 @@ where
     };
 
     let database_url = require("DATABASE_URL")?;
-    let api_key_hash_salt = require("SCBDB_API_KEY_HASH_SALT")?;
+    let api_key_hash_salt = lookup("SCBDB_API_KEY_HASH_SALT").ok();
 
     let env = parse_environment(&or_default("SCBDB_ENV", "development"))?;
 

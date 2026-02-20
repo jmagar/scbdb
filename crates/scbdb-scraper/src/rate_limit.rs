@@ -15,28 +15,36 @@ use crate::error::ScraperError;
 /// Retriable errors:
 /// - [`ScraperError::RateLimited`] — HTTP 429; the server has asked us to back off.
 /// - [`ScraperError::Http`] — network-level failure (connection reset, timeout, etc.).
+/// - [`ScraperError::UnexpectedStatus`] with status >= 500 — transient server errors
+///   (502/503/504 are common from CDNs like Shopify's).
 ///
 /// Non-retriable errors (propagated immediately):
 /// - [`ScraperError::NotFound`] — 404; retrying would return the same result.
-/// - [`ScraperError::UnexpectedStatus`] — non-retriable HTTP status (e.g., 403, 500).
+/// - [`ScraperError::UnexpectedStatus`] with status < 500 — client errors (e.g., 403).
 /// - [`ScraperError::Deserialize`] — response body does not parse; retrying won't fix it.
 /// - [`ScraperError::Normalization`] — data shape issue; retrying won't fix it.
 /// - [`ScraperError::PaginationLimit`] — guard against infinite loops; not a transient error.
 fn is_retriable(err: &ScraperError) -> bool {
-    matches!(
-        err,
-        ScraperError::RateLimited { .. } | ScraperError::Http(_)
-    )
+    match err {
+        ScraperError::RateLimited { .. } | ScraperError::Http(_) => true,
+        ScraperError::UnexpectedStatus { status, .. } => *status >= 500,
+        _ => false,
+    }
 }
 
 /// Executes `operation` with exponential backoff retries on transient errors.
 ///
 /// On success the result is returned immediately.
 ///
-/// On a retriable error ([`ScraperError::RateLimited`] or [`ScraperError::Http`]),
-/// the function sleeps for `backoff_base_secs * 2^attempt` seconds and tries again,
-/// up to `max_retries` additional attempts after the first try. If all retries are
-/// exhausted the last error is returned.
+/// On a retriable error ([`ScraperError::RateLimited`], [`ScraperError::Http`],
+/// or [`ScraperError::UnexpectedStatus`] with status >= 500), the function sleeps
+/// for `backoff_base_secs * 2^attempt` seconds and tries again, up to `max_retries`
+/// additional attempts after the first try. If all retries are exhausted the last
+/// error is returned.
+///
+/// For [`ScraperError::RateLimited`] errors, the delay is
+/// `max(computed_backoff, retry_after_secs)` so we never retry sooner than the
+/// server requested.
 ///
 /// Non-retriable errors are returned immediately without sleeping or retrying.
 ///
@@ -59,7 +67,6 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, ScraperError>>,
 {
-    let mut last_err;
     let mut attempt = 0u32;
 
     loop {
@@ -69,31 +76,31 @@ where
                 if !is_retriable(&err) || attempt >= max_retries {
                     return Err(err);
                 }
-                last_err = err;
+
+                // Exponential backoff: base * 2^attempt seconds.
+                // For rate-limited responses, honour the server-supplied Retry-After
+                // value as a floor so we never retry sooner than the server asked.
+                let computed = backoff_base_secs.saturating_mul(1u64 << attempt.min(62));
+                let delay_secs = if let ScraperError::RateLimited {
+                    retry_after_secs, ..
+                } = &err
+                {
+                    computed.max(*retry_after_secs)
+                } else {
+                    computed
+                };
+
+                tracing::warn!(
+                    attempt,
+                    max_retries,
+                    delay_secs,
+                    error = %err,
+                    "transient scraper error — retrying after backoff"
+                );
+                tokio::time::sleep(Duration::from_secs(delay_secs)).await;
+                attempt += 1;
             }
         }
-
-        // Exponential backoff: base * 2^attempt seconds.
-        // For rate-limited responses, honour the server-supplied Retry-After
-        // value as a floor so we never retry sooner than the server asked.
-        let exponential_secs = backoff_base_secs.saturating_mul(1u64 << attempt.min(62));
-        let delay_secs = if let ScraperError::RateLimited {
-            retry_after_secs, ..
-        } = &last_err
-        {
-            exponential_secs.max(*retry_after_secs)
-        } else {
-            exponential_secs
-        };
-        tracing::warn!(
-            attempt,
-            max_retries,
-            delay_secs,
-            error = %last_err,
-            "transient scraper error — retrying after backoff"
-        );
-        tokio::time::sleep(Duration::from_secs(delay_secs)).await;
-        attempt += 1;
     }
 }
 
@@ -201,5 +208,52 @@ mod tests {
         .await;
         assert_eq!(call_count.load(Ordering::SeqCst), 1);
         assert!(matches!(result, Err(ScraperError::Deserialize { .. })));
+    }
+
+    #[tokio::test]
+    async fn retries_on_5xx_unexpected_status_then_succeeds() {
+        let call_count = Arc::new(AtomicU32::new(0));
+        let cc = Arc::clone(&call_count);
+        let result = retry_with_backoff(3, 0, || {
+            let cc = Arc::clone(&cc);
+            async move {
+                let n = cc.fetch_add(1, Ordering::SeqCst);
+                if n < 1 {
+                    Err(ScraperError::UnexpectedStatus {
+                        status: 503,
+                        url: "https://example.com/products.json".to_owned(),
+                    })
+                } else {
+                    Ok::<u32, ScraperError>(7)
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), 7);
+        // 1 failure + 1 success = 2 calls
+        assert_eq!(call_count.load(Ordering::SeqCst), 2);
+    }
+
+    #[tokio::test]
+    async fn does_not_retry_4xx_unexpected_status() {
+        let call_count = Arc::new(AtomicU32::new(0));
+        let cc = Arc::clone(&call_count);
+        let result = retry_with_backoff(3, 0, || {
+            let cc = Arc::clone(&cc);
+            async move {
+                cc.fetch_add(1, Ordering::SeqCst);
+                Err::<u32, ScraperError>(ScraperError::UnexpectedStatus {
+                    status: 403,
+                    url: "https://example.com/products.json".to_owned(),
+                })
+            }
+        })
+        .await;
+        // 403 is not retriable — exactly 1 attempt.
+        assert_eq!(call_count.load(Ordering::SeqCst), 1);
+        assert!(matches!(
+            result,
+            Err(ScraperError::UnexpectedStatus { status: 403, .. })
+        ));
     }
 }

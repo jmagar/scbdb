@@ -72,8 +72,7 @@ db-down:
     docker compose down
 
 db-reset:
-    @printf "This will destroy all postgres data. Continue? [y/N] " && read r && [ "$$r" = "y" ]
-    docker compose down -v
+    @printf "This will destroy all postgres data. Continue? [y/N] " && read r && [ "$$r" = "y" ] && docker compose down -v
 
 hooks:
     lefthook install

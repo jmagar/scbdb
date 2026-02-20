@@ -128,7 +128,18 @@ impl LegiscanClient {
                 source: e,
             })?;
 
-        Ok(envelope.data.searchresult.results)
+        // The `search` endpoint returns bills as numbered string keys ("0", "1", …)
+        // alongside `summary`. Filter to numeric keys and deserialize each entry.
+        let items: Vec<BillSearchItem> = envelope
+            .data
+            .searchresult
+            .results
+            .into_iter()
+            .filter(|(k, _)| k.parse::<u32>().is_ok())
+            .filter_map(|(_, v)| serde_json::from_value::<BillSearchItem>(v).ok())
+            .collect();
+
+        Ok(items)
     }
 
     /// Gets the list of legislative sessions for a state (e.g., `"SC"`).

@@ -128,9 +128,9 @@ brands:
     relationship: competitor
     tier: 2
     domain: greenmonkehemp.com
-    shop_url: https://www.greenmonkehemp.com/s/shop
+    shop_url: null
     notes: >
-      Squarespace /s/shop path. Happy Soda line + Cookies collab. 8 SKUs in
+      Squarespace /s/shop path — shop_url set to null to skip Shopify collection. Happy Soda line + Cookies collab. 8 SKUs in
       SHL.
 
   - name: Happy Flower

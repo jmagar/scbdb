@@ -63,6 +63,8 @@ async fn get_bill_returns_parsed_bill() {
 async fn search_bills_returns_results() {
     let server = MockServer::start().await;
 
+    // LegiScan returns search results as numeric string keys ("0", "1", …) alongside
+    // "summary" — NOT as an array under a "results" key.
     let body = serde_json::json!({
         "status": "OK",
         "searchresult": {
@@ -72,19 +74,17 @@ async fn search_bills_returns_results() {
                 "relevancy": 100,
                 "count": 1
             },
-            "results": [
-                {
-                    "bill_id": 999,
-                    "bill_number": "SB200",
-                    "title": "THC Regulation",
-                    "state": "SC",
-                    "status": 4,
-                    "status_date": "2025-06-01",
-                    "last_action_date": "2025-06-01",
-                    "last_action": "Signed by Governor",
-                    "url": "https://legiscan.com/SC/bill/SB200"
-                }
-            ]
+            "0": {
+                "bill_id": 999,
+                "bill_number": "SB200",
+                "title": "THC Regulation",
+                "state": "SC",
+                "status": 4,
+                "status_date": "2025-06-01",
+                "last_action_date": "2025-06-01",
+                "last_action": "Signed by Governor",
+                "url": "https://legiscan.com/SC/bill/SB200"
+            }
         }
     });
 

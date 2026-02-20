@@ -32,40 +32,38 @@ pub enum CollectCommands {
 /// Load the brands to process for a collect run.
 ///
 /// If `brand_filter` is `Some(slug)`, fetches that single brand and returns an
-/// error if not found. If `None`, returns all active brands. Either way,
-/// brands without a `shop_url` are filtered out with a warning logged.
+/// error if not found or if `shop_url` is `None`. If `None`, returns all
+/// active brands, filtering out those without a `shop_url` (with a warning).
 pub(crate) async fn load_brands_for_collect(
     pool: &sqlx::PgPool,
     brand_filter: Option<&str>,
 ) -> anyhow::Result<Vec<scbdb_db::BrandRow>> {
-    let all = match brand_filter {
-        Some(slug) => {
-            let brand = scbdb_db::get_brand_by_slug(pool, slug)
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("brand '{slug}' not found"))?;
-            if brand.shop_url.is_none() {
-                anyhow::bail!(
-                    "brand '{slug}' exists but has no shop_url configured; update config/brands.yaml"
-                );
-            }
-            vec![brand]
+    if let Some(slug) = brand_filter {
+        let brand = scbdb_db::get_brand_by_slug(pool, slug)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("brand '{slug}' not found"))?;
+        if brand.shop_url.is_none() {
+            anyhow::bail!(
+                "brand '{slug}' exists but has no shop_url configured; update config/brands.yaml"
+            );
         }
-        None => scbdb_db::list_active_brands(pool).await?,
-    };
-
-    let brands: Vec<scbdb_db::BrandRow> = all
-        .into_iter()
-        .filter(|b| {
-            if b.shop_url.is_none() {
-                tracing::warn!(slug = %b.slug, "skipping brand — shop_url is not set");
-                false
-            } else {
-                true
-            }
-        })
-        .collect();
-
-    Ok(brands)
+        // Single-brand path: already validated shop_url above, no filter needed.
+        Ok(vec![brand])
+    } else {
+        let all = scbdb_db::list_active_brands(pool).await?;
+        let brands: Vec<scbdb_db::BrandRow> = all
+            .into_iter()
+            .filter(|b| {
+                if b.shop_url.is_none() {
+                    tracing::warn!(slug = %b.slug, "skipping brand — shop_url is not set");
+                    false
+                } else {
+                    true
+                }
+            })
+            .collect();
+        Ok(brands)
+    }
 }
 
 /// Collect full product catalog and variant data from Shopify storefronts,
@@ -104,36 +102,51 @@ pub(crate) async fn run_collect_products(
     let client = brand::build_shopify_client(config)?;
 
     let run = scbdb_db::create_collection_run(pool, "products", "cli").await?;
-    scbdb_db::start_collection_run(pool, run.id).await?;
+    if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
+        brand::fail_run_best_effort(pool, run.id, "products", format!("{e:#}")).await;
+        return Err(e.into());
+    }
 
     let mut total_records: i32 = 0;
+    let mut failed_brands: usize = 0;
     let brand_count = brands.len();
 
-    let collect_result: anyhow::Result<()> = async {
-        for b in &brands {
-            let brand_records =
-                brand::collect_brand_products(pool, &client, config, run.id, b).await?;
-            total_records = total_records.saturating_add(brand_records);
-        }
-        Ok(())
-    }
-    .await;
-
-    match collect_result {
-        Ok(()) => {
-            if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
-                let message = format!("{err:#}");
-                brand::fail_run_best_effort(pool, run.id, "collection", message).await;
-                return Err(err.into());
+    for b in &brands {
+        match brand::collect_brand_products(pool, &client, config, run.id, b).await {
+            Ok((brand_records, succeeded)) => {
+                total_records = total_records.saturating_add(brand_records);
+                if !succeeded {
+                    failed_brands += 1;
+                }
             }
-            println!("collected {total_records} products across {brand_count} brands");
-            Ok(())
-        }
-        Err(err) => {
-            brand::fail_run_best_effort(pool, run.id, "collection", format!("{err:#}")).await;
-            Err(err)
+            Err(e) => {
+                tracing::error!(brand = %b.slug, error = %e, "unexpected error collecting products");
+                failed_brands += 1;
+            }
         }
     }
+
+    if failed_brands > 0 {
+        tracing::warn!(
+            failed_brands,
+            total_brands = brand_count,
+            "some brands failed during collection"
+        );
+    }
+
+    if failed_brands == brand_count {
+        let message = format!("all {failed_brands} brands failed collection");
+        brand::fail_run_best_effort(pool, run.id, "products", message.clone()).await;
+        anyhow::bail!("{message}");
+    }
+
+    if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
+        let message = format!("{err:#}");
+        brand::fail_run_best_effort(pool, run.id, "products", message).await;
+        return Err(err.into());
+    }
+    println!("collected {total_records} products across {brand_count} brands");
+    Ok(())
 }
 
 /// Capture price snapshots for all brands' Shopify storefronts.
@@ -164,37 +177,123 @@ pub(crate) async fn run_collect_pricing(
     let client = brand::build_shopify_client(config)?;
 
     let run = scbdb_db::create_collection_run(pool, "pricing", "cli").await?;
-    scbdb_db::start_collection_run(pool, run.id).await?;
+    if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
+        brand::fail_run_best_effort(pool, run.id, "pricing", format!("{e:#}")).await;
+        return Err(e.into());
+    }
 
     // `records_processed` is consistently the number of products processed.
     let mut total_records: i32 = 0;
     let mut total_snapshots: i32 = 0;
+    let mut failed_brands: usize = 0;
     let brand_count = brands.len();
 
-    let collect_result: anyhow::Result<()> = async {
-        for b in &brands {
-            let (brand_records, brand_snapshots) =
-                brand::collect_brand_pricing(pool, &client, config, run.id, b).await?;
-            total_records = total_records.saturating_add(brand_records);
-            total_snapshots = total_snapshots.saturating_add(brand_snapshots);
-        }
-        Ok(())
-    }
-    .await;
-
-    match collect_result {
-        Ok(()) => {
-            if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
-                let message = format!("{err:#}");
-                brand::fail_run_best_effort(pool, run.id, "pricing", message).await;
-                return Err(err.into());
+    for b in &brands {
+        match brand::collect_brand_pricing(pool, &client, config, run.id, b).await {
+            Ok((brand_records, brand_snapshots, succeeded)) => {
+                total_records = total_records.saturating_add(brand_records);
+                total_snapshots = total_snapshots.saturating_add(brand_snapshots);
+                if !succeeded {
+                    failed_brands += 1;
+                }
             }
-            println!("captured {total_snapshots} price snapshots across {brand_count} brands");
-            Ok(())
+            Err(e) => {
+                tracing::error!(brand = %b.slug, error = %e, "unexpected error collecting pricing");
+                failed_brands += 1;
+            }
         }
-        Err(err) => {
-            brand::fail_run_best_effort(pool, run.id, "pricing", format!("{err:#}")).await;
-            Err(err)
-        }
+    }
+
+    if failed_brands > 0 {
+        tracing::warn!(
+            failed_brands,
+            total_brands = brand_count,
+            "some brands failed during collection"
+        );
+    }
+
+    if failed_brands == brand_count {
+        let message = format!("all {failed_brands} brands failed collection");
+        brand::fail_run_best_effort(pool, run.id, "pricing", message.clone()).await;
+        anyhow::bail!("{message}");
+    }
+
+    if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
+        let message = format!("{err:#}");
+        brand::fail_run_best_effort(pool, run.id, "pricing", message).await;
+        return Err(err.into());
+    }
+    println!("captured {total_snapshots} price snapshots across {brand_count} brands");
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Insert a minimal brand row for test purposes.
+    ///
+    /// When `shop_url` is `None` the brand is inserted without a shop URL.
+    async fn insert_test_brand(pool: &sqlx::PgPool, slug: &str, shop_url: Option<&str>) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            "INSERT INTO brands (name, slug, relationship, tier, shop_url, is_active) \
+             VALUES ($1, $2, 'portfolio', 1, $3, true) RETURNING id",
+        )
+        .bind(format!("Test Brand {slug}"))
+        .bind(slug)
+        .bind(shop_url)
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|e| panic!("insert_test_brand failed for slug '{slug}': {e}"))
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn load_brands_unknown_slug_returns_error(pool: sqlx::PgPool) {
+        // Insert a brand with a different slug so the table isn't empty.
+        insert_test_brand(&pool, "existing-brand", Some("https://existing.com")).await;
+
+        let result = load_brands_for_collect(&pool, Some("nonexistent")).await;
+
+        let err = result.expect_err("expected Err for unknown slug");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("not found"),
+            "error should mention 'not found', got: {msg}"
+        );
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn load_brands_known_slug_null_shop_url_returns_error(pool: sqlx::PgPool) {
+        insert_test_brand(&pool, "no-shop", None).await;
+
+        let result = load_brands_for_collect(&pool, Some("no-shop")).await;
+
+        let err = result.expect_err("expected Err for brand with null shop_url");
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("no shop_url"),
+            "error should mention 'no shop_url', got: {msg}"
+        );
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn load_brands_all_filters_out_null_shop_url(pool: sqlx::PgPool) {
+        insert_test_brand(&pool, "has-shop", Some("https://has-shop.com")).await;
+        insert_test_brand(&pool, "no-shop-all", None).await;
+
+        let brands = load_brands_for_collect(&pool, None)
+            .await
+            .expect("load_brands_for_collect should succeed");
+
+        assert_eq!(
+            brands.len(),
+            1,
+            "only the brand with shop_url should be returned"
+        );
+        assert_eq!(brands[0].slug, "has-shop");
     }
 }

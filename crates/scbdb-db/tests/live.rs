@@ -11,8 +11,8 @@ use scbdb_db::{
     complete_collection_run, create_collection_run, fail_collection_run,
     get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
     get_last_price_snapshot, insert_price_snapshot_if_changed, list_active_brands,
-    list_bill_events, list_bills, start_collection_run, upsert_bill, upsert_bill_event,
-    upsert_product, upsert_variant,
+    list_bill_events, list_bills, list_collection_run_brands, start_collection_run, upsert_bill,
+    upsert_bill_event, upsert_collection_run_brand, upsert_product, upsert_variant,
 };
 
 // ---------------------------------------------------------------------------
@@ -1084,4 +1084,91 @@ async fn get_bill_by_jurisdiction_number_not_found(pool: sqlx::PgPool) {
         .expect("query failed");
 
     assert!(result.is_none(), "expected None for nonexistent bill");
+}
+
+// ---------------------------------------------------------------------------
+// Section 7: Collection Run Brands
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn upsert_collection_run_brand_overwrites_on_conflict(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "crb-upsert", true).await;
+    let run = create_collection_run(&pool, "products", "cli")
+        .await
+        .expect("create_collection_run failed");
+
+    // First call: simulate a failure recording
+    upsert_collection_run_brand(&pool, run.id, brand_id, "failed", None, Some("first error"))
+        .await
+        .expect("first upsert_collection_run_brand failed");
+
+    // Second call: simulate a re-run that succeeded
+    upsert_collection_run_brand(&pool, run.id, brand_id, "succeeded", Some(5), None)
+        .await
+        .expect("second upsert_collection_run_brand failed");
+
+    // Verify exactly one row exists for this (run_id, brand_id) pair
+    let count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM collection_run_brands \
+         WHERE collection_run_id = $1 AND brand_id = $2",
+    )
+    .bind(run.id)
+    .bind(brand_id)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        count, 1,
+        "upsert should produce exactly one row, not a duplicate"
+    );
+
+    // Verify the row reflects the second (overwriting) call
+    let (status, records_processed, error_message): (String, i32, Option<String>) = sqlx::query_as(
+        "SELECT status, records_processed, error_message \
+             FROM collection_run_brands \
+             WHERE collection_run_id = $1 AND brand_id = $2",
+    )
+    .bind(run.id)
+    .bind(brand_id)
+    .fetch_one(&pool)
+    .await
+    .expect("fetch upserted row failed");
+
+    assert_eq!(
+        status, "succeeded",
+        "status should be overwritten to 'succeeded'"
+    );
+    assert_eq!(
+        records_processed, 5,
+        "records_processed should be overwritten to 5"
+    );
+    assert!(
+        error_message.is_none(),
+        "error_message should be overwritten to NULL"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_collection_run_brands_returns_inserted_entries(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "crb-list", true).await;
+    let run = create_collection_run(&pool, "products", "cli")
+        .await
+        .expect("create_collection_run failed");
+
+    // Insert a brand-level result via the upsert helper
+    upsert_collection_run_brand(&pool, run.id, brand_id, "succeeded", Some(3), None)
+        .await
+        .expect("upsert_collection_run_brand failed");
+
+    let entries = list_collection_run_brands(&pool, run.id)
+        .await
+        .expect("list_collection_run_brands failed");
+
+    assert_eq!(entries.len(), 1, "should return exactly one entry");
+    assert_eq!(entries[0].collection_run_id, run.id);
+    assert_eq!(entries[0].brand_id, brand_id);
+    assert_eq!(entries[0].status, "succeeded");
+    assert_eq!(entries[0].records_processed, 3);
+    assert!(entries[0].error_message.is_none());
 }

@@ -94,8 +94,8 @@ fn build_app(state: AppState) -> Router {
         .route("/api/v1/health", get(health))
         .layer(
             ServiceBuilder::new()
-                .layer(axum::middleware::from_fn(request_id))
-                .layer(TraceLayer::new_for_http()),
+                .layer(TraceLayer::new_for_http())
+                .layer(axum::middleware::from_fn(request_id)),
         )
         .with_state(state)
 }

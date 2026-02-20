@@ -32,4 +32,7 @@ pub enum ScraperError {
 
     #[error("pagination limit reached for {shop_url}: exceeded {max_pages} pages")]
     PaginationLimit { shop_url: String, max_pages: usize },
+
+    #[error("invalid shop URL \"{shop_url}\": {reason}")]
+    InvalidShopUrl { shop_url: String, reason: String },
 }
