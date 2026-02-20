@@ -182,3 +182,81 @@ pub(crate) async fn run_sentiment_collect(
     );
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use crate::{Cli, Commands};
+
+    use super::SentimentCommands;
+
+    #[test]
+    fn parses_sentiment_collect_defaults() {
+        let cli = Cli::try_parse_from(["scbdb-cli", "sentiment", "collect"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Sentiment {
+                command: SentimentCommands::Collect {
+                    brand: None,
+                    dry_run: false,
+                }
+            })
+        ));
+    }
+
+    #[test]
+    fn parses_sentiment_collect_with_brand() {
+        let cli =
+            Cli::try_parse_from(["scbdb-cli", "sentiment", "collect", "--brand", "cann"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Sentiment {
+                command: SentimentCommands::Collect {
+                    brand: Some(ref b),
+                    dry_run: false,
+                }
+            }) if b == "cann"
+        ));
+    }
+
+    #[test]
+    fn parses_sentiment_collect_dry_run() {
+        let cli = Cli::try_parse_from(["scbdb-cli", "sentiment", "collect", "--dry-run"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Sentiment {
+                command: SentimentCommands::Collect { dry_run: true, .. }
+            })
+        ));
+    }
+
+    #[test]
+    fn parses_sentiment_status_no_args() {
+        let cli = Cli::try_parse_from(["scbdb-cli", "sentiment", "status"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Sentiment {
+                command: SentimentCommands::Status { brand: None }
+            })
+        ));
+    }
+
+    #[test]
+    fn parses_sentiment_report_with_brand() {
+        let cli =
+            Cli::try_parse_from(["scbdb-cli", "sentiment", "report", "--brand", "cann"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Some(Commands::Sentiment {
+                command: SentimentCommands::Report {
+                    brand: Some(ref b)
+                }
+            }) if b == "cann"
+        ));
+    }
+}

@@ -1,6 +1,16 @@
 //! Read-only sentiment query handlers.
 
 use chrono::Utc;
+use std::collections::HashMap;
+
+/// Build a map from `brand_id` → brand slug for display purposes.
+///
+/// Brands that are inactive or missing from the map will display as
+/// `brand:<id>` in the output rather than failing.
+async fn brand_slug_map(pool: &sqlx::PgPool) -> anyhow::Result<HashMap<i64, String>> {
+    let brands = scbdb_db::list_active_brands(pool).await?;
+    Ok(brands.into_iter().map(|b| (b.id, b.slug)).collect())
+}
 
 /// Show recent sentiment scores for brands.
 ///
@@ -32,12 +42,18 @@ pub(crate) async fn run_sentiment_status(
         return Ok(());
     }
 
-    println!("{:<20}{:<12}{:<10}SIGNALS", "BRAND_ID", "CAPTURED", "SCORE");
+    let slug_map = brand_slug_map(pool).await?;
+
+    println!("{:<25}{:<18}{:<10}SIGNALS", "BRAND", "CAPTURED", "SCORE");
     for snap in &snapshots {
+        let brand_label = slug_map
+            .get(&snap.brand_id)
+            .cloned()
+            .unwrap_or_else(|| format!("brand:{}", snap.brand_id));
         let captured = snap.captured_at.format("%Y-%m-%d %H:%M").to_string();
         println!(
-            "{:<20}{:<12}{:<10}{}",
-            snap.brand_id, captured, snap.score, snap.signal_count
+            "{:<25}{:<18}{:<10}{}",
+            brand_label, captured, snap.score, snap.signal_count
         );
     }
 
@@ -69,6 +85,8 @@ pub(crate) async fn run_sentiment_report(
         return Ok(());
     }
 
+    let slug_map = brand_slug_map(pool).await?;
+
     let now = Utc::now().format("%Y-%m-%d %H:%M UTC");
     let filter_label = brand_filter.unwrap_or("All brands");
 
@@ -80,14 +98,18 @@ pub(crate) async fn run_sentiment_report(
     println!();
     println!("---");
     println!();
-    println!("| Brand ID | Captured At | Score | Signals |");
-    println!("|----------|-------------|-------|---------|");
+    println!("| Brand | Captured At | Score | Signals |");
+    println!("|-------|-------------|-------|---------|");
 
     for snap in &snapshots {
+        let brand_label = slug_map
+            .get(&snap.brand_id)
+            .cloned()
+            .unwrap_or_else(|| format!("brand:{}", snap.brand_id));
         let captured = snap.captured_at.format("%Y-%m-%d %H:%M UTC").to_string();
         println!(
             "| {} | {} | {} | {} |",
-            snap.brand_id, captured, snap.score, snap.signal_count
+            brand_label, captured, snap.score, snap.signal_count
         );
     }
 

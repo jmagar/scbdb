@@ -2,8 +2,10 @@
 //! These tests do not require a live database connection.
 
 use chrono::Utc;
+use rust_decimal::Decimal;
 use scbdb_core::{AppConfig, Environment};
-use scbdb_db::{CollectionRunRow, PoolConfig, ProductRow};
+use scbdb_db::{CollectionRunRow, PoolConfig, ProductRow, SentimentSnapshotRow};
+use serde_json::json;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use uuid::Uuid;
@@ -86,4 +88,25 @@ fn product_row_has_expected_fields() {
     assert_eq!(row.name, "Hi Boy Blood Orange");
     assert_eq!(row.status.as_deref(), Some("active"));
     assert!(row.handle.is_none());
+}
+
+/// Compile-time smoke test: confirm that [`SentimentSnapshotRow`] has all expected
+/// fields with the correct types. No database required.
+#[test]
+fn sentiment_snapshot_row_has_expected_fields() {
+    let row = SentimentSnapshotRow {
+        id: 1_i64,
+        brand_id: 7_i64,
+        captured_at: Utc::now(),
+        score: Decimal::new(150, 3), // 0.150
+        signal_count: 12_i32,
+        metadata: json!({}),
+        created_at: Utc::now(),
+    };
+
+    assert_eq!(row.id, 1);
+    assert_eq!(row.brand_id, 7);
+    assert_eq!(row.score, Decimal::new(150, 3));
+    assert_eq!(row.signal_count, 12);
+    assert!(row.metadata.is_object());
 }
