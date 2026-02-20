@@ -51,7 +51,13 @@ impl RedditClient {
     ///
     /// Returns [`SentimentError::Reddit`] if token exchange fails.
     pub(crate) async fn new(config: &SentimentConfig) -> Result<Self, SentimentError> {
-        let client = reqwest::Client::new();
+        // oauth.reddit.com uses TLS fingerprinting that blocks rustls. Use the
+        // system OpenSSL stack so the handshake looks like standard curl/browser
+        // traffic rather than a Rust-native TLS client.
+        let client = reqwest::Client::builder()
+            .use_native_tls()
+            .build()
+            .map_err(|e| SentimentError::Reddit(format!("failed to build HTTP client: {e}")))?;
         let token = Self::fetch_token(
             &client,
             &config.reddit_client_id,
