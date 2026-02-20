@@ -6,6 +6,8 @@
 pub mod client;
 pub mod error;
 pub mod normalize;
+pub(crate) mod retry;
+pub(crate) mod session;
 pub mod types;
 
 pub use client::LegiscanClient;

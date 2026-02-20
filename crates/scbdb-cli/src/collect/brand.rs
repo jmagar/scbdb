@@ -67,6 +67,7 @@ pub(super) async fn persist_normalized_products(
 /// returning the error, this function records a `"failed"` status row in
 /// `collection_run_brands` on a best-effort basis — the caller must not write
 /// a second status row for the brand.
+#[allow(clippy::too_many_lines)] // Orchestration function: product fetch, normalization, upsert loop, error handling
 pub(super) async fn collect_brand_core(
     pool: &sqlx::PgPool,
     client: &scbdb_scraper::ShopifyClient,

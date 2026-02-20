@@ -80,11 +80,22 @@ async fn main() -> anyhow::Result<()> {
             RegsCommands::Ingest {
                 state,
                 keyword,
+                max_pages,
+                max_requests,
                 dry_run,
             } => {
                 let config = load_config_or_exit();
                 let pool = connect_or_exit().await;
-                regs::run_regs_ingest(&pool, &config, &state, keyword.as_deref(), dry_run).await?;
+                regs::run_regs_ingest(
+                    &pool,
+                    &config,
+                    &state,
+                    &keyword,
+                    max_pages,
+                    max_requests,
+                    dry_run,
+                )
+                .await?;
             }
             RegsCommands::Status { state, limit } => {
                 let pool = connect_or_exit().await;

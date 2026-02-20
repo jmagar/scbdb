@@ -134,12 +134,19 @@ fn parses_regs_ingest_defaults() {
         cli.command,
         Some(Commands::Regs {
             command: RegsCommands::Ingest {
-                ref state,
-                keyword: None,
                 dry_run: false,
+                max_pages: 3,
+                max_requests: 300,
+                ..
             }
-        }) if state == "SC"
+        })
     ));
+    if let Some(Commands::Regs {
+        command: RegsCommands::Ingest { ref state, .. },
+    }) = cli.command
+    {
+        assert_eq!(state, &["SC"]);
+    }
 }
 
 #[test]
@@ -154,16 +161,20 @@ fn parses_regs_ingest_with_state_and_keyword() {
         "cannabis",
     ])
     .unwrap();
-    assert!(matches!(
-        cli.command,
-        Some(Commands::Regs {
-            command: RegsCommands::Ingest {
+    if let Some(Commands::Regs {
+        command:
+            RegsCommands::Ingest {
                 ref state,
                 ref keyword,
-                dry_run: false,
-            }
-        }) if state == "TX" && keyword.as_deref() == Some("cannabis")
-    ));
+                ..
+            },
+    }) = cli.command
+    {
+        assert_eq!(state, &["TX"]);
+        assert_eq!(keyword, &["cannabis"]);
+    } else {
+        panic!("unexpected command variant");
+    }
 }
 
 #[test]

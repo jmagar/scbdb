@@ -1,7 +1,7 @@
 use super::*;
 
 fn test_client(base_url: &str) -> LegiscanClient {
-    LegiscanClient::with_base_url("test-key", 30, base_url)
+    LegiscanClient::with_base_url("test-key", 30, 1_000, base_url)
         .expect("client construction should not fail")
 }
 

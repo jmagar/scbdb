@@ -18,12 +18,27 @@ pub(crate) use query::{run_regs_report, run_regs_status, run_regs_timeline};
 pub enum RegsCommands {
     /// Ingest bills from `LegiScan` API
     Ingest {
-        /// State to ingest bills for (e.g., SC)
+        /// States to search (repeat for multiple: --state SC --state US).
+        /// "US" fetches US Congress bills.
         #[arg(long, default_value = "SC")]
-        state: String,
-        /// Search keyword (defaults to "hemp")
+        state: Vec<String>,
+
+        /// Keywords to search (repeat for multiple: --keyword hemp --keyword "intoxicating hemp").
+        /// Defaults to "hemp" when not specified.
         #[arg(long)]
-        keyword: Option<String>,
+        keyword: Vec<String>,
+
+        /// Maximum result pages per keyword search (50 results/page).
+        /// Lower this to reduce API request usage.
+        #[arg(long, default_value = "3")]
+        max_pages: u32,
+
+        /// Hard ceiling on `LegiScan` API requests for this run.
+        /// Protects the 30 000/month quota. A full sweep of 8 keywords × 2
+        /// states × 3 pages + ~250 bill fetches uses ≈ 300 requests.
+        #[arg(long, default_value = "300")]
+        max_requests: u32,
+
         /// Preview what would be ingested without writing to the database
         #[arg(long)]
         dry_run: bool,

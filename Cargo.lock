@@ -1918,6 +1918,7 @@ name = "scbdb-legiscan"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "rand 0.9.2",
  "reqwest",
  "serde",
  "serde_json",
