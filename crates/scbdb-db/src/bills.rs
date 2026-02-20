@@ -114,7 +114,7 @@ pub async fn upsert_bill(
 ///
 /// Deduplication is based on `(bill_id, description, event_date)` via the
 /// `idx_bill_events_dedup` unique index (created with `NULLS NOT DISTINCT`
-/// so rows with a NULL event_date are treated as equal). The `ON CONFLICT DO
+/// so rows with a `NULL` `event_date` are treated as equal). The `ON CONFLICT DO
 /// NOTHING` form is atomic; the previous `WHERE NOT EXISTS` form was not.
 ///
 /// # Errors
