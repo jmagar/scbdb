@@ -82,7 +82,7 @@ pub struct PriceSnapshotRow {
 ///
 /// Conflicts on `(brand_id, source_platform, source_product_id)` update
 /// `name`, `description`, `status`, `product_type`, `tags`, `handle`,
-/// `metadata`, and `updated_at` in place.
+/// `source_url`, and `updated_at` in place.
 ///
 /// Returns the internal `id` of the upserted row.
 ///
@@ -137,8 +137,8 @@ pub async fn upsert_product(
 /// Upserts a variant row.
 ///
 /// Conflicts on `(product_id, source_variant_id)` update `sku`, `title`,
-/// `is_available`, `dosage_mg`, `cbd_mg`, `size_value`, `size_unit`, and
-/// `updated_at` in place.
+/// `is_default`, `is_available`, `dosage_mg`, `cbd_mg`, `size_value`,
+/// `size_unit`, and `updated_at` in place.
 ///
 /// Numeric fields (`dosage_mg`, `cbd_mg`, `size_value`) are bound as `f64`
 /// and cast to fixed-scale `NUMERIC` columns (`8,2`, `8,2`, and `10,2`)
@@ -252,7 +252,7 @@ pub async fn insert_price_snapshot_if_changed(
 ) -> Result<bool, DbError> {
     let rows_affected = sqlx::query(
         "WITH last AS ( \
-             SELECT price, compare_at_price \
+             SELECT price, compare_at_price, currency_code \
              FROM price_snapshots \
              WHERE variant_id = $1 \
              ORDER BY captured_at DESC, id DESC \
@@ -267,6 +267,7 @@ pub async fn insert_price_snapshot_if_changed(
              SELECT 1 FROM last \
              WHERE last.price = $4::numeric(10,2) \
                AND last.compare_at_price IS NOT DISTINCT FROM $5::numeric(10,2) \
+               AND last.currency_code = $3 \
          )",
     )
     .bind(variant_id)

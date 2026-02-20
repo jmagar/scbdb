@@ -17,11 +17,14 @@ anyhow.workspace = true
 chrono.workspace = true
 clap.workspace = true
 dotenvy.workspace = true
+rust_decimal = { workspace = true }
+serde_json.workspace = true
 sqlx.workspace = true
 scbdb-core = { path = "../scbdb-core" }
 scbdb-db = { path = "../scbdb-db" }
 scbdb-legiscan = { path = "../scbdb-legiscan" }
 scbdb-scraper = { path = "../scbdb-scraper" }
+scbdb-sentiment = { path = "../scbdb-sentiment" }
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true

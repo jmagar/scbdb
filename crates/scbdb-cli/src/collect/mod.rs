@@ -8,6 +8,8 @@ mod brand;
 
 use clap::Subcommand;
 
+use crate::fail_run_best_effort;
+
 /// Sub-commands available under `collect`.
 #[derive(Debug, Subcommand)]
 pub enum CollectCommands {
@@ -103,7 +105,7 @@ pub(crate) async fn run_collect_products(
 
     let run = scbdb_db::create_collection_run(pool, "products", "cli").await?;
     if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
-        brand::fail_run_best_effort(pool, run.id, "products", format!("{e:#}")).await;
+        fail_run_best_effort(pool, run.id, "products", format!("{e:#}")).await;
         return Err(e.into());
     }
 
@@ -136,13 +138,13 @@ pub(crate) async fn run_collect_products(
 
     if failed_brands == brand_count {
         let message = format!("all {failed_brands} brands failed collection");
-        brand::fail_run_best_effort(pool, run.id, "products", message.clone()).await;
+        fail_run_best_effort(pool, run.id, "products", message.clone()).await;
         anyhow::bail!("{message}");
     }
 
     if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
         let message = format!("{err:#}");
-        brand::fail_run_best_effort(pool, run.id, "products", message).await;
+        fail_run_best_effort(pool, run.id, "products", message).await;
         return Err(err.into());
     }
     println!("collected {total_records} products across {brand_count} brands");
@@ -178,7 +180,7 @@ pub(crate) async fn run_collect_pricing(
 
     let run = scbdb_db::create_collection_run(pool, "pricing", "cli").await?;
     if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
-        brand::fail_run_best_effort(pool, run.id, "pricing", format!("{e:#}")).await;
+        fail_run_best_effort(pool, run.id, "pricing", format!("{e:#}")).await;
         return Err(e.into());
     }
 
@@ -214,13 +216,13 @@ pub(crate) async fn run_collect_pricing(
 
     if failed_brands == brand_count {
         let message = format!("all {failed_brands} brands failed collection");
-        brand::fail_run_best_effort(pool, run.id, "pricing", message.clone()).await;
+        fail_run_best_effort(pool, run.id, "pricing", message.clone()).await;
         anyhow::bail!("{message}");
     }
 
     if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_records).await {
         let message = format!("{err:#}");
-        brand::fail_run_best_effort(pool, run.id, "pricing", message).await;
+        fail_run_best_effort(pool, run.id, "pricing", message).await;
         return Err(err.into());
     }
     println!("captured {total_snapshots} price snapshots across {brand_count} brands");
@@ -295,5 +297,42 @@ mod tests {
             "only the brand with shop_url should be returned"
         );
         assert_eq!(brands[0].slug, "has-shop");
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn run_collect_products_dry_run_writes_zero_db_rows(pool: sqlx::PgPool) {
+        insert_test_brand(&pool, "dry-run-brand", Some("https://dry-run.com")).await;
+
+        let config = scbdb_core::AppConfig {
+            database_url: String::new(),
+            env: scbdb_core::Environment::Test,
+            bind_addr: "0.0.0.0:3000".parse().unwrap(),
+            log_level: "info".to_string(),
+            brands_path: std::path::PathBuf::from("config/brands.yaml"),
+            api_key_hash_salt: None,
+            legiscan_api_key: None,
+            db_max_connections: 10,
+            db_min_connections: 1,
+            db_acquire_timeout_secs: 10,
+            scraper_request_timeout_secs: 30,
+            scraper_user_agent: "scbdb/0.1 (test)".to_string(),
+            scraper_max_concurrent_brands: 1,
+            scraper_inter_request_delay_ms: 0,
+            scraper_max_retries: 3,
+            scraper_retry_backoff_base_secs: 5,
+        };
+
+        let result = run_collect_products(&pool, &config, None, true).await;
+        assert!(
+            result.is_ok(),
+            "dry-run should return Ok(()), got: {result:?}"
+        );
+
+        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM collection_runs")
+            .fetch_one(&pool)
+            .await
+            .expect("count query failed");
+
+        assert_eq!(count, 0, "dry-run must not create any collection_runs rows");
     }
 }

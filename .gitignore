@@ -6,6 +6,13 @@ dist
 coverage
 target
 
+# Rust-specific artifacts
+*.rs.bk
+*.profraw
+*.profdata
+tarpaulin-report.html
+lcov.info
+
 # Python artifacts
 __pycache__/
 *.pyc

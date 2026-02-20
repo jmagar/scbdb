@@ -103,12 +103,24 @@ pub struct SearchResult {
 }
 
 /// Pagination and relevance metadata from a search response.
+///
+/// The `LegiScan` API returns `page` as a human-readable string (`"1 of 451"`),
+/// `range` as an ordinal range string (`"1 - 50"`), and `relevancy` as a
+/// percentage range string (`"100% - 99%"`). All three are `String` to match
+/// the actual wire format — treating them as `i32` causes deserialization failure.
 #[derive(Debug, Deserialize)]
 pub struct SearchSummary {
-    pub page: i32,
-    pub range: i32,
-    pub relevancy: i32,
+    #[serde(default)]
+    pub page: String,
+    #[serde(default)]
+    pub range: String,
+    #[serde(default)]
+    pub relevancy: String,
     pub count: i32,
+    #[serde(default)]
+    pub page_current: Option<i32>,
+    #[serde(default)]
+    pub page_total: Option<i32>,
 }
 
 /// A single bill returned by a search query.

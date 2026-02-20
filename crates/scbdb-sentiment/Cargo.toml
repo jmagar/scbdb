@@ -10,4 +10,16 @@ workspace = true
 
 [dependencies]
 scbdb-core = { path = "../scbdb-core" }
+percent-encoding.workspace = true
+reqwest = { workspace = true }
 serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+quick-xml = { workspace = true, features = ["serialize"] }
+sha2.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+wiremock.workspace = true

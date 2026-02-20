@@ -150,6 +150,7 @@ pub mod brands;
 pub mod collection_runs;
 pub mod products;
 pub mod seed;
+pub mod sentiment;
 
 pub use bills::{
     get_bill_by_jurisdiction_number, list_bill_events, list_bills, upsert_bill, upsert_bill_event,
@@ -164,4 +165,8 @@ pub use collection_runs::{
 pub use products::{
     get_last_price_snapshot, insert_price_snapshot_if_changed, upsert_product, upsert_variant,
     PriceSnapshotRow, ProductRow, VariantRow,
+};
+pub use sentiment::{
+    get_latest_sentiment_by_brand, insert_sentiment_snapshot, list_sentiment_snapshots,
+    SentimentSnapshotRow,
 };

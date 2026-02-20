@@ -268,17 +268,10 @@ impl ShopifyClient {
 ///
 /// Falls back to the full URL string if parsing fails.
 fn extract_domain(shop_url: &str) -> String {
-    // Avoid pulling in the `url` crate for this minor operation.
-    // Strip scheme and take up to the first `/`.
-    let without_scheme = shop_url
-        .strip_prefix("https://")
-        .or_else(|| shop_url.strip_prefix("http://"))
-        .unwrap_or(shop_url);
-    without_scheme
-        .split('/')
-        .next()
-        .unwrap_or(shop_url)
-        .to_owned()
+    reqwest::Url::parse(shop_url)
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_owned))
+        .unwrap_or_else(|| shop_url.to_owned())
 }
 
 #[cfg(test)]

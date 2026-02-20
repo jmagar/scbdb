@@ -168,3 +168,19 @@ fn size_not_present_returns_none() {
 fn size_default_title_returns_none() {
     assert!(parse_size("Default Title").is_none());
 }
+
+// Competitor-dominance regression tests — validate that the positional check
+// correctly gates on whether the competing label precedes the mg value, not
+// just whether it appears anywhere in the after-label slice.
+
+#[test]
+fn thc_mg_label_before_value_cbd_follows_value_not_suppressed() {
+    // "THC 5mg CBD" — CBD appears *after* the value; THC read should not be suppressed.
+    assert_eq!(parse_thc_mg("THC 5mg CBD"), Some(5.0));
+}
+
+#[test]
+fn thc_mg_label_before_value_cbd_precedes_value_suppressed() {
+    // "THC CBD 5mg" — CBD appears *before* the value; the 5mg belongs to CBD, not THC.
+    assert!(parse_thc_mg("THC CBD 5mg").is_none());
+}

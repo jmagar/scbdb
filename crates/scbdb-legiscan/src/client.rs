@@ -50,9 +50,14 @@ impl LegiscanClient {
         timeout_secs: u64,
         base_url: &str,
     ) -> Result<Self, LegiscanError> {
+        // Cap the connect phase at the overall timeout or 10 s, whichever is
+        // shorter.  This keeps test clients (low timeout) fast-failing while
+        // giving production clients (higher timeout) a reasonable window.
+        let connect_timeout = timeout_secs.min(10);
+
         let client = Client::builder()
             .timeout(Duration::from_secs(timeout_secs))
-            .connect_timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(connect_timeout))
             .user_agent("scbdb/0.1 (regulatory-tracking)")
             .build()?;
 
@@ -136,7 +141,11 @@ impl LegiscanClient {
             .results
             .into_iter()
             .filter(|(k, _)| k.parse::<u32>().is_ok())
-            .filter_map(|(_, v)| serde_json::from_value::<BillSearchItem>(v).ok())
+            .filter_map(|(k, v)| {
+                serde_json::from_value::<BillSearchItem>(v).map_err(|e| {
+                    tracing::warn!(key = %k, error = %e, "search_bills: skipping entry that failed to deserialize");
+                }).ok()
+            })
             .collect();
 
         Ok(items)
@@ -198,7 +207,11 @@ impl LegiscanClient {
             .bills
             .into_iter()
             .filter(|(k, _)| k != "session")
-            .filter_map(|(_, v)| serde_json::from_value::<MasterListEntry>(v).ok())
+            .filter_map(|(k, v)| {
+                serde_json::from_value::<MasterListEntry>(v).map_err(|e| {
+                    tracing::warn!(key = %k, error = %e, "get_master_list: skipping entry that failed to deserialize");
+                }).ok()
+            })
             .collect();
 
         Ok((data.session, entries))

@@ -97,4 +97,4 @@ scbdb-cli collect pricing               # snapshot all active brands
 scbdb-cli collect pricing --brand cann  # snapshot single brand
 ```
 
-Exit codes: `0` = success, `1` = error (partial success records per-brand failures in DB, CLI still exits `0`).
+Exit codes: `0` = success or partial success (per-brand failures are recorded in the DB and logged; the CLI exits `0` unless every brand fails). `1` = fatal error (all brands failed, or a run-level DB error occurred).

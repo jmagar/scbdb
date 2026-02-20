@@ -69,11 +69,15 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
 - `GET /health`
   - Public status check.
 
+### Path Parameter Convention
+
+All `{*_id}` path parameters accept the **public UUID** (`public_id` column), not the internal integer PK. Using UUIDs in public URLs prevents sequential enumeration of resources. Internal integer PKs are not exposed in any API response.
+
 ### Brands
 
 - `GET /brands`
   - Filters: `relationship`, `tier`, `is_active`, `q`.
-- `GET /brands/{brand_id}`
+- `GET /brands/{brand_id}` — `brand_id` is the public UUID
 - `POST /brands` *(Post-MVP — server is read-only in MVP scope)*
 - `PATCH /brands/{brand_id}` *(Post-MVP — server is read-only in MVP scope)*
 
@@ -81,7 +85,7 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
 
 - `GET /products`
   - Filters: `brand_id`, `tier`, `relationship`, `updated_after`.
-- `GET /products/{product_id}`
+- `GET /products/{product_id}` — `product_id` is the public UUID
 - `GET /products/{product_id}/variants`
 
 ### Pricing

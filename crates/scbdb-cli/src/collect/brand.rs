@@ -16,21 +16,6 @@ pub(super) fn build_shopify_client(
     .map_err(|e| anyhow::anyhow!("failed to build Shopify client: {e}"))
 }
 
-pub(super) async fn fail_run_best_effort(
-    pool: &sqlx::PgPool,
-    run_id: i64,
-    context: &'static str,
-    message: String,
-) {
-    if let Err(mark_err) = scbdb_db::fail_collection_run(pool, run_id, &message).await {
-        tracing::error!(
-            run_id,
-            error = %mark_err,
-            "failed to mark {context} run as failed"
-        );
-    }
-}
-
 /// Upserts products, variants, and price snapshots for a pre-normalized product
 /// list.
 ///
@@ -74,20 +59,21 @@ pub(super) async fn persist_normalized_products(
 /// Fetches the Shopify catalog for a single brand, normalizes all products,
 /// and upserts products, variants, and price snapshots to the database.
 ///
-/// Returns `Ok(Some((products_count, snapshots_count)))` on success. The
-/// caller is responsible for recording success via `upsert_collection_run_brand`
-/// with whichever count it wants to surface (products or snapshots).
+/// Returns `Ok((products_count, snapshots_count))` on success. The caller is
+/// responsible for recording success via `upsert_collection_run_brand` with
+/// whichever count it wants to surface (products or snapshots).
 ///
-/// Returns `Ok(None)` when a network or DB failure occurs. In that case this
-/// function has already recorded the failure in `collection_run_brands` — the
-/// caller must not write a second status row for the brand.
+/// Returns `Err` when a network fetch or DB persist failure occurs. Before
+/// returning the error, this function records a `"failed"` status row in
+/// `collection_run_brands` on a best-effort basis — the caller must not write
+/// a second status row for the brand.
 pub(super) async fn collect_brand_core(
     pool: &sqlx::PgPool,
     client: &scbdb_scraper::ShopifyClient,
     config: &scbdb_core::AppConfig,
     run_id: i64,
     brand: &scbdb_db::BrandRow,
-) -> anyhow::Result<Option<(i32, i32)>> {
+) -> anyhow::Result<(i32, i32)> {
     let shop_url = brand.shop_url.as_deref().ok_or_else(|| {
         anyhow::anyhow!(
             "brand '{}' has no shop_url — the filter in load_brands_for_collect should have excluded it; this is a bug",
@@ -118,12 +104,17 @@ pub(super) async fn collect_brand_core(
             .await
             {
                 tracing::error!(
+                    run_id,
                     brand = %brand.slug,
                     error = %mark_err,
-                    "failed to record network failure for brand"
+                    "failed to record brand failure"
                 );
             }
-            return Ok(None);
+            return Err(anyhow::anyhow!(
+                "failed to fetch products for {}: {}",
+                brand.slug,
+                err_string
+            ));
         }
     };
 
@@ -147,7 +138,7 @@ pub(super) async fn collect_brand_core(
         .collect();
 
     match persist_normalized_products(pool, brand.id, run_id, &normalized_products).await {
-        Ok(counts) => Ok(Some(counts)),
+        Ok(counts) => Ok(counts),
         Err(e) => {
             let err_string = format!("{e:#}");
             tracing::error!(
@@ -166,12 +157,17 @@ pub(super) async fn collect_brand_core(
             .await
             {
                 tracing::error!(
+                    run_id,
                     brand = %brand.slug,
                     error = %mark_err,
-                    "failed to record brand db failure"
+                    "failed to record brand failure"
                 );
             }
-            Ok(None)
+            Err(anyhow::anyhow!(
+                "db error persisting products for {}: {}",
+                brand.slug,
+                err_string
+            ))
         }
     }
 }
@@ -179,7 +175,8 @@ pub(super) async fn collect_brand_core(
 /// Returns `(records_count, brand_succeeded)`.
 ///
 /// When `brand_succeeded` is `false`, the brand's failure has already been
-/// recorded in `collection_run_brands` and the returned count is `0`.
+/// recorded in `collection_run_brands` by [`collect_brand_core`] and the
+/// returned count is `0`.
 pub(super) async fn collect_brand_products(
     pool: &sqlx::PgPool,
     client: &scbdb_scraper::ShopifyClient,
@@ -187,33 +184,34 @@ pub(super) async fn collect_brand_products(
     run_id: i64,
     brand: &scbdb_db::BrandRow,
 ) -> anyhow::Result<(i32, bool)> {
-    let Some((brand_products, _brand_snapshots)) =
-        collect_brand_core(pool, client, config, run_id, brand).await?
-    else {
-        // Core already recorded the failure in collection_run_brands.
-        return Ok((0, false));
-    };
-
-    if let Err(e) = scbdb_db::upsert_collection_run_brand(
-        pool,
-        run_id,
-        brand.id,
-        "succeeded",
-        Some(brand_products),
-        None,
-    )
-    .await
-    {
-        tracing::error!(
-            brand = %brand.slug,
-            run_id,
-            error = %e,
-            "product data saved but failed to record brand success in collection_run_brands — audit trail incomplete"
-        );
-        return Err(e.into());
+    match collect_brand_core(pool, client, config, run_id, brand).await {
+        Ok((brand_products, _brand_snapshots)) => {
+            if let Err(e) = scbdb_db::upsert_collection_run_brand(
+                pool,
+                run_id,
+                brand.id,
+                "succeeded",
+                Some(brand_products),
+                None,
+            )
+            .await
+            {
+                tracing::error!(
+                    brand = %brand.slug,
+                    run_id,
+                    error = %e,
+                    "product data saved but failed to record brand success in collection_run_brands — audit trail incomplete"
+                );
+                return Err(e.into());
+            }
+            Ok((brand_products, true))
+        }
+        Err(e) => {
+            // collect_brand_core already recorded the failure row and logged it.
+            tracing::error!(brand = %brand.slug, error = %e, "brand collection failed");
+            Ok((0, false))
+        }
     }
-
-    Ok((brand_products, true))
 }
 
 /// Collect brand pricing snapshot data.
@@ -226,7 +224,8 @@ pub(super) async fn collect_brand_products(
 /// Returns `(products_count, snapshots_count, brand_succeeded)`.
 ///
 /// When `brand_succeeded` is `false`, the brand's failure has already been
-/// recorded in `collection_run_brands` and both returned counts are `0`.
+/// recorded in `collection_run_brands` by [`collect_brand_core`] and both
+/// returned counts are `0`.
 pub(super) async fn collect_brand_pricing(
     pool: &sqlx::PgPool,
     client: &scbdb_scraper::ShopifyClient,
@@ -234,31 +233,124 @@ pub(super) async fn collect_brand_pricing(
     run_id: i64,
     brand: &scbdb_db::BrandRow,
 ) -> anyhow::Result<(i32, i32, bool)> {
-    let Some((brand_products, brand_snapshots)) =
-        collect_brand_core(pool, client, config, run_id, brand).await?
-    else {
-        // Core already recorded the failure in collection_run_brands.
-        return Ok((0, 0, false));
-    };
+    match collect_brand_core(pool, client, config, run_id, brand).await {
+        Ok((brand_products, brand_snapshots)) => {
+            if let Err(e) = scbdb_db::upsert_collection_run_brand(
+                pool,
+                run_id,
+                brand.id,
+                "succeeded",
+                Some(brand_snapshots),
+                None,
+            )
+            .await
+            {
+                tracing::error!(
+                    brand = %brand.slug,
+                    run_id,
+                    error = %e,
+                    "pricing data saved but failed to record brand success in collection_run_brands — audit trail incomplete"
+                );
+                return Err(e.into());
+            }
+            Ok((brand_products, brand_snapshots, true))
+        }
+        Err(e) => {
+            // collect_brand_core already recorded the failure row and logged it.
+            tracing::error!(brand = %brand.slug, error = %e, "brand collection failed");
+            Ok((0, 0, false))
+        }
+    }
+}
 
-    if let Err(e) = scbdb_db::upsert_collection_run_brand(
-        pool,
-        run_id,
-        brand.id,
-        "succeeded",
-        Some(brand_snapshots),
-        None,
-    )
-    .await
-    {
-        tracing::error!(
-            brand = %brand.slug,
-            run_id,
-            error = %e,
-            "pricing data saved but failed to record brand success in collection_run_brands — audit trail incomplete"
-        );
-        return Err(e.into());
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Insert a minimal brand row for test purposes and return its generated `id`.
+    async fn insert_test_brand(pool: &sqlx::PgPool, slug: &str) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            "INSERT INTO brands (name, slug, relationship, tier, shop_url, is_active) \
+             VALUES ($1, $2, 'portfolio', 1, $3, true) RETURNING id",
+        )
+        .bind(format!("Test Brand {slug}"))
+        .bind(slug)
+        .bind(format!("https://{slug}.com"))
+        .fetch_one(pool)
+        .await
+        .unwrap_or_else(|e| panic!("insert_test_brand failed for slug '{slug}': {e}"))
     }
 
-    Ok((brand_products, brand_snapshots, true))
+    fn make_normalized_product(source_product_id: &str) -> scbdb_core::NormalizedProduct {
+        scbdb_core::NormalizedProduct {
+            source_product_id: source_product_id.to_string(),
+            source_platform: "shopify".to_string(),
+            name: "Test Product".to_string(),
+            description: None,
+            product_type: None,
+            tags: vec![],
+            handle: Some("test-product".to_string()),
+            status: "active".to_string(),
+            source_url: None,
+            variants: vec![make_normalized_variant("VAR-001")],
+        }
+    }
+
+    fn make_normalized_variant(source_variant_id: &str) -> scbdb_core::NormalizedVariant {
+        scbdb_core::NormalizedVariant {
+            source_variant_id: source_variant_id.to_string(),
+            sku: None,
+            title: "Default Title".to_string(),
+            price: "12.99".to_string(),
+            compare_at_price: None,
+            currency_code: "USD".to_string(),
+            source_url: None,
+            is_available: true,
+            is_default: true,
+            dosage_mg: Some(5.0),
+            cbd_mg: None,
+            size_value: Some(12.0),
+            size_unit: Some("oz".to_string()),
+        }
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn persist_normalized_products_deduplicates_snapshots(pool: sqlx::PgPool) {
+        let brand_id = insert_test_brand(&pool, "dedup-brand").await;
+
+        let run = scbdb_db::create_collection_run(&pool, "products", "cli")
+            .await
+            .expect("create_collection_run failed");
+        scbdb_db::start_collection_run(&pool, run.id)
+            .await
+            .expect("start_collection_run failed");
+
+        let product = make_normalized_product("DEDUP-PROD-001");
+
+        // First call: should insert 1 product and 1 snapshot.
+        let (products, snapshots) =
+            persist_normalized_products(&pool, brand_id, run.id, std::slice::from_ref(&product))
+                .await
+                .expect("first persist_normalized_products failed");
+        assert_eq!(
+            (products, snapshots),
+            (1, 1),
+            "first call should insert 1 product and 1 snapshot"
+        );
+
+        // Second call with the same price: should process 1 product but insert 0 new snapshots.
+        let (products, snapshots) =
+            persist_normalized_products(&pool, brand_id, run.id, std::slice::from_ref(&product))
+                .await
+                .expect("second persist_normalized_products failed");
+        assert_eq!(
+            (products, snapshots),
+            (1, 0),
+            "second call with same price should insert 0 new snapshots (dedup)"
+        );
+    }
 }

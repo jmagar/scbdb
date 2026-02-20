@@ -13,7 +13,7 @@ chrono.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
-serde_yml.workspace = true
+serde_yaml.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

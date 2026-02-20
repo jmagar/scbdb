@@ -32,12 +32,15 @@ pub(crate) async fn run_regs_ingest(
     let keyword = keyword.unwrap_or("hemp");
 
     if dry_run {
-        println!("dry-run: would ingest bills for state {state}");
+        println!("dry-run: would ingest bills for state {state} (keyword: {keyword:?})");
         return Ok(());
     }
 
     let run = scbdb_db::create_collection_run(pool, "regs", "cli").await?;
-    scbdb_db::start_collection_run(pool, run.id).await?;
+    if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
+        crate::fail_run_best_effort(pool, run.id, "regs", format!("{e:#}")).await;
+        return Err(e.into());
+    }
 
     let mut total_bills: i32 = 0;
     let mut total_events: i32 = 0;
@@ -76,6 +79,9 @@ pub(crate) async fn run_regs_ingest(
             )
             .await?;
 
+            // DB write failures are treated as fatal — `?` aborts the entire
+            // ingestion run and marks it failed. API fetch failures for
+            // individual bills (above) are non-fatal and logged as warnings.
             for event in &events {
                 scbdb_db::upsert_bill_event(
                     pool,
@@ -101,14 +107,14 @@ pub(crate) async fn run_regs_ingest(
         Ok(()) => {
             if let Err(err) = scbdb_db::complete_collection_run(pool, run.id, total_bills).await {
                 let message = format!("{err:#}");
-                super::fail_run_best_effort(pool, run.id, "regs", message).await;
+                crate::fail_run_best_effort(pool, run.id, "regs", message).await;
                 return Err(err.into());
             }
             println!("ingested {total_bills} bills, {total_events} events for state {state}");
             Ok(())
         }
         Err(err) => {
-            super::fail_run_best_effort(pool, run.id, "regs", format!("{err:#}")).await;
+            crate::fail_run_best_effort(pool, run.id, "regs", format!("{err:#}")).await;
             Err(err)
         }
     }

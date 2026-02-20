@@ -2,9 +2,9 @@
 
 ## Document Metadata
 
-- Version: 1.2
+- Version: 1.3
 - Status: Active
-- Last Updated (EST): 09:00:00 | 02/19/2026 EST
+- Last Updated (EST): 00:00:00 | 02/20/2026 EST
 
 ## Purpose
 
@@ -192,7 +192,7 @@ CREATE TABLE bill_events (
 CREATE INDEX idx_bill_events_bill_id_event_date ON bill_events (bill_id, event_date DESC);
 ```
 
-### `sentiment_snapshots` (Post-MVP)
+### `sentiment_snapshots`
 
 ```sql
 CREATE TABLE sentiment_snapshots (
@@ -219,13 +219,12 @@ CREATE INDEX idx_sentiment_snapshots_brand_captured ON sentiment_snapshots (bran
 - `collection_run_brands`
 - `bills`
 - `bill_events`
+- `sentiment_snapshots`
 
 ### Planned Post-MVP / Future Work
 
-- `sentiment_snapshots`
-- Any Spider/Qdrant/TEI-related schema extensions
+- Any Spider/Qdrant/TEI-related schema extensions beyond vector dedup
 
 ## Notes
 
-- `sentiment_snapshots` is planned but not required for MVP delivery.
-- Spider/Qdrant/TEI integration will add additional schema later as needed.
+- Spider/Qdrant/TEI integration for semantic search beyond dedup will add additional schema later as needed.

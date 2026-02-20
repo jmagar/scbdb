@@ -27,10 +27,13 @@
 
 ## Required Environment Variables
 
-- `POSTGRES_PASSWORD`
-- `DATABASE_URL`
+- `DATABASE_URL` — full PostgreSQL connection string read by the application
 - `SCBDB_ENV` (`development`, `test`, `production`)
 - `SCBDB_API_KEY_HASH_SALT`
+
+## Docker Compose Variables
+
+- `POSTGRES_PASSWORD` — required by the `docker-compose.yml` `postgres` service to initialize the container; not read by the application (which uses `DATABASE_URL` instead)
 
 ## Optional Environment Variables
 

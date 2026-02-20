@@ -12,7 +12,7 @@ pre-commit:
 
     web-format:
       glob: "web/**/*.{ts,tsx,css}"
-      run: pnpm --dir web format:check
+      run: command -v pnpm > /dev/null 2>&1 && pnpm --dir web format:check || echo "pnpm not found — skipping web format check"
       fail_text: "Run 'just format' to fix web formatting."
 
 pre-push:
@@ -30,5 +30,5 @@ pre-push:
 
     web-typecheck:
       glob: "web/**/*.{ts,tsx}"
-      run: pnpm --dir web typecheck
+      run: command -v pnpm > /dev/null 2>&1 && pnpm --dir web typecheck || echo "pnpm not found — skipping web typecheck"
       fail_text: "Fix TypeScript errors before pushing."

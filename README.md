@@ -1,11 +1,5 @@
 # SCBDB
 
-## Document Metadata
-
-- Version: 1.2
-- Status: Active
-- Last Updated (EST): 09:30:00 | 02/19/2026 EST
-
 SCBDB is a self-hosted competitive intelligence and regulatory tracking platform for hemp-derived THC beverages.
 
 ## What It Does
@@ -89,7 +83,7 @@ cargo run --bin scbdb-cli -- db ping      # test DB connection
 cargo run --bin scbdb-cli -- db migrate   # run pending migrations
 cargo run --bin scbdb-cli -- db seed      # seed brands from config/brands.yaml
 
-# Data collection (Phase 2 — scaffold wired, DB writes pending)
+# Data collection (Phase 2 — complete)
 cargo run --bin scbdb-cli -- collect products                       # collect product catalog for all brands
 cargo run --bin scbdb-cli -- collect products --brand <SLUG>        # restrict to one brand by slug
 cargo run --bin scbdb-cli -- collect products --dry-run             # preview without writing to DB

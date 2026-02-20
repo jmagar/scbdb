@@ -35,7 +35,7 @@ pub enum RegsCommands {
         state: Option<String>,
         /// Maximum number of bills to show
         #[arg(long, default_value = "20")]
-        limit: i64,
+        limit: u32,
     },
     /// Show event timeline for a specific bill
     Timeline {
@@ -60,20 +60,4 @@ fn fmt_date(date: Option<NaiveDate>) -> String {
         || "\u{2014}".to_string(),
         |d| d.format("%Y-%m-%d").to_string(),
     )
-}
-
-/// Attempt to mark a collection run as failed, logging any secondary error.
-async fn fail_run_best_effort(
-    pool: &sqlx::PgPool,
-    run_id: i64,
-    context: &'static str,
-    message: String,
-) {
-    if let Err(mark_err) = scbdb_db::fail_collection_run(pool, run_id, &message).await {
-        tracing::error!(
-            run_id,
-            error = %mark_err,
-            "failed to mark {context} run as failed"
-        );
-    }
 }

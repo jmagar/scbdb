@@ -1,11 +1,13 @@
 mod collect;
 mod regs;
+mod sentiment;
 
 use clap::{Parser, Subcommand};
 use tracing_subscriber::EnvFilter;
 
 use collect::CollectCommands;
 use regs::RegsCommands;
+use sentiment::SentimentCommands;
 
 #[derive(Debug, Parser)]
 #[command(name = "scbdb-cli")]
@@ -26,6 +28,11 @@ enum Commands {
     Regs {
         #[command(subcommand)]
         command: RegsCommands,
+    },
+    /// Collect and query brand sentiment signals
+    Sentiment {
+        #[command(subcommand)]
+        command: SentimentCommands,
     },
     /// Generate reports and exports (Phase 5)
     Report,
@@ -81,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
             }
             RegsCommands::Status { state, limit } => {
                 let pool = connect_or_exit().await;
-                regs::run_regs_status(&pool, state.as_deref(), limit).await?;
+                regs::run_regs_status(&pool, state.as_deref(), i64::from(limit)).await?;
             }
             RegsCommands::Timeline { state, bill } => {
                 let pool = connect_or_exit().await;
@@ -90,6 +97,20 @@ async fn main() -> anyhow::Result<()> {
             RegsCommands::Report { state } => {
                 let pool = connect_or_exit().await;
                 regs::run_regs_report(&pool, state.as_deref()).await?;
+            }
+        },
+        Some(Commands::Sentiment { command }) => match command {
+            SentimentCommands::Collect { brand, dry_run } => {
+                let pool = connect_or_exit().await;
+                sentiment::run_sentiment_collect(&pool, brand.as_deref(), dry_run).await?;
+            }
+            SentimentCommands::Status { brand } => {
+                let pool = connect_or_exit().await;
+                sentiment::run_sentiment_status(&pool, brand.as_deref()).await?;
+            }
+            SentimentCommands::Report { brand } => {
+                let pool = connect_or_exit().await;
+                sentiment::run_sentiment_report(&pool, brand.as_deref()).await?;
             }
         },
         Some(Commands::Report) => {
@@ -182,6 +203,26 @@ async fn connect_or_exit() -> sqlx::PgPool {
         }
         std::process::exit(1);
     })
+}
+
+/// Attempt to mark a collection run as failed, logging any secondary error.
+///
+/// This is a best-effort operation — if the run is not in the expected state
+/// (e.g., it was never transitioned to `running`), `fail_collection_run` will
+/// itself return an error, which is logged and swallowed here.
+pub(crate) async fn fail_run_best_effort(
+    pool: &sqlx::PgPool,
+    run_id: i64,
+    context: &'static str,
+    message: String,
+) {
+    if let Err(mark_err) = scbdb_db::fail_collection_run(pool, run_id, &message).await {
+        tracing::error!(
+            run_id,
+            error = %mark_err,
+            "failed to mark {context} run as failed"
+        );
+    }
 }
 
 #[cfg(test)]

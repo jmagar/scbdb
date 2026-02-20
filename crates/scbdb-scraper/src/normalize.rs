@@ -38,15 +38,18 @@ pub fn normalize_product(
     let product_type = product.product_type.filter(|s| !s.is_empty());
 
     // The position-1 variant is the storefront default. If no position data
-    // exists, fall back to the first variant by index.
+    // exists, or if position data exists but no variant claims position 1
+    // (e.g., a variant was deleted), fall back to the first variant by index.
     let has_position_data = product.variants.iter().any(|v| v.position.is_some());
+    let has_position_one = product.variants.iter().any(|v| v.position == Some(1));
+    let use_position = has_position_data && has_position_one;
 
     let variants = product
         .variants
         .into_iter()
         .enumerate()
         .map(|(idx, variant)| {
-            let is_default = if has_position_data {
+            let is_default = if use_position {
                 variant.position == Some(1)
             } else {
                 idx == 0
@@ -89,12 +92,22 @@ fn normalize_variant(
     is_default: bool,
     source_product_id: &str,
 ) -> Result<NormalizedVariant, ScraperError> {
-    // Validate price is non-empty; this is always set by Shopify but guard
-    // defensively.
+    // Validate price is non-empty and parseable as a numeric value.
+    // Shopify always sets this field, but guard defensively — a malformed
+    // value like "N/A" would otherwise fail silently at DB coercion time.
     if variant.price.is_empty() {
         return Err(ScraperError::Normalization {
             source_product_id: source_product_id.to_owned(),
             reason: format!("variant {} has empty price", variant.id),
+        });
+    }
+    if variant.price.parse::<f64>().is_err() {
+        return Err(ScraperError::Normalization {
+            source_product_id: source_product_id.to_owned(),
+            reason: format!(
+                "variant {} has malformed price: {:?}",
+                variant.id, variant.price
+            ),
         });
     }
 

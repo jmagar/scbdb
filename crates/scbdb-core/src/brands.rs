@@ -73,7 +73,7 @@ pub fn load_brands(path: &Path) -> Result<BrandsFile, ConfigError> {
     })?;
 
     let brands_file: BrandsFile =
-        serde_yml::from_str(&content).map_err(ConfigError::BrandsFileParse)?;
+        serde_yaml::from_str(&content).map_err(ConfigError::BrandsFileParse)?;
 
     validate_brands(&brands_file)?;
 

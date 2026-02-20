@@ -1,11 +1,19 @@
-/// Placeholder sentiment scorer — always returns a neutral score.
-///
-/// This is a stub for Phase 4. Callers should not act on its return value
-/// for production decisions until a real model is integrated.
-#[must_use]
-pub fn score_signal(input: &str) -> f32 {
-    if input.trim().is_empty() {
-        return 0.0;
-    }
-    0.5
-}
+//! Sentiment analysis pipeline for SCBDB.
+//!
+//! Collects brand signals from Google News RSS and Reddit, embeds them via TEI,
+//! stores deduplicated vectors in Qdrant, and scores them using a domain-specific
+//! lexicon. Aggregates per-brand scores for storage in `sentiment_snapshots`.
+
+pub mod error;
+pub mod pipeline;
+pub mod scorer;
+pub mod types;
+
+mod embeddings;
+mod sources;
+mod vector_store;
+
+pub use error::SentimentError;
+pub use pipeline::run_brand_sentiment;
+pub use scorer::lexicon_score;
+pub use types::{BrandSentimentResult, SentimentConfig, SentimentSignal};

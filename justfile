@@ -72,7 +72,7 @@ db-down:
     docker compose down
 
 db-reset:
-    @printf "This will destroy all postgres data. Continue? [y/N] " && read r && [ "$$r" = "y" ] && docker compose down -v
+    @printf "This will destroy all postgres data. Continue? [y/N] " && read r && case "$$r" in [yY]|[yY][eE][sS]) docker compose down -v ;; *) echo "Aborted." ;; esac
 
 hooks:
     lefthook install

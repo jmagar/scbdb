@@ -1,10 +1,12 @@
 //! Offline unit tests for scbdb-db pool configuration and row types.
 //! These tests do not require a live database connection.
 
+use chrono::Utc;
 use scbdb_core::{AppConfig, Environment};
 use scbdb_db::{CollectionRunRow, PoolConfig, ProductRow};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use uuid::Uuid;
 
 #[test]
 fn pool_config_from_app_config_uses_core_values() {
@@ -37,9 +39,6 @@ fn pool_config_from_app_config_uses_core_values() {
 /// fields with the correct types. No database required.
 #[test]
 fn collection_run_row_has_expected_fields() {
-    use chrono::Utc;
-    use uuid::Uuid;
-
     let row = CollectionRunRow {
         id: 1_i64,
         public_id: Uuid::new_v4(),
@@ -67,8 +66,6 @@ fn collection_run_row_has_expected_fields() {
 /// fields with the correct types. No database required.
 #[test]
 fn product_row_has_expected_fields() {
-    use chrono::Utc;
-
     let row = ProductRow {
         id: 42_i64,
         brand_id: 7_i64,

@@ -1,11 +1,25 @@
 //! Integration tests for `LegiscanClient` using wiremock HTTP mocks.
+//!
+//! Each test starts its own [`MockServer`] on a random port and builds a
+//! dedicated [`LegiscanClient`] pointed at that server. This guarantees full
+//! isolation so tests can run in parallel -- both within this binary and across
+//! workspace crates that also use wiremock.
+//!
+//! The test client uses a short timeout (5 s) so that any misrouted or dropped
+//! connections fail fast instead of hanging under parallel workspace load.
+//!
+//! Every mock carries `.expect(1)` so wiremock's verification (on
+//! `MockServer` drop) catches unmatched or double-hit mocks with a clear
+//! panic rather than a confusing deserialization error.
 
 use scbdb_legiscan::LegiscanClient;
 use wiremock::matchers::{method, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
+/// Build a [`LegiscanClient`] suitable for tests: short timeout, pointed at
+/// the given mock server URI.
 fn test_client(base_url: &str) -> LegiscanClient {
-    LegiscanClient::with_base_url("test-key", 30, base_url)
+    LegiscanClient::with_base_url("test-key", 5, base_url)
         .expect("client construction should not fail")
 }
 
@@ -44,6 +58,7 @@ async fn get_bill_returns_parsed_bill() {
         .and(query_param("key", "test-key"))
         .and(query_param("id", "12345"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(1)
         .mount(&server)
         .await;
 
@@ -90,9 +105,11 @@ async fn search_bills_returns_results() {
 
     Mock::given(method("GET"))
         .and(query_param("op", "search"))
+        .and(query_param("key", "test-key"))
         .and(query_param("query", "hemp"))
         .and(query_param("state", "SC"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(1)
         .mount(&server)
         .await;
 
@@ -129,8 +146,10 @@ async fn get_session_list_returns_sessions() {
 
     Mock::given(method("GET"))
         .and(query_param("op", "getSessionList"))
+        .and(query_param("key", "test-key"))
         .and(query_param("state", "SC"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(1)
         .mount(&server)
         .await;
 
@@ -180,8 +199,10 @@ async fn get_master_list_parses_bill_entries() {
 
     Mock::given(method("GET"))
         .and(query_param("op", "getMasterList"))
+        .and(query_param("key", "test-key"))
         .and(query_param("state", "SC"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(1)
         .mount(&server)
         .await;
 
@@ -213,6 +234,7 @@ async fn api_error_response_returns_err() {
     Mock::given(method("GET"))
         .and(query_param("op", "getBill"))
         .respond_with(ResponseTemplate::new(200).set_body_json(&body))
+        .expect(1)
         .mount(&server)
         .await;
 

@@ -117,16 +117,19 @@ async fn health(
                 meta,
             }),
         ),
-        Err(_) => (
-            StatusCode::SERVICE_UNAVAILABLE,
-            Json(ApiResponse {
-                data: HealthData {
-                    status: "degraded",
-                    database: "unavailable",
-                },
-                meta,
-            }),
-        ),
+        Err(e) => {
+            tracing::warn!(error = %e, "health check: database unavailable");
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(ApiResponse {
+                    data: HealthData {
+                        status: "degraded",
+                        database: "unavailable",
+                    },
+                    meta,
+                }),
+            )
+        }
     }
 }
 
