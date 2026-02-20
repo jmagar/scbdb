@@ -130,7 +130,8 @@ pub struct BillSearchItem {
     pub bill_number: String,
     pub title: String,
     pub state: String,
-    pub status: i32,
+    #[serde(default)]
+    pub status: Option<i32>,
     #[serde(default)]
     pub status_date: Option<String>,
     #[serde(default)]
