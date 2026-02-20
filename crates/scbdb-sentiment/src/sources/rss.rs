@@ -9,7 +9,7 @@ use crate::types::SentimentSignal;
 
 /// Fetch signals from Google News RSS for a brand.
 ///
-/// Searches for `{brand_name} hemp beverage` and returns up to 25 signals.
+/// Searches for `{brand_name} hemp OR cbd beverage` and returns up to 25 signals.
 /// Each `<item>` title + description becomes one `SentimentSignal`.
 ///
 /// # Errors
@@ -20,7 +20,7 @@ pub(crate) async fn fetch_google_news_rss(
     brand_slug: &str,
     brand_name: &str,
 ) -> Result<Vec<SentimentSignal>, SentimentError> {
-    let query = format!("{brand_name} hemp beverage");
+    let query = format!("{brand_name} hemp OR cbd beverage");
     let encoded = utf8_percent_encode(&query, NON_ALPHANUMERIC).to_string();
     let url = format!("https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en");
 

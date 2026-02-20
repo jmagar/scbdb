@@ -114,7 +114,7 @@ impl RedditClient {
         brand_slug: &str,
         brand_name: &str,
     ) -> Result<Vec<SentimentSignal>, SentimentError> {
-        let subreddits = "delta8+hemp+cannabis+delta_8+hempflowers";
+        let subreddits = "delta8+hemp+cannabis+delta_8+hempflowers+CBD";
         let url = format!(
             "https://oauth.reddit.com/r/{subreddits}/search?q={brand_name}&restrict_sr=true&limit=25&sort=new"
         );
