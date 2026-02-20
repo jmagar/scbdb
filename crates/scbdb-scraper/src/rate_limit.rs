@@ -74,8 +74,17 @@ where
         }
 
         // Exponential backoff: base * 2^attempt seconds.
-        // Cap at u64::MAX to prevent overflow on extreme configs.
-        let delay_secs = backoff_base_secs.saturating_mul(1u64 << attempt.min(62));
+        // For rate-limited responses, honour the server-supplied Retry-After
+        // value as a floor so we never retry sooner than the server asked.
+        let exponential_secs = backoff_base_secs.saturating_mul(1u64 << attempt.min(62));
+        let delay_secs = if let ScraperError::RateLimited {
+            retry_after_secs, ..
+        } = &last_err
+        {
+            exponential_secs.max(*retry_after_secs)
+        } else {
+            exponential_secs
+        };
         tracing::warn!(
             attempt,
             max_retries,
