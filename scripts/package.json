@@ -1,0 +1,16 @@
+{
+  "name": "scbdb-scripts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "discover": "tsx discover-locator.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -121,7 +121,6 @@ scbdb-cli db seed         # seed brands from config/brands.yaml
 - **LegiScan `search` response** — Returns numbered JSON objects `{"0":{...},"1":{...}}`, not a Vec. Deserialize as `HashMap<String, Value>` with `#[serde(flatten)]`, filter numeric keys. Same pattern as `MasterListData`.
 - **sqlx + `SELECT 1`** — PostgreSQL `int4` maps to `i32`, not `i64`. Use `query_scalar::<_, i32>`.
 - **`dotenvy` policy** — Library crates must NOT call `dotenvy::dotenv()`. Only binary entrypoints (`scbdb-cli`, `scbdb-server`) load `.env`.
-- **`api_key_hash_salt`** — `AppConfig.api_key_hash_salt` is `Option<String>`. CLI commands don't need it; server code must validate `is_some()` before use.
 - **Git hooks** — pre-commit runs `cargo fmt`; pre-push runs `cargo test` + `cargo clippy -D warnings`. Run `just check` and `just test` before pushing to avoid failed pushes.
 
 ## Documentation Workflow

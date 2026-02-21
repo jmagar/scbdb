@@ -28,31 +28,31 @@ pub struct BrandConfig {
     pub tier: u8,
     pub domain: Option<String>,
     pub shop_url: Option<String>,
+    #[serde(default)]
+    pub store_locator_url: Option<String>,
     pub notes: Option<String>,
+    /// Social platform handles: platform name → handle/username.
+    /// e.g. `twitter: drinkcann`, `youtube: UCxxxxxxx`, `reddit: r/drinkcann`
+    #[serde(default)]
+    pub social: std::collections::HashMap<String, String>,
+    /// All known domains for this brand (primary, redirects, defunct, etc.)
+    #[serde(default)]
+    pub domains: Vec<String>,
+    /// Twitter/X handle for the brand account (without @), e.g. `"drinkcann"`.
+    ///
+    /// This is the canonical handle used by the sentiment pipeline for brand-timeline
+    /// and reply collection. It is stored as a dedicated column on `brands` for efficient
+    /// access. The generic [`BrandConfig::social`] map may also contain a `twitter` key
+    /// but the two fields are independent — `twitter_handle` is the authoritative source.
+    #[serde(default)]
+    pub twitter_handle: Option<String>,
 }
 
 impl BrandConfig {
     /// Generate a URL-safe slug from the brand name.
     #[must_use]
     pub fn slug(&self) -> String {
-        self.name
-            .to_lowercase()
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() || c == '-' {
-                    c
-                } else if c == ' ' {
-                    '-'
-                } else {
-                    '\0'
-                }
-            })
-            .filter(|&c| c != '\0')
-            .collect::<String>()
-            .split('-')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("-")
+        slug_from_name(&self.name)
     }
 }
 
@@ -127,3 +127,28 @@ fn validate_brands(brands_file: &BrandsFile) -> Result<(), ConfigError> {
 #[cfg(test)]
 #[path = "brands_test.rs"]
 mod tests;
+
+/// Generate a URL-safe slug from an arbitrary brand name string.
+///
+/// This is the single source of truth for slug generation.
+/// [`BrandConfig::slug`] delegates to this function.
+#[must_use]
+pub fn slug_from_name(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else if c == ' ' {
+                '-'
+            } else {
+                '\0'
+            }
+        })
+        .filter(|&c| c != '\0')
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}

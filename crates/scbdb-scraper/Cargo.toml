@@ -11,9 +11,11 @@ workspace = true
 [dependencies]
 rand.workspace = true
 reqwest.workspace = true
+regex.workspace = true
 scbdb-core = { path = "../scbdb-core" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

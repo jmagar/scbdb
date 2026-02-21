@@ -3,12 +3,12 @@
 //! Dosage and size parsing is delegated to [`crate::parse`]; this module
 //! focuses on structural conversion from Shopify API shapes.
 
-use scbdb_core::{NormalizedProduct, NormalizedVariant};
+use scbdb_core::{NormalizedImage, NormalizedProduct, NormalizedVariant};
 
 use crate::client::extract_store_origin;
 use crate::error::ScraperError;
 use crate::parse::{parse_cbd_mg, parse_size, parse_thc_mg};
-use crate::types::{ShopifyProduct, ShopifyVariant};
+use crate::types::{ShopifyImage, ShopifyProduct, ShopifyVariant};
 
 /// Normalizes a raw [`ShopifyProduct`] into a [`NormalizedProduct`].
 ///
@@ -37,12 +37,67 @@ pub fn normalize_product(
     // Normalize product_type: treat empty string as absent.
     let product_type = product.product_type.filter(|s| !s.is_empty());
 
+    // Best-effort dosage fallback chain (applied uniformly to all variants
+    // when a variant's own title yields no dosage value):
+    //
+    // 1. body_html — works for brands like BREZ that embed dosage in
+    //    product descriptions ("3mg micronized THC, 6mg CBD per can").
+    // 2. product title — works for brands like Better Than Booze that encode
+    //    dosage in the product name ("2MG THC + 6MG CBD Lemon Drop Martini")
+    //    but not in individual variant titles ("12-Pack", "24-Pack").
+    //
+    // The same single-dose limitation as html_dosage_fallback applies: if a
+    // product has multiple dosage strengths across variants with bare titles,
+    // the first parseable THC value from the fallback is attributed to all.
+    // Only use the THC-specific parser for the dosage fallback. Using
+    // `parse_dosage_from_html` would fall back to CBD values, which would
+    // incorrectly populate `dosage_mg` (a THC field) with a CBD reading.
+    let html_dosage_fallback: Option<f64> = product
+        .body_html
+        .as_deref()
+        .and_then(parse_thc_from_html)
+        .or_else(|| parse_thc_mg(&product.title));
+
     // The position-1 variant is the storefront default. If no position data
     // exists, or if position data exists but no variant claims position 1
     // (e.g., a variant was deleted), fall back to the first variant by index.
     let has_position_data = product.variants.iter().any(|v| v.position.is_some());
     let has_position_one = product.variants.iter().any(|v| v.position == Some(1));
     let use_position = has_position_data && has_position_one;
+
+    let default_variant_source_id = if use_position {
+        product
+            .variants
+            .iter()
+            .find(|v| v.position == Some(1))
+            .map(|v| v.id.to_string())
+    } else {
+        product.variants.first().map(|v| v.id.to_string())
+    };
+
+    let mut image_gallery = product
+        .images
+        .into_iter()
+        .map(normalize_image)
+        .collect::<Vec<_>>();
+    image_gallery.sort_by_key(|img| img.position.unwrap_or(i32::MAX));
+
+    let primary_image_url = default_variant_source_id
+        .as_deref()
+        .and_then(|default_id| {
+            image_gallery
+                .iter()
+                .find(|img| img.variant_source_ids.iter().any(|id| id == default_id))
+                .map(|img| img.src.clone())
+        })
+        .or_else(|| {
+            image_gallery
+                .iter()
+                .find(|img| img.position == Some(1))
+                .map(|img| img.src.clone())
+        })
+        .or_else(|| product.image.as_ref().map(|image| image.src.clone()))
+        .or_else(|| image_gallery.first().map(|img| img.src.clone()));
 
     let variants = product
         .variants
@@ -54,7 +109,12 @@ pub fn normalize_product(
             } else {
                 idx == 0
             };
-            normalize_variant(variant, is_default, &source_product_id)
+            normalize_variant(
+                variant,
+                is_default,
+                &source_product_id,
+                html_dosage_fallback,
+            )
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -78,19 +138,36 @@ pub fn normalize_product(
         handle: Some(product.handle),
         status: product.status.unwrap_or_else(|| "active".to_string()),
         source_url,
+        vendor: product.vendor,
+        primary_image_url,
+        image_gallery,
         variants,
     })
 }
 
 /// Normalizes a raw [`ShopifyVariant`] into a [`NormalizedVariant`].
 ///
+/// The `html_dosage_fallback` is the dosage extracted from the parent
+/// product's `body_html` (computed once in [`normalize_product`]). It is
+/// applied uniformly to **all** variants of the product when a variant's
+/// title yields no dosage value.
+///
+/// **Limitation:** this fallback assumes every variant of a product has the
+/// same dosage — which holds for single-dose brands like BREZ but will
+/// produce incorrect data for products that offer multiple dosage strengths
+/// across variants with bare titles (e.g., "Hi Boy" / "Hi'er Boy" paired
+/// with `body_html` that mentions both 5mg and 10mg). For such products the
+/// first parseable THC value in the HTML will be attributed to all variants.
+///
 /// # Errors
 ///
-/// Returns [`ScraperError::Normalization`] if `variant.price` is empty.
+/// Returns [`ScraperError::Normalization`] if `variant.price` is empty or
+/// not parseable as a number.
 fn normalize_variant(
     variant: ShopifyVariant,
     is_default: bool,
     source_product_id: &str,
+    html_dosage_fallback: Option<f64>,
 ) -> Result<NormalizedVariant, ScraperError> {
     // Validate price is non-empty and parseable as a numeric value.
     // Shopify always sets this field, but guard defensively — a malformed
@@ -112,7 +189,8 @@ fn normalize_variant(
     }
 
     // Parse dosage and size from the title before moving it into the struct.
-    let dosage_mg = parse_thc_mg(&variant.title);
+    // Fall back to HTML body dosage when the variant title has no mg value.
+    let dosage_mg = parse_thc_mg(&variant.title).or(html_dosage_fallback);
     let cbd_mg = parse_cbd_mg(&variant.title);
     let (size_value, size_unit) = parse_size(&variant.title).unzip();
 
@@ -143,6 +221,49 @@ fn normalize_variant(
         size_value,
         size_unit,
     })
+}
+
+/// Strips HTML tags and entities from `html`, then extracts a THC-only dosage.
+///
+/// Unlike [`crate::parse::parse_dosage_from_html`], this does **not** fall back
+/// to CBD values — preventing CBD readings from being misattributed to the THC
+/// `dosage_mg` field.
+fn parse_thc_from_html(html: &str) -> Option<f64> {
+    let mut stripped = String::with_capacity(html.len());
+    let mut inside_tag = false;
+    for ch in html.chars() {
+        match ch {
+            '<' => inside_tag = true,
+            '>' => {
+                inside_tag = false;
+                stripped.push(' ');
+            }
+            _ if !inside_tag => stripped.push(ch),
+            _ => {}
+        }
+    }
+    let decoded = stripped
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ");
+    parse_thc_mg(&decoded)
+}
+
+fn normalize_image(image: ShopifyImage) -> NormalizedImage {
+    NormalizedImage {
+        source_image_id: image.id.map(|id| id.to_string()),
+        src: image.src,
+        alt: image.alt,
+        position: image.position,
+        width: image.width,
+        height: image.height,
+        variant_source_ids: image
+            .variant_ids
+            .into_iter()
+            .map(|id| id.to_string())
+            .collect(),
+    }
 }
 
 #[cfg(test)]

@@ -2,9 +2,9 @@
 
 ## Document Metadata
 
-- Version: 1.0
+- Version: 1.1
 - Status: Active
-- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+- Last Updated (EST): 21:30:00 | 02/20/2026 EST
 
 ## Core Product Docs
 
@@ -23,6 +23,10 @@
 - [docs/TESTING.md](TESTING.md) — testing standards and TDD workflow
 - [docs/LOGGING.md](LOGGING.md) — error handling and logging/tracing standards
 - [docs/DEPLOYMENT.md](DEPLOYMENT.md) — deployment architecture and operational runbook
+- [docs/SENTIMENT_PIPELINE.md](SENTIMENT_PIPELINE.md) — sentiment pipeline architecture, sources, scoring, and config
+- [docs/SENTIMENT_DASHBOARD.md](SENTIMENT_DASHBOARD.md) — sentiment dashboard tab: API endpoints, DB queries, UI components, CSS reference
+- [docs/STORE_LOCATOR.md](STORE_LOCATOR.md) — store locator crawler: extraction pipeline, territory change detection, scheduler, DB schema
+- [docs/LOCATIONS_DASHBOARD.md](LOCATIONS_DASHBOARD.md) — locations dashboard tab: API endpoints, DB queries, US tile heatmap, UI components
 
 ## Prompt Assets
 

@@ -17,7 +17,6 @@ fn lookup_from_map<'a>(
 fn full_env<'a>() -> HashMap<&'a str, &'a str> {
     let mut m = HashMap::new();
     m.insert("DATABASE_URL", "postgres://user:pass@localhost/testdb");
-    m.insert("SCBDB_API_KEY_HASH_SALT", "test-salt");
     m
 }
 
@@ -77,7 +76,6 @@ fn build_app_config_succeeds_with_all_required_vars() {
     let cfg = result.unwrap();
     assert_eq!(cfg.env, Environment::Development);
     assert_eq!(cfg.database_url, "postgres://user:pass@localhost/testdb");
-    assert_eq!(cfg.api_key_hash_salt, Some("test-salt".to_string()));
     assert_eq!(cfg.bind_addr.to_string(), "0.0.0.0:3000");
     assert_eq!(cfg.log_level, "info");
     assert_eq!(cfg.db_max_connections, 10);

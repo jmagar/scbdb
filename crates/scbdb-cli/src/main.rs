@@ -75,16 +75,38 @@ async fn main() -> anyhow::Result<()> {
                 let pool = connect_or_exit().await;
                 collect::run_collect_pricing(&pool, &config, brand.as_deref()).await?;
             }
+            CollectCommands::VerifyImages { brand, concurrency } => {
+                let pool = connect_or_exit().await;
+                collect::run_collect_verify_images(&pool, brand.as_deref(), concurrency).await?;
+            }
+            CollectCommands::Locations { brand, dry_run } => {
+                let config = load_config_or_exit();
+                let pool = connect_or_exit().await;
+                collect::run_collect_locations(&pool, &config, brand.as_deref(), dry_run).await?;
+            }
         },
         Some(Commands::Regs { command }) => match command {
             RegsCommands::Ingest {
                 state,
                 keyword,
+                max_pages,
+                max_requests,
+                all_sessions,
                 dry_run,
             } => {
                 let config = load_config_or_exit();
                 let pool = connect_or_exit().await;
-                regs::run_regs_ingest(&pool, &config, &state, keyword.as_deref(), dry_run).await?;
+                regs::run_regs_ingest(
+                    &pool,
+                    &config,
+                    &state,
+                    &keyword,
+                    max_pages,
+                    max_requests,
+                    all_sessions,
+                    dry_run,
+                )
+                .await?;
             }
             RegsCommands::Status { state, limit } => {
                 let pool = connect_or_exit().await;

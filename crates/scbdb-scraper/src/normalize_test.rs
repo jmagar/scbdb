@@ -26,6 +26,8 @@ fn make_shopify_product(variants: Vec<ShopifyVariant>) -> ShopifyProduct {
         tags: vec!["thc".to_owned(), "beverage".to_owned()],
         status: Some("active".to_owned()),
         vendor: Some("Hi".to_owned()),
+        image: None,
+        images: vec![],
         variants,
     }
 }
@@ -158,4 +160,176 @@ fn normalize_variant_parses_dosage_from_title() {
     assert_eq!(normalized.variants[0].dosage_mg, Some(5.0));
     assert_eq!(normalized.variants[0].size_value, Some(12.0));
     assert_eq!(normalized.variants[0].size_unit.as_deref(), Some("oz"));
+}
+
+#[test]
+fn normalize_product_preserves_vendor_from_shopify() {
+    // make_shopify_product sets vendor: Some("Hi") — assert it flows through.
+    let product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(normalized.vendor.as_deref(), Some("Hi"));
+}
+
+#[test]
+fn normalize_product_maps_full_image_gallery() {
+    let mut product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
+    product.image = Some(crate::types::ShopifyImage {
+        id: Some(1001),
+        src: "https://cdn.shopify.com/image-primary.jpg".to_owned(),
+        alt: Some("primary".to_owned()),
+        position: Some(1),
+        width: Some(1200),
+        height: Some(1200),
+        variant_ids: vec![1],
+    });
+    product.images = vec![
+        crate::types::ShopifyImage {
+            id: Some(1001),
+            src: "https://cdn.shopify.com/image-primary.jpg".to_owned(),
+            alt: Some("primary".to_owned()),
+            position: Some(1),
+            width: Some(1200),
+            height: Some(1200),
+            variant_ids: vec![1],
+        },
+        crate::types::ShopifyImage {
+            id: Some(1002),
+            src: "https://cdn.shopify.com/image-secondary.jpg".to_owned(),
+            alt: None,
+            position: Some(2),
+            width: Some(1200),
+            height: Some(1200),
+            variant_ids: vec![],
+        },
+    ];
+
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.primary_image_url.as_deref(),
+        Some("https://cdn.shopify.com/image-primary.jpg")
+    );
+    assert_eq!(normalized.image_gallery.len(), 2);
+    assert_eq!(
+        normalized.image_gallery[0].source_image_id.as_deref(),
+        Some("1001")
+    );
+    assert_eq!(
+        normalized.image_gallery[0].variant_source_ids,
+        vec!["1".to_string()]
+    );
+}
+
+#[test]
+fn normalize_product_primary_image_prefers_default_variant_mapping() {
+    let mut product = make_shopify_product(vec![
+        make_shopify_variant(11, "Option A", Some(2)),
+        make_shopify_variant(22, "Option B", Some(1)),
+    ]);
+    product.image = Some(crate::types::ShopifyImage {
+        id: Some(2000),
+        src: "https://cdn.shopify.com/fallback-primary.jpg".to_owned(),
+        alt: None,
+        position: Some(99),
+        width: None,
+        height: None,
+        variant_ids: vec![],
+    });
+    product.images = vec![
+        crate::types::ShopifyImage {
+            id: Some(2001),
+            src: "https://cdn.shopify.com/for-variant-11.jpg".to_owned(),
+            alt: None,
+            position: Some(1),
+            width: None,
+            height: None,
+            variant_ids: vec![11],
+        },
+        crate::types::ShopifyImage {
+            id: Some(2002),
+            src: "https://cdn.shopify.com/for-variant-22.jpg".to_owned(),
+            alt: None,
+            position: Some(2),
+            width: None,
+            height: None,
+            variant_ids: vec![22],
+        },
+    ];
+
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.primary_image_url.as_deref(),
+        Some("https://cdn.shopify.com/for-variant-22.jpg")
+    );
+}
+
+#[test]
+fn normalize_product_primary_image_falls_back_to_position_one() {
+    let mut product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
+    product.image = None;
+    product.images = vec![
+        crate::types::ShopifyImage {
+            id: Some(3002),
+            src: "https://cdn.shopify.com/position-2.jpg".to_owned(),
+            alt: None,
+            position: Some(2),
+            width: None,
+            height: None,
+            variant_ids: vec![],
+        },
+        crate::types::ShopifyImage {
+            id: Some(3001),
+            src: "https://cdn.shopify.com/position-1.jpg".to_owned(),
+            alt: None,
+            position: Some(1),
+            width: None,
+            height: None,
+            variant_ids: vec![],
+        },
+    ];
+
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.primary_image_url.as_deref(),
+        Some("https://cdn.shopify.com/position-1.jpg")
+    );
+}
+
+#[test]
+fn normalize_product_title_dosage_fallback_when_no_body_html() {
+    // Better Than Booze pattern: dosage is in the product title ("2MG THC + 6MG CBD
+    // Lemon Drop Martini"), variant titles are pack counts ("12-Pack"). When
+    // body_html is absent, the title fallback should supply dosage_mg.
+    let mut product = make_shopify_product(vec![make_shopify_variant(1, "12-Pack", Some(1))]);
+    product.title = "2MG THC + 6MG CBD Lemon Drop Martini".to_owned();
+    product.body_html = None; // no HTML to fall back to
+    let normalized = normalize_product(product, "https://drinkbetterthanbooze.com").unwrap();
+    assert_eq!(
+        normalized.variants[0].dosage_mg,
+        Some(2.0),
+        "dosage should be extracted from product title when body_html is absent"
+    );
+}
+
+#[test]
+fn normalize_html_dosage_fallback_applies_uniformly_to_all_variants() {
+    // When variant titles are bare names with no mg values, the dosage
+    // extracted from body_html is applied to every variant. This is correct
+    // for single-dose products (like BREZ) but is a known limitation for
+    // multi-dose products — see normalize_variant doc for details.
+    let mut product = make_shopify_product(vec![
+        make_shopify_variant(1, "Hi Boy", Some(1)),
+        make_shopify_variant(2, "Hi'er Boy", Some(2)),
+    ]);
+    product.body_html = Some("<p>3mg micronized THC per can</p>".to_owned());
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.variants[0].dosage_mg,
+        Some(3.0),
+        "first variant should receive html_dosage_fallback"
+    );
+    assert_eq!(
+        normalized.variants[1].dosage_mg,
+        Some(3.0),
+        "second variant also receives the same html_dosage_fallback — uniform behavior"
+    );
 }

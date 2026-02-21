@@ -1,3 +1,7 @@
+use std::collections::BTreeMap;
+
+use serde::Serialize;
+
 /// A single piece of content collected for sentiment analysis.
 #[derive(Debug, Clone)]
 pub struct SentimentSignal {
@@ -21,6 +25,19 @@ pub struct BrandSentimentResult {
     pub score: f32,
     /// Number of signals collected and scored.
     pub signal_count: usize,
+    /// Per-source signal counts used to compute this snapshot.
+    pub source_counts: BTreeMap<String, usize>,
+    /// Top evidence rows ordered by absolute score contribution.
+    pub top_signals: Vec<SignalEvidence>,
+}
+
+/// Minimal evidence details for transparency in APIs and UI.
+#[derive(Debug, Clone, Serialize)]
+pub struct SignalEvidence {
+    pub source: String,
+    pub url: String,
+    pub score: f32,
+    pub text_preview: String,
 }
 
 /// Configuration for the sentiment pipeline.
@@ -32,6 +49,9 @@ pub struct SentimentConfig {
     pub reddit_client_id: String,
     pub reddit_client_secret: String,
     pub reddit_user_agent: String,
+    /// Optional Twitter/X credentials for bird CLI integration.
+    pub twitter_auth_token: Option<String>,
+    pub twitter_ct0: Option<String>,
 }
 
 impl SentimentConfig {
@@ -47,50 +67,62 @@ impl SentimentConfig {
     ///
     /// Does not panic: all `unwrap` calls are guarded by the `missing` check above.
     pub fn from_env() -> Result<Self, String> {
-        let mut missing = Vec::new();
+        let tei_url = std::env::var("SENTIMENT_TEI_URL").ok();
+        let qdrant_url = std::env::var("SENTIMENT_QDRANT_URL").ok();
+        let qdrant_collection = std::env::var("SENTIMENT_QDRANT_COLLECTION").ok();
+        let reddit_client_id = std::env::var("REDDIT_CLIENT_ID").ok();
+        let reddit_client_secret = std::env::var("REDDIT_CLIENT_SECRET").ok();
+        let reddit_user_agent = std::env::var("REDDIT_USER_AGENT").ok();
 
-        let get = |key: &str| -> Option<String> { std::env::var(key).ok() };
-
-        let tei_url = get("SENTIMENT_TEI_URL");
-        let qdrant_url = get("SENTIMENT_QDRANT_URL");
-        let qdrant_collection = get("SENTIMENT_QDRANT_COLLECTION");
-        let reddit_client_id = get("REDDIT_CLIENT_ID");
-        let reddit_client_secret = get("REDDIT_CLIENT_SECRET");
-        let reddit_user_agent = get("REDDIT_USER_AGENT");
-
-        if tei_url.is_none() {
-            missing.push("SENTIMENT_TEI_URL");
-        }
-        if qdrant_url.is_none() {
-            missing.push("SENTIMENT_QDRANT_URL");
-        }
-        if qdrant_collection.is_none() {
-            missing.push("SENTIMENT_QDRANT_COLLECTION");
-        }
-        if reddit_client_id.is_none() {
-            missing.push("REDDIT_CLIENT_ID");
-        }
-        if reddit_client_secret.is_none() {
-            missing.push("REDDIT_CLIENT_SECRET");
-        }
-        if reddit_user_agent.is_none() {
-            missing.push("REDDIT_USER_AGENT");
-        }
-
-        if !missing.is_empty() {
-            return Err(format!(
+        if let (
+            Some(tei_url),
+            Some(qdrant_url),
+            Some(qdrant_collection),
+            Some(reddit_client_id),
+            Some(reddit_client_secret),
+            Some(reddit_user_agent),
+        ) = (
+            tei_url,
+            qdrant_url,
+            qdrant_collection,
+            reddit_client_id,
+            reddit_client_secret,
+            reddit_user_agent,
+        ) {
+            Ok(Self {
+                tei_url,
+                qdrant_url,
+                qdrant_collection,
+                reddit_client_id,
+                reddit_client_secret,
+                reddit_user_agent,
+                twitter_auth_token: std::env::var("TWITTER_AUTH_TOKEN").ok(),
+                twitter_ct0: std::env::var("TWITTER_CT0").ok(),
+            })
+        } else {
+            let mut missing = Vec::new();
+            if std::env::var("SENTIMENT_TEI_URL").is_err() {
+                missing.push("SENTIMENT_TEI_URL");
+            }
+            if std::env::var("SENTIMENT_QDRANT_URL").is_err() {
+                missing.push("SENTIMENT_QDRANT_URL");
+            }
+            if std::env::var("SENTIMENT_QDRANT_COLLECTION").is_err() {
+                missing.push("SENTIMENT_QDRANT_COLLECTION");
+            }
+            if std::env::var("REDDIT_CLIENT_ID").is_err() {
+                missing.push("REDDIT_CLIENT_ID");
+            }
+            if std::env::var("REDDIT_CLIENT_SECRET").is_err() {
+                missing.push("REDDIT_CLIENT_SECRET");
+            }
+            if std::env::var("REDDIT_USER_AGENT").is_err() {
+                missing.push("REDDIT_USER_AGENT");
+            }
+            Err(format!(
                 "missing sentiment env vars: {}",
                 missing.join(", ")
-            ));
+            ))
         }
-
-        Ok(Self {
-            tei_url: tei_url.unwrap(),
-            qdrant_url: qdrant_url.unwrap(),
-            qdrant_collection: qdrant_collection.unwrap(),
-            reddit_client_id: reddit_client_id.unwrap(),
-            reddit_client_secret: reddit_client_secret.unwrap(),
-            reddit_user_agent: reddit_user_agent.unwrap(),
-        })
     }
 }
