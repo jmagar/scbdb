@@ -184,6 +184,7 @@ pub use products::{
     get_last_price_snapshot, insert_price_snapshot_if_changed, upsert_product, upsert_variant,
     PriceSnapshotRow, ProductRow, VariantRow,
 };
+pub use seed::{upsert_brand_domains, upsert_brand_social_handles};
 pub use sentiment::{
     get_latest_sentiment_by_brand, insert_sentiment_snapshot, list_sentiment_snapshots,
     SentimentSnapshotRow,
