@@ -3,7 +3,9 @@
 mod bing_rss;
 mod brand_newsroom;
 mod reddit;
+mod reddit_helpers;
 mod rss;
+pub(crate) mod rss_helpers;
 mod twitter;
 mod yahoo_rss;
 

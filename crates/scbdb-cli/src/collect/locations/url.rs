@@ -22,6 +22,18 @@ pub(super) const LOCATOR_PATHS: &[&str] = &[
 ///
 /// Returns `brand.store_locator_url` if set, otherwise delegates to
 /// [`discover_locator_url`].
+///
+/// # Future improvement
+///
+/// When a URL is discovered via HTTP probing, it is only returned to the
+/// caller -- it is **not** persisted to `brands.store_locator_url` in the
+/// database. This means auto-discovery runs on every collection cycle.
+/// The function signature does not currently include a `&PgPool` parameter;
+/// threading one through from `collect_brand_locations` would allow a DB
+/// write here to cache the discovered URL for future runs.
+// TODO: P1 - persist discovered URL to brands.store_locator_url (requires
+// adding `pool: &PgPool` parameter and calling
+// `scbdb_db::update_brand_store_locator_url`).
 pub(super) async fn resolve_locator_url(
     brand: &scbdb_db::BrandRow,
     config: &scbdb_core::AppConfig,

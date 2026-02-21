@@ -4,9 +4,9 @@
 //! They handle the Shopify fetch → normalize → persist pipeline for a single
 //! brand and record per-brand status rows.
 
-mod core;
+mod pipeline;
 
-use core::collect_brand_core;
+use pipeline::collect_brand_core;
 
 pub(super) fn build_shopify_client(
     config: &scbdb_core::AppConfig,
@@ -77,13 +77,18 @@ pub(super) async fn collect_brand_products(
             } else {
                 "succeeded"
             };
+            // The `partial_note` (e.g. "browser-profile fallback succeeded") is
+            // stored in the `error_message` column of `collection_run_brands` because
+            // the table has no dedicated `note` column. We prefix with "[NOTE]" to
+            // distinguish informational notes from actual errors.
+            let prefixed_note = partial_note.map(|note| format!("[NOTE] {note}"));
             if let Err(e) = scbdb_db::upsert_collection_run_brand(
                 pool,
                 run_id,
                 brand.id,
                 status,
                 Some(brand_products),
-                partial_note.as_deref(),
+                prefixed_note.as_deref(),
             )
             .await
             {
@@ -129,13 +134,15 @@ pub(super) async fn collect_brand_pricing(
             } else {
                 "succeeded"
             };
+            // See comment in `collect_brand_products` about [NOTE] prefix.
+            let prefixed_note = partial_note.map(|note| format!("[NOTE] {note}"));
             if let Err(e) = scbdb_db::upsert_collection_run_brand(
                 pool,
                 run_id,
                 brand.id,
                 status,
                 Some(brand_snapshots),
-                partial_note.as_deref(),
+                prefixed_note.as_deref(),
             )
             .await
             {

@@ -63,7 +63,7 @@ where
                     return Err(err);
                 }
                 attempt += 1;
-                let computed = backoff_base_ms.saturating_mul(1u64 << attempt.min(10));
+                let computed = backoff_base_ms.saturating_mul(1u64 << (attempt - 1).min(10));
                 let capped = computed.min(MAX_DELAY_MS);
                 #[allow(
                     clippy::cast_possible_truncation,
@@ -159,6 +159,38 @@ mod tests {
             "QuotaExceeded must not be retried"
         );
         assert!(matches!(result, Err(LegiscanError::QuotaExceeded(_))));
+    }
+
+    #[tokio::test]
+    async fn retries_then_succeeds() {
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
+        let calls = Arc::new(AtomicU32::new(0));
+        let c = Arc::clone(&calls);
+        let result = retry_with_backoff(3, 0, || {
+            let c = Arc::clone(&c);
+            async move {
+                let attempt = c.fetch_add(1, Ordering::SeqCst) + 1;
+                if attempt < 3 {
+                    // Simulate a retriable HTTP connect error
+                    let resp = reqwest::Client::new()
+                        .get("http://0.0.0.0:1")
+                        .send()
+                        .await
+                        .unwrap_err();
+                    Err::<u32, _>(LegiscanError::Http(resp))
+                } else {
+                    Ok(99)
+                }
+            }
+        })
+        .await;
+        assert_eq!(result.unwrap(), 99, "should succeed after retries");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            3,
+            "should have been called 3 times (2 failures + 1 success)"
+        );
     }
 
     #[tokio::test]

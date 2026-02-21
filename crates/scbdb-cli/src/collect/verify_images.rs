@@ -78,12 +78,13 @@ pub(super) async fn run_collect_verify_images(
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
+        .user_agent("scbdb-verifier/1.0")
         .build()?;
 
     let checks = stream::iter(targets.into_iter().map(|(kind, label, url)| {
         let client = client.clone();
         async move {
-            let result = client.get(&url).send().await;
+            let result = client.head(&url).send().await;
             (kind, label, url, result)
         }
     }))

@@ -48,25 +48,8 @@ impl LegiscanClient {
         let url = self.build_url("getMasterList", &[("id", &id_str)]);
         let body = self.request_json(&url).await?;
         Self::check_api_error(&body)?;
-        let envelope: ApiResponse<MasterListResponse> =
-            serde_json::from_value(body).map_err(|e| LegiscanError::Deserialize {
-                context: format!("getMasterList(session_id={session_id})"),
-                source: e,
-            })?;
-        let data = envelope.data.masterlist;
-        let entries = data
-            .bills
-            .into_iter()
-            .filter(|(k, _)| k != "session")
-            .filter_map(|(k, v)| {
-                serde_json::from_value::<MasterListEntry>(v)
-                    .map_err(|e| {
-                        tracing::warn!(key = %k, error = %e, "get_master_list_by_session: skipping malformed entry");
-                    })
-                    .ok()
-            })
-            .collect();
-        Ok((data.session, entries))
+        let context = format!("getMasterList(session_id={session_id})");
+        Self::parse_master_list_response(body, &context)
     }
 
     /// Gets the master bill list for a state's current session.
@@ -85,9 +68,21 @@ impl LegiscanClient {
         let url = self.build_url("getMasterList", &[("state", &state_upper)]);
         let body = self.request_json(&url).await?;
         Self::check_api_error(&body)?;
+        let context = format!("getMasterList(state={state})");
+        Self::parse_master_list_response(body, &context)
+    }
+
+    /// Parse a `getMasterList` JSON response into session detail and bill entries.
+    ///
+    /// Shared by [`get_master_list`] and [`get_master_list_by_session`] to avoid
+    /// duplicating the envelope deserialization and numbered-key extraction logic.
+    fn parse_master_list_response(
+        body: serde_json::Value,
+        context: &str,
+    ) -> Result<(SessionDetail, Vec<MasterListEntry>), LegiscanError> {
         let envelope: ApiResponse<MasterListResponse> =
             serde_json::from_value(body).map_err(|e| LegiscanError::Deserialize {
-                context: format!("getMasterList(state={state})"),
+                context: context.to_string(),
                 source: e,
             })?;
         let data = envelope.data.masterlist;
@@ -98,7 +93,7 @@ impl LegiscanClient {
             .filter_map(|(k, v)| {
                 serde_json::from_value::<MasterListEntry>(v)
                     .map_err(|e| {
-                        tracing::warn!(key = %k, error = %e, "get_master_list: skipping malformed entry");
+                        tracing::warn!(key = %k, error = %e, context, "skipping malformed master list entry");
                     })
                     .ok()
             })

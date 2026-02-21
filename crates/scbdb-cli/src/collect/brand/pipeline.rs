@@ -6,6 +6,11 @@
 
 /// Brand slugs known to return HTTP 403 on the standard scraper user-agent.
 /// These receive a browser-profile retry rather than an immediate failure.
+///
+/// NOTE: This list is hardcoded and requires a code change for new brands.
+/// Ideally, this should be driven by a flag in `config/brands.yaml` (e.g.
+/// `requires_browser_profile: true`) so new 403 brands can be added without
+/// recompilation.
 pub(super) const KNOWN_403_FALLBACK_BRANDS: &[&str] = &["cycling-frog"];
 
 /// Shared core for both product and pricing collection runs.

@@ -91,12 +91,12 @@ pub(super) async fn collect_brand_locations(
         .collect();
 
     // Snapshot active keys before upsert for diff logging.
-    let prev_keys: std::collections::HashSet<String> =
+    let prev_keys: Option<std::collections::HashSet<String>> =
         match scbdb_db::get_active_location_keys_for_brand(pool, brand.id).await {
-            Ok(keys) => keys,
+            Ok(keys) => Some(keys),
             Err(e) => {
                 tracing::warn!(brand = %brand.slug, error = %e, "could not snapshot active keys; diff logging skipped");
-                std::collections::HashSet::new()
+                None
             }
         };
 
@@ -128,7 +128,9 @@ pub(super) async fn collect_brand_locations(
         }
     };
 
-    log_location_changeset(&brand.slug, &prev_keys, &active_keys);
+    if let Some(prev) = &prev_keys {
+        log_location_changeset(&brand.slug, prev, &active_keys);
+    }
 
     let total_active = new_count.saturating_add(kept_count);
     let records_i32 = i32::try_from(total_active).unwrap_or(i32::MAX);

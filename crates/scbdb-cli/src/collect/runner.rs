@@ -13,6 +13,13 @@ use crate::fail_run_best_effort;
 /// Outcome of processing a single brand: primary `records`, secondary `extra`
 /// count (e.g. price snapshots), and a `succeeded` flag for partial-failure
 /// tracking. `Err` wraps unexpected per-brand errors.
+///
+/// Note: `Ok` with `succeeded: false` represents a partial/soft failure where
+/// the brand was processed but the underlying collector reported a non-fatal
+/// error (e.g. `collect_brand_core` returned `Err` which was caught and mapped
+/// to `(0, false)` by the caller). The variant is named `Ok` because the
+/// *orchestration* succeeded -- the brand was attempted and an outcome recorded
+/// -- even though the *collection* itself failed.
 pub(super) enum BrandOutcome {
     Ok {
         records: i32,

@@ -52,24 +52,7 @@ impl BrandConfig {
     /// Generate a URL-safe slug from the brand name.
     #[must_use]
     pub fn slug(&self) -> String {
-        self.name
-            .to_lowercase()
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() || c == '-' {
-                    c
-                } else if c == ' ' {
-                    '-'
-                } else {
-                    '\0'
-                }
-            })
-            .filter(|&c| c != '\0')
-            .collect::<String>()
-            .split('-')
-            .filter(|s| !s.is_empty())
-            .collect::<Vec<_>>()
-            .join("-")
+        slug_from_name(&self.name)
     }
 }
 
@@ -147,7 +130,8 @@ mod tests;
 
 /// Generate a URL-safe slug from an arbitrary brand name string.
 ///
-/// Identical logic to [`BrandConfig::slug`] but usable without a `BrandConfig`.
+/// This is the single source of truth for slug generation.
+/// [`BrandConfig::slug`] delegates to this function.
 #[must_use]
 pub fn slug_from_name(name: &str) -> String {
     name.to_lowercase()

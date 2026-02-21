@@ -64,8 +64,7 @@ pub(crate) async fn run_collect_locations(
     let brands = load_brands_for_locations(pool, brand_filter).await?;
 
     if brands.is_empty() {
-        println!("no eligible brands found for location collection; skipping run creation");
-        return Ok(());
+        anyhow::bail!("no eligible brands found for location collection");
     }
 
     if dry_run {

@@ -84,13 +84,22 @@ pub async fn ingest_signals(
     for signal in &all_signals {
         let text_to_embed = build_embed_text(signal);
 
-        // Deterministic content key for Qdrant point ID derivation
-        let content_key = signal
+        // Deterministic content key for Qdrant point ID derivation.
+        // When no external_id, source_url, or title is available, generate a
+        // unique fallback from a UUID to avoid ID collisions across signals.
+        let fallback_key;
+        let content_key = match signal
             .external_id
             .as_deref()
             .or(signal.source_url.as_deref())
             .or(signal.title.as_deref())
-            .unwrap_or("unknown");
+        {
+            Some(key) => key,
+            None => {
+                fallback_key = uuid::Uuid::new_v4().to_string();
+                &fallback_key
+            }
+        };
 
         let qdrant_point_id = crate::embedder::signal_point_id(content_key);
 
