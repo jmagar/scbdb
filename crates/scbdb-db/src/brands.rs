@@ -24,6 +24,7 @@ pub struct BrandRow {
     pub logo_url: Option<String>,
     pub store_locator_url: Option<String>,
     pub notes: Option<String>,
+    pub twitter_handle: Option<String>,
     pub is_active: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -42,7 +43,7 @@ pub struct BrandRow {
 pub async fn list_active_brands(pool: &PgPool) -> Result<Vec<BrandRow>, DbError> {
     let rows = sqlx::query_as::<_, BrandRow>(
         "SELECT id, public_id, name, slug, relationship, tier, domain, shop_url, logo_url, \
-                store_locator_url, notes, is_active, created_at, updated_at, deleted_at \
+                store_locator_url, notes, twitter_handle, is_active, created_at, updated_at, deleted_at \
          FROM brands \
          WHERE is_active = true AND deleted_at IS NULL \
          ORDER BY name",
@@ -61,7 +62,7 @@ pub async fn list_active_brands(pool: &PgPool) -> Result<Vec<BrandRow>, DbError>
 pub async fn get_brand_by_slug(pool: &PgPool, slug: &str) -> Result<Option<BrandRow>, DbError> {
     let row = sqlx::query_as::<_, BrandRow>(
         "SELECT id, public_id, name, slug, relationship, tier, domain, shop_url, logo_url, \
-                store_locator_url, notes, is_active, created_at, updated_at, deleted_at \
+                store_locator_url, notes, twitter_handle, is_active, created_at, updated_at, deleted_at \
          FROM brands \
          WHERE slug = $1 AND is_active = true AND deleted_at IS NULL",
     )
@@ -124,7 +125,7 @@ pub async fn update_brand_store_locator_url(
 pub async fn list_brands_with_locator(pool: &PgPool) -> Result<Vec<BrandRow>, DbError> {
     let rows = sqlx::query_as::<_, BrandRow>(
         "SELECT id, public_id, name, slug, relationship, tier, domain, shop_url, logo_url, \
-                store_locator_url, notes, is_active, created_at, updated_at, deleted_at \
+                store_locator_url, notes, twitter_handle, is_active, created_at, updated_at, deleted_at \
          FROM brands \
          WHERE store_locator_url IS NOT NULL AND is_active = true AND deleted_at IS NULL \
          ORDER BY name",
