@@ -8,8 +8,10 @@
 
 pub(crate) mod fetch;
 mod formats;
+pub mod trust;
 pub mod types;
 
+pub use trust::{make_location_key, validate_store_locations_trust};
 pub use types::{LocatorError, RawStoreLocation};
 
 use fetch::fetch_html;
@@ -131,9 +133,18 @@ pub async fn fetch_store_locations(
     }
 
     // Strategy 9: WordPress Agile Store Locator
-    if let Some((ajax_url, nonce, lang, load_all, layout, stores_filter)) =
-        extract_agile_store_locator_config(&html)
-    {
+    let mut agile_config = extract_agile_store_locator_config(&html);
+    if agile_config.is_none() && html.contains("agile-store-locator") {
+        if let Some(locator_page_url) = extract_store_locator_page_url(&html, locator_url) {
+            if let Ok(locator_page_html) =
+                fetch_html(&locator_page_url, timeout_secs, user_agent).await
+            {
+                agile_config = extract_agile_store_locator_config(&locator_page_html);
+            }
+        }
+    }
+
+    if let Some((ajax_url, nonce, lang, load_all, layout, stores_filter)) = agile_config {
         tracing::debug!(locator_url, ajax_url, "detected Agile Store Locator widget");
         let stores = fetch_agile_store_locator_stores(
             &ajax_url,
@@ -170,7 +181,8 @@ pub async fn fetch_store_locations(
             alpha_code = config.alpha_code,
             "detected Destini locator"
         );
-        let stores = fetch_destini_stores(&config, timeout_secs, user_agent).await?;
+        let stores: Vec<RawStoreLocation> =
+            fetch_destini_stores(&config, timeout_secs, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -203,99 +215,24 @@ pub async fn fetch_store_locations(
     Ok(vec![])
 }
 
-/// Validate whether a scrape result is trusted enough to mutate stored data.
-///
-/// Trusted sources: `locally`, `storemapper`, `stockist`, `storepoint`,
-/// `roseperl`, `vtinfo`, `askhoodie`, `beveragefinder`, `storerocket`,
-/// `agile_store_locator`, `jsonld`.
-///
-/// `json_embed` is a fallback parser and is accepted only when quality is
-/// high enough to reduce false positives.
-///
-/// # Errors
-///
-/// Returns `Err` with a human-readable reason when the scrape result is not
-/// trusted (empty result, low-quality embed parse, or unknown source).
-pub fn validate_store_locations_trust(locations: &[RawStoreLocation]) -> Result<(), String> {
-    if locations.is_empty() {
-        return Err("scrape returned zero locations".to_string());
+fn extract_store_locator_page_url(html: &str, locator_url: &str) -> Option<String> {
+    let re = regex::Regex::new(r#"href=["']([^"']*/store-locator/?(?:[?#][^"']*)?)["']"#)
+        .expect("valid regex");
+    let href = re.captures(html)?.get(1)?.as_str();
+
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return Some(href.to_string());
+    }
+    if href.starts_with('/') {
+        let scheme_split = locator_url.find("://")?;
+        let scheme = &locator_url[..scheme_split];
+        let remainder = &locator_url[(scheme_split + 3)..];
+        let host_end = remainder.find('/').unwrap_or(remainder.len());
+        let host = &remainder[..host_end];
+        return Some(format!("{scheme}://{host}{href}"));
     }
 
-    let source = locations
-        .first()
-        .map_or("unknown", |loc| loc.locator_source.as_str());
-
-    match source {
-        "locally"
-        | "storemapper"
-        | "stockist"
-        | "storepoint"
-        | "roseperl"
-        | "vtinfo"
-        | "askhoodie"
-        | "beveragefinder"
-        | "storerocket"
-        | "agile_store_locator"
-        | "jsonld" => Ok(()),
-        "json_embed" => {
-            let quality_count = locations
-                .iter()
-                .filter(|loc| location_record_has_minimum_shape(loc))
-                .count();
-            // Both counts are bounded by the slice length which is at most
-            // usize::MAX; for any realistic data set they fit well within
-            // f64's 52-bit mantissa without precision loss.
-            #[allow(clippy::cast_precision_loss)]
-            let quality_ratio = quality_count as f64 / locations.len() as f64;
-
-            if locations.len() >= 5 && quality_ratio >= 0.80 {
-                Ok(())
-            } else {
-                Err(format!(
-                    "json_embed scrape below trust threshold (count={}, quality_ratio={quality_ratio:.2})",
-                    locations.len()
-                ))
-            }
-        }
-        other => Err(format!("unknown locator source '{other}'")),
-    }
-}
-
-fn location_record_has_minimum_shape(location: &RawStoreLocation) -> bool {
-    let has_name = !location.name.trim().is_empty();
-    let has_address = location
-        .address_line1
-        .as_deref()
-        .is_some_and(|s| !s.trim().is_empty());
-    let has_city_state = location
-        .city
-        .as_deref()
-        .is_some_and(|s| !s.trim().is_empty())
-        && location
-            .state
-            .as_deref()
-            .is_some_and(|s| !s.trim().is_empty());
-    let has_coordinates = location.latitude.is_some() && location.longitude.is_some();
-
-    has_name && (has_address || has_city_state || has_coordinates)
-}
-
-/// Compute a stable dedup key for a location.
-///
-/// SHA-256 over `brand_id || name || city || state || zip`, normalised to
-/// lower-case city/name, upper-case state. Hex-encoded.
-#[must_use]
-pub fn make_location_key(brand_id: i64, loc: &RawStoreLocation) -> String {
-    use sha2::{Digest, Sha256};
-    let input = format!(
-        "{}\x00{}\x00{}\x00{}\x00{}",
-        brand_id,
-        loc.name.to_lowercase().trim(),
-        loc.city.as_deref().unwrap_or("").trim().to_lowercase(),
-        loc.state.as_deref().unwrap_or("").trim().to_uppercase(),
-        loc.zip.as_deref().unwrap_or("").trim(),
-    );
-    format!("{:x}", Sha256::digest(input.as_bytes()))
+    None
 }
 
 // ---------------------------------------------------------------------------

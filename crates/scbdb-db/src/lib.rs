@@ -158,11 +158,16 @@ pub mod seed;
 pub mod sentiment;
 
 pub use brand_intel::{
-    insert_brand_funding_event, insert_brand_lab_test, insert_brand_legal_proceeding,
-    insert_brand_sponsorship, list_brand_funding_events, list_brand_lab_tests,
-    list_brand_legal_proceedings, list_brand_sponsorships, BrandFundingEventRow, BrandLabTestRow,
-    BrandLegalProceedingRow, BrandSponsorshipRow, NewBrandFundingEvent, NewBrandLabTest,
-    NewBrandLegalProceeding, NewBrandSponsorship,
+    insert_brand_competitor_relationship, insert_brand_distributor, insert_brand_funding_event,
+    insert_brand_lab_test, insert_brand_legal_proceeding, insert_brand_media_appearance,
+    insert_brand_newsletter, insert_brand_sponsorship, list_brand_competitor_relationships,
+    list_brand_distributors, list_brand_funding_events, list_brand_lab_tests,
+    list_brand_legal_proceedings, list_brand_media_appearances, list_brand_newsletters,
+    list_brand_sponsorships, BrandCompetitorRelationshipRow, BrandDistributorRow,
+    BrandFundingEventRow, BrandLabTestRow, BrandLegalProceedingRow, BrandMediaAppearanceRow,
+    BrandNewsletterRow, BrandSponsorshipRow, NewBrandCompetitorRelationship, NewBrandDistributor,
+    NewBrandFundingEvent, NewBrandLabTest, NewBrandLegalProceeding, NewBrandMediaAppearance,
+    NewBrandNewsletter, NewBrandSponsorship,
 };
 pub use brand_signals::{list_brand_signals, upsert_brand_signal, BrandSignalRow, NewBrandSignal};
 

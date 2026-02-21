@@ -11,15 +11,19 @@ use scbdb_core::{NormalizedProduct, NormalizedVariant};
 use scbdb_db::{
     complete_collection_run, create_collection_run, deactivate_missing_locations,
     fail_collection_run, get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
-    get_last_price_snapshot, insert_brand_funding_event, insert_brand_lab_test,
-    insert_brand_legal_proceeding, insert_brand_sponsorship, insert_price_snapshot_if_changed,
-    list_active_brands, list_bill_events, list_bills, list_brand_funding_events,
-    list_brand_lab_tests, list_brand_legal_proceedings, list_brand_sponsorships,
-    list_brands_without_profiles, list_collection_run_brands, list_locations_by_state,
-    list_locations_dashboard_summary, start_collection_run, update_brand_logo, upsert_bill,
-    upsert_bill_event, upsert_brand_profile, upsert_collection_run_brand, upsert_product,
-    upsert_store_locations, upsert_variant, NewBrandFundingEvent, NewBrandLabTest,
-    NewBrandLegalProceeding, NewBrandSponsorship, NewStoreLocation,
+    get_last_price_snapshot, insert_brand_competitor_relationship, insert_brand_distributor,
+    insert_brand_funding_event, insert_brand_lab_test, insert_brand_legal_proceeding,
+    insert_brand_media_appearance, insert_brand_newsletter, insert_brand_sponsorship,
+    insert_price_snapshot_if_changed, list_active_brands, list_bill_events, list_bills,
+    list_brand_competitor_relationships, list_brand_distributors, list_brand_funding_events,
+    list_brand_lab_tests, list_brand_legal_proceedings, list_brand_media_appearances,
+    list_brand_newsletters, list_brand_sponsorships, list_brands_without_profiles,
+    list_collection_run_brands, list_locations_by_state, list_locations_dashboard_summary,
+    start_collection_run, update_brand_logo, upsert_bill, upsert_bill_event, upsert_brand_profile,
+    upsert_collection_run_brand, upsert_product, upsert_store_locations, upsert_variant,
+    NewBrandCompetitorRelationship, NewBrandDistributor, NewBrandFundingEvent, NewBrandLabTest,
+    NewBrandLegalProceeding, NewBrandMediaAppearance, NewBrandNewsletter, NewBrandSponsorship,
+    NewStoreLocation,
 };
 
 // ---------------------------------------------------------------------------
@@ -1804,4 +1808,241 @@ async fn brand_sponsorship_round_trip(pool: sqlx::PgPool) {
         Some("Title sponsorship for summer series")
     );
     assert!(row.is_active);
+}
+
+// ---------------------------------------------------------------------------
+// Section 15: Brand Distributors
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_distributor_round_trip(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "dist-brand", true).await;
+
+    let states = vec!["CA".to_string(), "OR".to_string(), "WA".to_string()];
+    let distributor = NewBrandDistributor {
+        brand_id,
+        distributor_name: "Pacific Distribution Co",
+        distributor_slug: "pacific-distribution-co",
+        states: Some(&states),
+        territory_type: "regional",
+        channel_type: "retail",
+        started_at: NaiveDate::from_ymd_opt(2025, 1, 1),
+        ended_at: None,
+        is_active: true,
+        notes: Some("West coast coverage"),
+    };
+
+    let id = insert_brand_distributor(&pool, &distributor)
+        .await
+        .expect("insert_brand_distributor failed");
+    assert!(id > 0, "returned id should be positive");
+
+    let rows = list_brand_distributors(&pool, brand_id)
+        .await
+        .expect("list_brand_distributors failed");
+
+    assert_eq!(rows.len(), 1, "should return exactly one distributor");
+    let row = &rows[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.brand_id, brand_id);
+    assert_eq!(row.distributor_name, "Pacific Distribution Co");
+    assert_eq!(row.distributor_slug, "pacific-distribution-co");
+    assert_eq!(
+        row.states.as_deref(),
+        Some(&["CA".to_string(), "OR".to_string(), "WA".to_string()][..])
+    );
+    assert_eq!(row.territory_type, "regional");
+    assert_eq!(row.channel_type, "retail");
+    assert_eq!(row.started_at, NaiveDate::from_ymd_opt(2025, 1, 1));
+    assert!(row.ended_at.is_none());
+    assert!(row.is_active);
+    assert_eq!(row.notes.as_deref(), Some("West coast coverage"));
+}
+
+// ---------------------------------------------------------------------------
+// Section 16: Brand Competitor Relationships
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_competitor_relationship_round_trip(pool: sqlx::PgPool) {
+    let brand_a = insert_test_brand(&pool, "comp-brand-a", true).await;
+    let brand_b = insert_test_brand(&pool, "comp-brand-b", true).await;
+
+    let states = vec!["SC".to_string(), "NC".to_string()];
+    let rel = NewBrandCompetitorRelationship {
+        brand_id: brand_a,
+        competitor_brand_id: brand_b,
+        relationship_type: "direct_competitor",
+        distributor_name: Some("Southern Dist"),
+        states: Some(&states),
+        notes: Some("Both sell in Carolinas"),
+        is_active: true,
+    };
+
+    let id = insert_brand_competitor_relationship(&pool, &rel)
+        .await
+        .expect("insert_brand_competitor_relationship failed");
+    assert!(id > 0, "returned id should be positive");
+
+    // Query from brand_a side
+    let rows_a = list_brand_competitor_relationships(&pool, brand_a)
+        .await
+        .expect("list from brand_a failed");
+    assert_eq!(rows_a.len(), 1, "brand_a should see 1 relationship");
+
+    // Query from brand_b side — same row should appear
+    let rows_b = list_brand_competitor_relationships(&pool, brand_b)
+        .await
+        .expect("list from brand_b failed");
+    assert_eq!(rows_b.len(), 1, "brand_b should see 1 relationship");
+    assert_eq!(rows_a[0].id, rows_b[0].id, "same row from both sides");
+
+    let row = &rows_a[0];
+    assert_eq!(row.relationship_type, "direct_competitor");
+    assert_eq!(row.distributor_name.as_deref(), Some("Southern Dist"));
+    assert_eq!(
+        row.states.as_deref(),
+        Some(&["SC".to_string(), "NC".to_string()][..])
+    );
+    assert_eq!(row.notes.as_deref(), Some("Both sell in Carolinas"));
+    assert!(row.is_active);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_competitor_relationship_canonical_ordering(pool: sqlx::PgPool) {
+    // Insert two brands; brand_a will have a lower id than brand_b.
+    let brand_a = insert_test_brand(&pool, "canon-lo", true).await;
+    let brand_b = insert_test_brand(&pool, "canon-hi", true).await;
+    assert!(
+        brand_a < brand_b,
+        "test setup: brand_a should have lower id"
+    );
+
+    // Pass ids in REVERSE order (higher first) to verify canonicalization.
+    let rel = NewBrandCompetitorRelationship {
+        brand_id: brand_b,            // higher id
+        competitor_brand_id: brand_a, // lower id
+        relationship_type: "indirect_competitor",
+        distributor_name: None,
+        states: None,
+        notes: None,
+        is_active: true,
+    };
+
+    let id = insert_brand_competitor_relationship(&pool, &rel)
+        .await
+        .expect("insert with reversed ids failed");
+
+    // Verify the stored row has canonical ordering: brand_id < competitor_brand_id.
+    let (stored_brand_id, stored_competitor_id): (i64, i64) = sqlx::query_as(
+        "SELECT brand_id, competitor_brand_id \
+         FROM brand_competitor_relationships WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_one(&pool)
+    .await
+    .expect("fetch stored row failed");
+
+    assert_eq!(stored_brand_id, brand_a, "brand_id should be the lower id");
+    assert_eq!(
+        stored_competitor_id, brand_b,
+        "competitor_brand_id should be the higher id"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Section 17: Brand Newsletters
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_newsletter_round_trip(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "news-brand", true).await;
+
+    let newsletter = NewBrandNewsletter {
+        brand_id,
+        list_name: "Monthly Buzz",
+        subscribe_url: Some("https://example.com/subscribe"),
+        unsubscribe_url: Some("https://example.com/unsubscribe"),
+        inbox_address: Some("buzz@inbox.example.com"),
+        subscribed_at: None,
+        last_received_at: None,
+        is_active: true,
+        notes: Some("Main marketing newsletter"),
+    };
+
+    let id = insert_brand_newsletter(&pool, &newsletter)
+        .await
+        .expect("insert_brand_newsletter failed");
+    assert!(id > 0, "returned id should be positive");
+
+    let rows = list_brand_newsletters(&pool, brand_id)
+        .await
+        .expect("list_brand_newsletters failed");
+
+    assert_eq!(rows.len(), 1, "should return exactly one newsletter");
+    let row = &rows[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.brand_id, brand_id);
+    assert_eq!(row.list_name, "Monthly Buzz");
+    assert_eq!(
+        row.subscribe_url.as_deref(),
+        Some("https://example.com/subscribe")
+    );
+    assert_eq!(
+        row.unsubscribe_url.as_deref(),
+        Some("https://example.com/unsubscribe")
+    );
+    assert_eq!(row.inbox_address.as_deref(), Some("buzz@inbox.example.com"));
+    assert!(row.subscribed_at.is_none());
+    assert!(row.last_received_at.is_none());
+    assert!(row.is_active);
+    assert_eq!(row.notes.as_deref(), Some("Main marketing newsletter"));
+}
+
+// ---------------------------------------------------------------------------
+// Section 18: Brand Media Appearances
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_media_appearance_round_trip(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "media-brand", true).await;
+
+    let appearance = NewBrandMediaAppearance {
+        brand_id,
+        brand_signal_id: None,
+        appearance_type: "podcast",
+        outlet_name: "Hemp Industry Daily",
+        title: Some("The Future of THC Beverages"),
+        host_or_author: Some("Jane Doe"),
+        aired_at: NaiveDate::from_ymd_opt(2025, 7, 20),
+        duration_seconds: Some(3600),
+        source_url: Some("https://example.com/podcast/ep42"),
+        notes: Some("CEO interview"),
+    };
+
+    let id = insert_brand_media_appearance(&pool, &appearance)
+        .await
+        .expect("insert_brand_media_appearance failed");
+    assert!(id > 0, "returned id should be positive");
+
+    let rows = list_brand_media_appearances(&pool, brand_id)
+        .await
+        .expect("list_brand_media_appearances failed");
+
+    assert_eq!(rows.len(), 1, "should return exactly one media appearance");
+    let row = &rows[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.brand_id, brand_id);
+    assert!(row.brand_signal_id.is_none());
+    assert_eq!(row.appearance_type, "podcast");
+    assert_eq!(row.outlet_name, "Hemp Industry Daily");
+    assert_eq!(row.title.as_deref(), Some("The Future of THC Beverages"));
+    assert_eq!(row.host_or_author.as_deref(), Some("Jane Doe"));
+    assert_eq!(row.aired_at, NaiveDate::from_ymd_opt(2025, 7, 20));
+    assert_eq!(row.duration_seconds, Some(3600));
+    assert_eq!(
+        row.source_url.as_deref(),
+        Some("https://example.com/podcast/ep42")
+    );
+    assert_eq!(row.notes.as_deref(), Some("CEO interview"));
 }
