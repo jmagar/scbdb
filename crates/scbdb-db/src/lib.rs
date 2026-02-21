@@ -147,6 +147,7 @@ mod tests {
 
 pub mod api_queries;
 pub mod bills;
+pub mod brand_profiles;
 pub mod brands;
 pub mod collection_runs;
 pub mod locations;
@@ -165,6 +166,10 @@ pub use bills::{
     get_bill_by_jurisdiction_number, get_bill_by_public_id, list_bill_events,
     list_bill_events_batch, list_bill_events_by_public_id, list_bills, upsert_bill,
     upsert_bill_event, BillEventRow, BillRow,
+};
+pub use brand_profiles::{
+    get_brand_profile, list_brand_social_handles, list_brands_without_profiles,
+    upsert_brand_profile, BrandProfileRow, BrandSocialHandleRow,
 };
 pub use brands::{
     get_brand_by_slug, list_active_brands, list_brands_with_locator, update_brand_logo,

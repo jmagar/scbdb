@@ -11,10 +11,11 @@ use scbdb_db::{
     complete_collection_run, create_collection_run, deactivate_missing_locations,
     fail_collection_run, get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
     get_last_price_snapshot, insert_price_snapshot_if_changed, list_active_brands,
-    list_bill_events, list_bills, list_collection_run_brands, list_locations_by_state,
-    list_locations_dashboard_summary, start_collection_run, update_brand_logo, upsert_bill,
-    upsert_bill_event, upsert_collection_run_brand, upsert_product, upsert_store_locations,
-    upsert_variant, NewStoreLocation,
+    list_bill_events, list_bills, list_brands_without_profiles, list_collection_run_brands,
+    list_locations_by_state, list_locations_dashboard_summary, start_collection_run,
+    update_brand_logo, upsert_bill, upsert_bill_event, upsert_brand_profile,
+    upsert_collection_run_brand, upsert_product, upsert_store_locations, upsert_variant,
+    NewStoreLocation,
 };
 
 // ---------------------------------------------------------------------------
@@ -1518,4 +1519,55 @@ async fn locations_by_state_excludes_null_and_empty_states(pool: sqlx::PgPool) {
         0,
         "rows with NULL or empty state should be excluded by WHERE clause"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Section 9: Brand Profiles
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_profile_round_trip(pool: sqlx::PgPool) {
+    let brand_id: i64 = sqlx::query_scalar(
+        "INSERT INTO brands (name, slug, relationship, tier, is_active) \
+         VALUES ('TestCo', 'testco', 'competitor', 1, true) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    upsert_brand_profile(
+        &pool,
+        brand_id,
+        Some("Test tagline"),
+        Some("Test desc"),
+        Some(2021_i16),
+        Some("Portland"),
+        Some("OR"),
+        Some("BigCorp"),
+    )
+    .await
+    .unwrap();
+
+    let profile = scbdb_db::get_brand_profile(&pool, brand_id)
+        .await
+        .unwrap()
+        .expect("profile exists");
+
+    assert_eq!(profile.tagline.as_deref(), Some("Test tagline"));
+    assert_eq!(profile.founded_year, Some(2021_i16));
+    assert_eq!(profile.hq_state.as_deref(), Some("OR"));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_brands_without_profiles_returns_unprofiled(pool: sqlx::PgPool) {
+    sqlx::query(
+        "INSERT INTO brands (name, slug, relationship, tier, is_active) \
+         VALUES ('NoBrand', 'nobrand', 'competitor', 2, true)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let ids = list_brands_without_profiles(&pool).await.unwrap();
+    assert!(!ids.is_empty(), "should find brand without profile");
 }
