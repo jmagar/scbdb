@@ -1,0 +1,77 @@
+export type ApiResponse<T> = {
+  data: T;
+  meta: {
+    request_id: string;
+    timestamp: string;
+  };
+};
+
+export type ProductItem = {
+  product_id: number;
+  product_name: string;
+  product_status: string | null;
+  vendor: string | null;
+  source_url: string | null;
+  primary_image_url: string | null;
+  brand_name: string;
+  brand_slug: string;
+  brand_logo_url: string | null;
+  relationship: string;
+  tier: number;
+  variant_count: number;
+  latest_price: string | null;
+  latest_price_captured_at: string | null;
+};
+
+export type PricingSummaryItem = {
+  brand_name: string;
+  brand_slug: string;
+  brand_logo_url: string | null;
+  variant_count: number;
+  avg_price: string;
+  min_price: string;
+  max_price: string;
+  latest_capture_at: string;
+};
+
+export type PricingSnapshotItem = {
+  captured_at: string;
+  currency_code: string;
+  price: string;
+  compare_at_price: string | null;
+  variant_title: string | null;
+  source_variant_id: string;
+  product_name: string;
+  brand_name: string;
+  brand_slug: string;
+  brand_logo_url: string | null;
+};
+
+export type BillItem = {
+  bill_id: string;
+  jurisdiction: string;
+  session: string | null;
+  bill_number: string;
+  title: string;
+  status: string;
+  status_date: string | null;
+  last_action_date: string | null;
+  source_url: string | null;
+  event_count: number;
+};
+
+export type SentimentSummaryItem = {
+  brand_name: string;
+  brand_slug: string;
+  score: string;
+  signal_count: number;
+  captured_at: string;
+};
+
+export type SentimentSnapshotItem = {
+  brand_name: string;
+  brand_slug: string;
+  score: string;
+  signal_count: number;
+  captured_at: string;
+};
