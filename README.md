@@ -5,7 +5,7 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 ## Status Snapshot (Verified)
 
 - Tracks 24 brands from `config/brands.yaml` (portfolio + competitor, tiered 1-3); 16 brands have confirmed Twitter/X handles for brand-timeline monitoring.
-- Rust Cargo workspace with 7 crates:
+- Rust Cargo workspace with 8 crates:
   - `scbdb-cli`
   - `scbdb-server`
   - `scbdb-core`
@@ -13,22 +13,18 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
   - `scbdb-scraper`
   - `scbdb-legiscan`
   - `scbdb-sentiment`
+  - `scbdb-profiler`
 - Two binaries:
   - `scbdb-cli`: operator workflows (collect, regs, sentiment, db)
-  - `scbdb-server`: Axum API for health, products, pricing, regulatory, and sentiment views
+  - `scbdb-server`: Axum API for health, products, pricing, regulatory, sentiment, locations, and brand intelligence
 - PostgreSQL 16 with sqlx migrations.
-- Current schema includes 10 tables:
-  - `brands`
-  - `products`
-  - `product_variants`
-  - `collection_runs`
-  - `collection_run_brands`
-  - `price_snapshots`
-  - `bills`
-  - `bill_events`
-  - `sentiment_snapshots`
-  - `store_locations`
-- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with five data tabs: Products, Pricing, Regulatory, Sentiment, and Locations. Styling uses CSS variables and custom component styles.
+- Current schema includes 24 tables (see `docs/DATABASE_SCHEMA.md` for full detail):
+  - Core: `brands`, `products`, `product_variants`, `collection_runs`, `collection_run_brands`, `price_snapshots`
+  - Regulatory: `bills`, `bill_events`, `bill_texts`
+  - Sentiment: `sentiment_snapshots`
+  - Locations: `store_locations`
+  - Brand intelligence: `brand_profiles`, `brand_social_handles`, `brand_domains`, `brand_signals`, `brand_funding_events`, `brand_lab_tests`, `brand_legal_proceedings`, `brand_sponsorships`, `brand_distributors`, `brand_competitor_relationships`, `brand_newsletters`, `brand_media_appearances`, `brand_profile_runs`
+- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with six sections: Products, Pricing, Regulatory, Sentiment, Locations, and Brands. Styling uses CSS variables and custom component styles.
 
 ## Implemented Capabilities
 
@@ -37,7 +33,11 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 - Legislative ingestion and reporting via LegiScan.
 - Sentiment collection and scoring pipeline (Google News RSS + Reddit sources), with snapshot persistence.
 - Store locator crawler — detects Locally.com, Storemapper, JSON-LD, and embedded JSON formats; tracks `first_seen_at` per location for territory monitoring.
-- Health-check API at `GET /api/v1/health` plus dashboard endpoints for products, pricing snapshots/summary, bills, sentiment summary/snapshots, and location summary/by-state.
+- Brand intelligence API: list brands with completeness scores, full brand profile, cursor-paginated signal feed, funding events, lab tests, legal proceedings, sponsorships, distributors, competitors, media appearances.
+- Brand management API: create, update (sparse patch), and soft-delete brands; overwrite profile, social handles, and domains.
+- LegiScan change-hash caching: `getMasterList` replaces search-per-page discovery; only changed bills call `getBill`. `--all-sessions` backfills historical legislative sessions; `--state US` tracks federal bills.
+- Bill texts: `getBill` text versions stored in `bill_texts` and served at `GET /api/v1/bills/{id}/texts`.
+- Health-check API at `GET /api/v1/health` plus dashboard endpoints for products, pricing snapshots/summary, bills + bill texts, sentiment summary/snapshots, location summary/by-state/pins, and all brand intelligence endpoints.
 
 ## Known Limitations
 
