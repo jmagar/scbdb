@@ -282,7 +282,8 @@ brands:
       Sub-brand of Island Brands USA (also makes Active beer). Individual
       products at /products/. 5mg THC + 10mg CBD. BeverageFinder widget
       (key 690cda4f900046.11446315) is configured but account not yet
-      populated with store locations.
+      populated with store locations. Monitor periodically — collection will
+      work automatically once they add stores.
 
   - name: Levity
     relationship: competitor
