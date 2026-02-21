@@ -2,9 +2,9 @@
 
 ## Document Metadata
 
-- Version: 1.3
+- Version: 1.4
 - Status: Active
-- Last Updated (EST): 00:00:00 | 02/20/2026 EST
+- Last Updated (EST): 00:00:00 | 02/21/2026 EST
 
 ## Purpose
 
@@ -235,99 +235,371 @@ CREATE VIEW view_sentiment_summary AS SELECT ...
 
 ## Phase 6: Brand Intelligence Layer
 
-These tables are added in Phase 6 to support the `scbdb-profiler` crate and brand profile dashboard. Full DDL lives in the `migrations/` directory.
+These tables are added in Phase 6 to support the `scbdb-profiler` crate and the brand profile dashboard. Migrations live in `migrations/20260222000100` through `migrations/20260222000500`.
 
 ### `brand_profiles`
 
-Static profile data for each brand — extended metadata beyond what lives in the `brands` table.
+Extended static profile metadata per brand -- one row per brand maximum.
 
-Key columns: `brand_id` (FK → `brands`), `tagline`, `description`, `hq_city`, `hq_state`, `hq_country`, `founded_year`, `funding_stage`, `employee_count_estimate`, `primary_channel` (`dtc`, `retail`, `hybrid`), `metadata` (JSONB), timestamps.
+Notable constraint: `UNIQUE (brand_id)` -- enforced as a column-level unique constraint.
+
+```sql
+CREATE TABLE brand_profiles (
+  id                    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id              BIGINT NOT NULL REFERENCES brands(id) UNIQUE,
+  tagline               TEXT,
+  description           TEXT,
+  founded_year          SMALLINT,
+  hq_city               TEXT,
+  hq_state              TEXT,
+  hq_country            TEXT NOT NULL DEFAULT 'US',
+  parent_company        TEXT,
+  parent_domain         TEXT,
+  ceo_name              TEXT,
+  employee_count_approx INTEGER,
+  total_funding_usd     BIGINT,
+  latest_valuation_usd  BIGINT,
+  funding_stage         TEXT,
+  stock_ticker          TEXT,
+  stock_exchange        TEXT,
+  hero_image_url        TEXT,
+  profile_completed_at  TIMESTAMPTZ,
+  last_enriched_at      TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
 
 ### `brand_social_handles`
 
-Platform → handle mapping per brand. Supports multi-platform social presence tracking.
+Platform-to-handle mapping for each brand. Supports multi-platform social presence tracking
+with follower counts and verified status.
 
-Key columns: `brand_id` (FK → `brands`), `platform` (`twitter`, `instagram`, `youtube`, `tiktok`, `linkedin`, etc.), `handle`, `profile_url`, `is_active`, timestamps.
+Notable constraint: `UNIQUE (brand_id, platform, handle)` -- a brand may have multiple handles
+per platform, but the same handle cannot be registered twice for the same brand and platform.
 
-Unique constraint: `(brand_id, platform)`.
+```sql
+CREATE TABLE brand_social_handles (
+  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id        BIGINT NOT NULL REFERENCES brands(id),
+  platform        TEXT NOT NULL,
+  handle          TEXT NOT NULL,
+  profile_url     TEXT,
+  follower_count  INTEGER,
+  is_verified     BOOLEAN,
+  is_active       BOOLEAN NOT NULL DEFAULT TRUE,
+  last_checked_at TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (brand_id, platform, handle)
+);
+CREATE INDEX idx_brand_social_handles_platform ON brand_social_handles (platform);
+```
 
 ### `brand_domains`
 
-Domain registrations per brand. A brand may own multiple domains (redirect domains, regional TLDs, sub-brands).
+Domain registrations per brand. A brand may own multiple domains -- redirect domains,
+regional TLDs, sub-brands.
 
-Key columns: `brand_id` (FK → `brands`), `domain`, `is_primary`, `is_active`, timestamps.
+Notable constraint: `UNIQUE (brand_id, domain)`.
 
-Unique constraint: `(brand_id, domain)`.
+```sql
+CREATE TABLE brand_domains (
+  id            BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id      BIGINT NOT NULL REFERENCES brands(id),
+  domain        TEXT NOT NULL,
+  domain_type   TEXT NOT NULL,
+  is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  registrar     TEXT,
+  registered_at DATE,
+  expires_at    DATE,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (brand_id, domain)
+);
+CREATE INDEX idx_brand_domains_domain ON brand_domains (domain);
+```
 
 ### `brand_signals`
 
-Unified signal stream for all brand intelligence content types — social posts, news articles, press releases, YouTube videos, RSS items, etc. Backed by Qdrant for embedding dedup.
+Unified signal stream for all brand intelligence content types. The `qdrant_point_id` column
+stores the deterministic Qdrant point ID computed during embedding. Signals are deduplicated
+on `(brand_id, signal_type, external_id)`.
 
-Key columns: `brand_id` (FK → `brands`), `signal_type` (`tweet`, `instagram_post`, `youtube_video`, `rss_item`, `press_release`, `news_article`, `newsletter`), `source_url`, `source_id` (platform-native ID), `title`, `body`, `published_at`, `author`, `metadata` (JSONB), `qdrant_id` (UUID — reference to Qdrant point), `embed_status` (`pending`, `embedded`, `skipped`, `failed`), timestamps.
+Signal types (`brand_signal_type` enum): `article`, `blog_post`, `tweet`, `youtube_video`,
+`reddit_post`, `newsletter`, `press_release`, `podcast_episode`, `event`, `award`,
+`partnership`, `launch`.
 
-Unique constraint: `(brand_id, signal_type, source_id)`.
+Notable constraint: `UNIQUE (brand_id, signal_type, external_id)`.
 
-### `brand_signal_embeds`
+```sql
+CREATE TYPE brand_signal_type AS ENUM (
+  'article', 'blog_post', 'tweet', 'youtube_video', 'reddit_post',
+  'newsletter', 'press_release', 'podcast_episode', 'event', 'award',
+  'partnership', 'launch'
+);
 
-Qdrant vector reference table. Records the relationship between a `brand_signals` row and its Qdrant point ID.
-
-Key columns: `signal_id` (FK → `brand_signals`), `qdrant_collection`, `qdrant_id` (UUID), `model`, `vector_dims`, `embedded_at`.
+CREATE TABLE brand_signals (
+  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  public_id       UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+  brand_id        BIGINT NOT NULL REFERENCES brands(id),
+  signal_type     brand_signal_type NOT NULL,
+  source_platform TEXT,
+  source_url      TEXT,
+  external_id     TEXT,
+  title           TEXT,
+  summary         TEXT,
+  content         TEXT,
+  image_url       TEXT,
+  view_count      INTEGER,
+  like_count      INTEGER,
+  comment_count   INTEGER,
+  share_count     INTEGER,
+  qdrant_point_id TEXT,
+  published_at    TIMESTAMPTZ,
+  collected_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (brand_id, signal_type, external_id)
+);
+CREATE INDEX idx_brand_signals_brand_published ON brand_signals (brand_id, published_at DESC);
+CREATE INDEX idx_brand_signals_type            ON brand_signals (signal_type);
+CREATE INDEX idx_brand_signals_source_platform ON brand_signals (source_platform);
+CREATE INDEX idx_brand_signals_collected       ON brand_signals (collected_at DESC);
+```
 
 ### `brand_funding_events`
 
-Investment rounds, exits, and other financing events per brand.
+Investment rounds, acquisitions, and other financing events per brand. `investors` is a TEXT
+array for multiple investor names per round. `acquirer` captures the acquiring entity name for
+acquisition events.
 
-Key columns: `brand_id` (FK → `brands`), `event_type` (`seed`, `series_a`, `series_b`, `growth`, `acquisition`, `ipo`, `other`), `amount_usd`, `announced_date`, `investors` (TEXT[]), `source_url`, `notes`.
+```sql
+CREATE TABLE brand_funding_events (
+  id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id     BIGINT NOT NULL REFERENCES brands(id),
+  event_type   TEXT NOT NULL,
+  amount_usd   BIGINT,
+  announced_at DATE,
+  investors    TEXT[],
+  acquirer     TEXT,
+  source_url   TEXT,
+  notes        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_brand_funding_events_brand_id  ON brand_funding_events (brand_id);
+CREATE INDEX idx_brand_funding_events_announced ON brand_funding_events (announced_at DESC);
+```
 
 ### `brand_lab_tests`
 
-CoA (Certificate of Analysis) and lab test results per product variant.
+CoA (Certificate of Analysis) and lab test results. Can be linked to a specific product and/or
+variant; both FKs are nullable to allow brand-level test records not yet matched to a SKU.
 
-Key columns: `brand_id` (FK → `brands`), `variant_id` (FK → `product_variants`, nullable), `lab_name`, `test_date`, `thc_mg_per_serving`, `cbd_mg_per_serving`, `batch_id`, `coa_url`, `metadata` (JSONB), timestamps.
+```sql
+CREATE TABLE brand_lab_tests (
+  id                    BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id              BIGINT NOT NULL REFERENCES brands(id),
+  product_id            BIGINT REFERENCES products(id),
+  variant_id            BIGINT REFERENCES product_variants(id),
+  lab_name              TEXT,
+  test_date             DATE,
+  report_url            TEXT,
+  thc_mg_actual         NUMERIC(8,3),
+  cbd_mg_actual         NUMERIC(8,3),
+  total_cannabinoids_mg NUMERIC(8,3),
+  passed                BOOLEAN,
+  raw_data              JSONB,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_brand_lab_tests_brand_id   ON brand_lab_tests (brand_id);
+CREATE INDEX idx_brand_lab_tests_variant_id ON brand_lab_tests (variant_id);
+```
 
 ### `brand_legal_proceedings`
 
-Lawsuits, regulatory actions, and enforcement events involving a brand.
+Lawsuits, regulatory enforcement actions, and FDA warning letters involving a brand.
 
-Key columns: `brand_id` (FK → `brands`), `proceeding_type` (`lawsuit`, `fda_warning`, `state_enforcement`, `class_action`, `settlement`, `other`), `title`, `filed_date`, `resolved_date`, `jurisdiction`, `outcome`, `source_url`, `notes`.
+```sql
+CREATE TABLE brand_legal_proceedings (
+  id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id        BIGINT NOT NULL REFERENCES brands(id),
+  proceeding_type TEXT NOT NULL,
+  jurisdiction    TEXT,
+  case_number     TEXT,
+  title           TEXT NOT NULL,
+  summary         TEXT,
+  status          TEXT NOT NULL,
+  filed_at        DATE,
+  resolved_at     DATE,
+  source_url      TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_brand_legal_proceedings_brand_id ON brand_legal_proceedings (brand_id);
+CREATE INDEX idx_brand_legal_proceedings_status   ON brand_legal_proceedings (status);
+```
 
 ### `brand_sponsorships`
 
-Sports, events, and influencer deal tracking per brand.
+Sports team, event, athlete, and influencer deal tracking per brand. `entity_type` and
+`deal_type` are free-text fields (e.g., `sports_team`, `title_sponsor`).
 
-Key columns: `brand_id` (FK → `brands`), `sponsorship_type` (`sports_team`, `event`, `athlete`, `influencer`, `venue`, `podcast`, `other`), `partner_name`, `deal_start`, `deal_end`, `territory`, `source_url`, `notes`.
+```sql
+CREATE TABLE brand_sponsorships (
+  id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id     BIGINT NOT NULL REFERENCES brands(id),
+  entity_name  TEXT NOT NULL,
+  entity_type  TEXT NOT NULL,
+  deal_type    TEXT NOT NULL,
+  announced_at DATE,
+  ends_at      DATE,
+  source_url   TEXT,
+  notes        TEXT,
+  is_active    BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_brand_sponsorships_brand_id ON brand_sponsorships (brand_id);
+CREATE INDEX idx_brand_sponsorships_active   ON brand_sponsorships (brand_id, is_active);
+```
 
 ### `brand_distributors`
 
-Distribution relationships per brand per territory.
+Distribution relationships per brand. `states` is a TEXT array (two-letter state codes) indexed
+with GIN for efficient containment queries. `territory_type` and `channel_type` are free-text
+fields (e.g., `national`, `regional`, `on_premise`, `off_premise`).
 
-Key columns: `brand_id` (FK → `brands`), `distributor_name`, `territory_state` (CHAR(2)), `territory_region`, `channel` (`on_premise`, `off_premise`, `dtc`, `dispensary`), `status` (`active`, `inactive`, `rumored`), `source_url`, `notes`.
+```sql
+CREATE TABLE brand_distributors (
+  id                BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id          BIGINT NOT NULL REFERENCES brands(id),
+  distributor_name  TEXT NOT NULL,
+  distributor_slug  TEXT NOT NULL,
+  states            TEXT[],
+  territory_type    TEXT NOT NULL,
+  channel_type      TEXT NOT NULL,
+  started_at        DATE,
+  ended_at          DATE,
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+  notes             TEXT,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_brand_distributors_brand_id         ON brand_distributors (brand_id);
+CREATE INDEX idx_brand_distributors_distributor_slug ON brand_distributors (distributor_slug);
+CREATE INDEX idx_brand_distributors_states           ON brand_distributors USING GIN (states);
+```
 
 ### `brand_competitor_relationships`
 
-Direct competitor mapping — records directional or symmetric relationships between brands.
+Directional or symmetric competitor mapping between brands. The
+`CHECK (brand_id < competitor_brand_id)` constraint enforces canonical ordering so the pair
+`(A, B)` and `(B, A)` cannot both exist -- all relationships are stored with the lower internal
+ID first.
 
-Key columns: `brand_id` (FK → `brands`), `competitor_brand_id` (FK → `brands`), `relationship_type` (`direct`, `adjacent`, `acqui_hire`, `distribution_overlap`), `notes`.
+Notable constraints: `CHECK (brand_id < competitor_brand_id)`,
+`UNIQUE (brand_id, competitor_brand_id, relationship_type, distributor_name)`.
 
-Unique constraint: `(brand_id, competitor_brand_id)`.
+```sql
+CREATE TABLE brand_competitor_relationships (
+  id                  BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id            BIGINT NOT NULL REFERENCES brands(id),
+  competitor_brand_id BIGINT NOT NULL REFERENCES brands(id),
+  relationship_type   TEXT NOT NULL,
+  distributor_name    TEXT,
+  states              TEXT[],
+  notes               TEXT,
+  first_observed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_brand_ordering CHECK (brand_id < competitor_brand_id),
+  UNIQUE (brand_id, competitor_brand_id, relationship_type, distributor_name)
+);
+CREATE INDEX idx_brand_competitor_rel_brand_id      ON brand_competitor_relationships (brand_id);
+CREATE INDEX idx_brand_competitor_rel_competitor_id ON brand_competitor_relationships (competitor_brand_id);
+```
 
 ### `brand_newsletters`
 
-Newsletter subscription tracking — records newsletter sources associated with each brand.
+Newsletter subscription tracking. `inbox_address` is the monitoring inbox used to receive
+issues. The `UNIQUE (brand_id, inbox_address)` constraint prevents duplicate subscriptions to
+the same inbox for the same brand.
 
-Key columns: `brand_id` (FK → `brands`), `list_name`, `subscribe_url`, `last_ingested_at`, `is_active`, timestamps.
+```sql
+CREATE TABLE brand_newsletters (
+  id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id         BIGINT NOT NULL REFERENCES brands(id),
+  list_name        TEXT NOT NULL,
+  subscribe_url    TEXT,
+  unsubscribe_url  TEXT,
+  inbox_address    TEXT,
+  subscribed_at    TIMESTAMPTZ,
+  last_received_at TIMESTAMPTZ,
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  notes            TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (brand_id, inbox_address)
+);
+CREATE INDEX idx_brand_newsletters_brand_id ON brand_newsletters (brand_id);
+```
 
 ### `brand_media_appearances`
 
-Podcast, press, and video appearances by brand principals or featuring the brand.
+Podcast episodes, press articles, video interviews, and reviews featuring the brand.
+`brand_signal_id` is an optional FK to `brand_signals` -- used when the appearance was first
+ingested as a raw signal before being promoted to a structured record.
 
-Key columns: `brand_id` (FK → `brands`), `media_type` (`podcast`, `press_article`, `video`, `interview`, `review`, `other`), `outlet_name`, `title`, `url`, `published_at`, `author`, `notes`.
+```sql
+CREATE TABLE brand_media_appearances (
+  id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id         BIGINT NOT NULL REFERENCES brands(id),
+  brand_signal_id  BIGINT REFERENCES brand_signals(id),
+  appearance_type  TEXT NOT NULL,
+  outlet_name      TEXT NOT NULL,
+  title            TEXT,
+  host_or_author   TEXT,
+  aired_at         DATE,
+  duration_seconds INTEGER,
+  source_url       TEXT,
+  notes            TEXT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_brand_media_appearances_brand_id ON brand_media_appearances (brand_id);
+CREATE INDEX idx_brand_media_appearances_aired_at ON brand_media_appearances (aired_at DESC);
+```
 
 ### `brand_profile_runs`
 
-Profiler job run log — records each execution of the `scbdb-profiler` pipeline per brand.
+Profiler job run log -- records each execution of the `scbdb-profiler` pipeline per brand.
+`tasks_total`, `tasks_completed`, and `tasks_failed` track sub-task progress within a run
+(one task per collector source). `trigger_source` is constrained to `scheduler` or `api`.
+The `partial` status applies when some tasks completed and others failed.
 
-Key columns: `brand_id` (FK → `brands`), `run_type` (e.g., `youtube`, `rss`, `newsroom`, `full`), `status` (`queued`, `running`, `succeeded`, `failed`), `signals_upserted`, `signals_embedded`, `started_at`, `completed_at`, `error_message`, `metadata` (JSONB).
+Notable constraint: `CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'partial'))`.
+
+```sql
+CREATE TABLE brand_profile_runs (
+  id               BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  brand_id         BIGINT NOT NULL REFERENCES brands(id),
+  status           TEXT NOT NULL CHECK (status IN ('queued', 'running', 'succeeded', 'failed', 'partial')),
+  trigger_source   TEXT NOT NULL CHECK (trigger_source IN ('scheduler', 'api')),
+  tasks_total      INTEGER NOT NULL DEFAULT 0,
+  tasks_completed  INTEGER NOT NULL DEFAULT 0,
+  tasks_failed     INTEGER NOT NULL DEFAULT 0,
+  started_at       TIMESTAMPTZ,
+  completed_at     TIMESTAMPTZ,
+  error_message    TEXT,
+  metadata         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_brand_profile_runs_brand_id ON brand_profile_runs (brand_id);
+CREATE INDEX idx_brand_profile_runs_status   ON brand_profile_runs (brand_id, status, created_at DESC);
+```
 
 ---
 
@@ -351,7 +623,6 @@ Key columns: `brand_id` (FK → `brands`), `run_type` (e.g., `youtube`, `rss`, `
 - `brand_social_handles`
 - `brand_domains`
 - `brand_signals`
-- `brand_signal_embeds`
 - `brand_funding_events`
 - `brand_lab_tests`
 - `brand_legal_proceedings`
@@ -369,6 +640,9 @@ Key columns: `brand_id` (FK → `brands`), `run_type` (e.g., `youtube`, `rss`, `
 
 ## Notes
 
-- Qdrant and TEI are integrated in Phase 4 for sentiment signal dedup and embedding storage. Future semantic search capabilities beyond dedup may add additional schema as needed.
+- Qdrant and TEI are integrated in Phase 4 for sentiment signal dedup and embedding storage.
+  Future semantic search capabilities beyond dedup may add additional schema as needed.
 - Spider integration for non-Shopify crawling will add schema later as needed.
-- Phase 6 `brand_signals` rows reference Qdrant points via `qdrant_id`; the `brand_signal_embeds` table is the authoritative join between PostgreSQL rows and the Qdrant `brand_signals` collection.
+- Phase 6 `brand_signals` rows store a `qdrant_point_id` TEXT column -- a deterministic UUID
+  string computed from the signal's `external_id`, `source_url`, or `title` during embedding.
+  This is the pointer from PostgreSQL into the Qdrant `brand_signals` collection.
