@@ -9,8 +9,9 @@ brands:
     store_locator_url: https://highrisebev.com/pages/store-locator
     twitter_handle: highrisebev
     social:
-      twitter: highrisebev
-      instagram: highrisebev
+      twitter: "@highrisebev"
+      instagram: "@highrisebev"
+      tiktok: "@highrisebev"
     domains:
       - highrisebev.com
     notes: >
@@ -28,8 +29,8 @@ brands:
     store_locator_url: https://drinkcann.com/pages/store-locator
     twitter_handle: drinkcann
     social:
-      twitter: drinkcann
-      instagram: drinkcann
+      twitter: "@drinkcann"
+      instagram: "@drinkcann"
     domains:
       - drinkcann.com
     notes: >
@@ -44,8 +45,9 @@ brands:
     store_locator_url: https://www.drinkbrez.com/pages/storelocator
     twitter_handle: drinkbrez
     social:
-      twitter: drinkbrez
-      instagram: drinkbrez
+      twitter: "@drinkbrez"
+      instagram: "@drinkbrez"
+      tiktok: "@drink.brez"
     domains:
       - drinkbrez.com
     notes: >
@@ -61,8 +63,9 @@ brands:
     store_locator_url: https://cyclingfrog.com/pages/where-to-buy
     twitter_handle: CyclingFrogCBD
     social:
-      twitter: CyclingFrogCBD
-      instagram: cyclingfrogcbd
+      twitter: "@CyclingFrogCBD"
+      instagram: "@cyclingfrogcbd"
+      tiktok: "@cyclingfrog"
     domains:
       - cyclingfrog.com
     notes: >
@@ -77,8 +80,8 @@ brands:
     store_locator_url: https://drinkwynk.com/pages/store-locator
     twitter_handle: DrinkWynk
     social:
-      twitter: DrinkWynk
-      instagram: drinkwynk
+      twitter: "@DrinkWynk"
+      instagram: "@drinkwynk"
     domains:
       - drinkwynk.com
     notes: >
@@ -93,8 +96,9 @@ brands:
     store_locator_url: https://unclearnies.com/pages/store-locator
     twitter_handle: OfficialArnies
     social:
-      twitter: OfficialArnies
-      instagram: officialarnies
+      twitter: "@OfficialArnies"
+      instagram: "@unclearnies"
+      tiktok: "@officialunclearnies"
     domains:
       - unclearnies.com
     notes: >
@@ -110,8 +114,8 @@ brands:
     store_locator_url: https://keefbrands.com/find-products
     twitter_handle: Keefbrands
     social:
-      twitter: Keefbrands
-      instagram: keefbrands
+      twitter: "@Keefbrands"
+      instagram: "@keefbrands"
     domains:
       - keefbrands.com
     notes: >
@@ -128,8 +132,8 @@ brands:
     store_locator_url: https://drinkcantrip.com/pages/contact
     twitter_handle: CantripDrinks
     social:
-      twitter: CantripDrinks
-      instagram: cantripdrinks
+      twitter: "@CantripDrinks"
+      instagram: "@drinkcantrip"
     domains:
       - drinkcantrip.com
     notes: >
@@ -143,8 +147,8 @@ brands:
     store_locator_url: https://www.wanabrands.com/find/
     twitter_handle: WanaBrands
     social:
-      twitter: WanaBrands
-      instagram: wanabrands
+      twitter: "@WanaBrands"
+      instagram: "@wanabrands"
     domains:
       - wanabrands.com
     notes: >
@@ -163,7 +167,7 @@ brands:
     shop_url: https://ayrloom.com/collections/beverages
     store_locator_url: https://ayrloom.com/pages/where-to-buy-new-york
     social:
-      instagram: ayrloom
+      instagram: "@ayrloom_ny"
     domains:
       - ayrloom.com
     notes: >
@@ -177,7 +181,7 @@ brands:
     shop_url: https://drinkbetterthanbooze.com/collections/all
     store_locator_url: https://drinkbetterthanbooze.com/pages/store-locator
     social:
-      instagram: drinkbetterthanbooze
+      instagram: "@betterthanbooze"
     domains:
       - drinkbetterthanbooze.com
     notes: >
@@ -192,8 +196,8 @@ brands:
     store_locator_url: https://drinkdelta.com/store-locator
     twitter_handle: DrinkDelta
     social:
-      twitter: DrinkDelta
-      instagram: drinkdelta
+      twitter: "@DrinkDelta"
+      instagram: "@drinkdelta"
     domains:
       - drinkdelta.com
     notes: >
@@ -208,7 +212,7 @@ brands:
     shop_url: null
     store_locator_url: https://findwunder.com/guides/where-to-buy-cbd-drinks/
     social:
-      instagram: findwunder
+      instagram: "@findwunder"
     domains:
       - findwunder.com
     notes: >
@@ -225,8 +229,8 @@ brands:
     store_locator_url: https://www.greenmonkehemp.com/store-locator
     twitter_handle: cbdgreenmonkey
     social:
-      twitter: cbdgreenmonkey
-      instagram: greenmonkehemp
+      twitter: "@cbdgreenmonkey"
+      instagram: "@greenmonkehemp"
     domains:
       - greenmonkehemp.com
     notes: >
@@ -240,7 +244,7 @@ brands:
     shop_url: https://drinkhappyflower.com/collections/all-products
     store_locator_url: https://drinkhappyflower.com/pages/retailers
     social:
-      instagram: drinkhappyflower
+      instagram: "@drinkhappyflower"
     domains:
       - drinkhappyflower.com
     notes: >
@@ -254,7 +258,7 @@ brands:
     shop_url: https://www.drinktrailmagic.com/collections/all-beverages-4-packs
     store_locator_url: https://www.drinktrailmagic.com/pages/find
     social:
-      instagram: drinktrailmagic
+      instagram: "@drinktrailmagic"
     domains:
       - drinktrailmagic.com
     notes: >
@@ -269,8 +273,8 @@ brands:
     store_locator_url: https://www.islandbrandsusa.com/pages/beverage-finder
     twitter_handle: islandbrandsusa
     social:
-      twitter: islandbrandsusa
-      instagram: islandbrandsusa
+      twitter: "@islandbrandsusa"
+      instagram: "@islandbrandsusa"
     domains:
       - islandbrandsusa.com
     notes: >
@@ -284,7 +288,7 @@ brands:
     shop_url: https://drinklevity.com/shop
     store_locator_url: https://drinklevity.com/pages/store-locator
     social:
-      instagram: drinklevity
+      instagram: "@drinklevity"
     domains:
       - drinklevity.com
     notes: >
@@ -298,8 +302,8 @@ brands:
     shop_url: null
     twitter_handle: MaryJonesBrand
     social:
-      twitter: MaryJonesBrand
-      instagram: maryjonesbrand
+      twitter: "@MaryJonesBrand"
+      instagram: "@maryjonesbrand"
     domains:
       - maryjones.com
     notes: >
@@ -315,8 +319,9 @@ brands:
     store_locator_url: https://dadgrass.com/pages/locations
     twitter_handle: DadGrass
     social:
-      twitter: DadGrass
-      instagram: dadgrass
+      twitter: "@DadGrass"
+      instagram: "@dad.grass"
+      tiktok: "@dadgrass"
     domains:
       - dadgrass.com
     notes: >
@@ -332,7 +337,7 @@ brands:
     domain: adaptaphoria.com
     shop_url: https://adaptaphoria.com
     social:
-      instagram: adaptaphoria
+      instagram: "@adaptaphoria"
     domains:
       - adaptaphoria.com
     notes: >
@@ -345,7 +350,7 @@ brands:
     shop_url: https://senoritadrinks.com
     store_locator_url: https://www.senoritadrinks.com/pages/store-locator
     social:
-      instagram: senoritadrinks
+      instagram: "@senoritadrinks"
     domains:
       - senoritadrinks.com
     notes: >
@@ -360,8 +365,9 @@ brands:
     store_locator_url: https://takearecess.com/where-to-buy
     twitter_handle: takearecess
     social:
-      twitter: takearecess
-      instagram: takearecess
+      twitter: "@takearecess"
+      instagram: "@takearecess"
+      tiktok: "@takearecess"
     domains:
       - takearecess.com
     notes: >
@@ -377,8 +383,8 @@ brands:
     store_locator_url: https://drinkbuzzn.com/pages/store-locator-1
     twitter_handle: drinkbuzzn
     social:
-      twitter: drinkbuzzn
-      instagram: drinkbuzzn
+      twitter: "@drinkbuzzn"
+      instagram: "@drinkbuzzn"
     domains:
       - drinkbuzzn.com
     notes: >
