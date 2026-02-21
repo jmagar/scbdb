@@ -54,6 +54,30 @@ pub(in crate::locator) fn extract_vtinfo_embed(html: &str) -> Option<VtinfoEmbed
     })
 }
 
+/// VTInfo search points: [`crate::locator::STRATEGIC_US_POINTS`] paired with
+/// representative zip codes.
+///
+/// Zip codes are form-submission hints only; lat/lng drives the actual
+/// geographic search.
+fn vtinfo_search_points() -> Vec<(f64, f64, &'static str)> {
+    const ZIPS: &[&str] = &[
+        "55401", // Minneapolis
+        "67202", // Kansas
+        "90001", // Los Angeles
+        "10001", // New York
+        "60601", // Chicago
+        "77001", // Houston
+        "80202", // Denver
+        "85001", // Phoenix
+        "28201", // Charlotte
+    ];
+    crate::locator::STRATEGIC_US_POINTS
+        .iter()
+        .zip(ZIPS.iter())
+        .map(|(pt, zip)| (pt.lat, pt.lng, *zip))
+        .collect()
+}
+
 pub(in crate::locator) async fn fetch_vtinfo_stores(
     embed: &VtinfoEmbed,
     locator_url: &str,
@@ -114,16 +138,7 @@ pub(in crate::locator) async fn fetch_vtinfo_stores(
         "vtinfo iframe parsed"
     );
 
-    let search_points = [
-        (44.9778_f64, -93.2650_f64, "55401"),
-        (39.8283, -98.5795, "67202"),
-        (34.0522, -118.2437, "90001"),
-        (40.7128, -74.0060, "10001"),
-        (41.8781, -87.6298, "60601"),
-        (29.7604, -95.3698, "77001"),
-        (39.7392, -104.9903, "80202"),
-        (33.4484, -112.0740, "85001"),
-    ];
+    let search_points = vtinfo_search_points();
 
     let mut dedup: std::collections::HashMap<String, RawStoreLocation> =
         std::collections::HashMap::new();
@@ -218,11 +233,11 @@ async fn run_vtinfo_search_point(
 
 #[cfg(test)]
 mod tests {
-    use super::extract_vtinfo_embed;
     use super::vtinfo_http::{
         build_vtinfo_form, retry_after_delay, vtinfo_brand_pacing_delay, vtinfo_retry_backoff_delay,
     };
     use super::vtinfo_parse::parse_vtinfo_search_results;
+    use super::{extract_vtinfo_embed, vtinfo_search_points};
 
     #[test]
     fn extracts_vtinfo_embed_params_from_iframe_src() {
@@ -295,5 +310,11 @@ mod tests {
             reqwest::header::HeaderValue::from_static("3"),
         );
         assert_eq!(retry_after_delay(&headers).map(|d| d.as_secs()), Some(3));
+    }
+
+    #[test]
+    fn vtinfo_search_points_matches_strategic_us_count() {
+        let pts = vtinfo_search_points();
+        assert_eq!(pts.len(), crate::locator::STRATEGIC_US_POINTS.len());
     }
 }
