@@ -1,6 +1,6 @@
 //! Per-brand location collection logic.
 
-use helpers::{raw_to_new_location, record_brand_failure};
+use helpers::{log_location_changeset, raw_to_new_location, record_brand_failure};
 use url::resolve_locator_url;
 
 use super::helpers;
@@ -128,17 +128,7 @@ pub(super) async fn collect_brand_locations(
         }
     };
 
-    {
-        let curr: std::collections::HashSet<_> = active_keys.iter().cloned().collect();
-        let added = curr.difference(&prev_keys).count();
-        let removed = prev_keys.difference(&curr).count();
-        if added > 0 {
-            tracing::info!(brand = %brand.slug, count = added, "new store locations detected");
-        }
-        if removed > 0 {
-            tracing::info!(brand = %brand.slug, count = removed, "store locations deactivated");
-        }
-    }
+    log_location_changeset(&brand.slug, &prev_keys, &active_keys);
 
     let total_active = new_count.saturating_add(kept_count);
     let records_i32 = i32::try_from(total_active).unwrap_or(i32::MAX);
