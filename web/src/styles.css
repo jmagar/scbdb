@@ -243,12 +243,65 @@ body {
   }
 
   .stats-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .card-stack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* ── Sentiment score badge ──────────────────────────────── */
+.sentiment-badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 99px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+
+.sentiment-badge--positive {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.sentiment-badge--negative {
+  background: #fdecea;
+  color: var(--warn);
+}
+
+.sentiment-badge--neutral {
+  background: #f0f0f0;
+  color: var(--muted);
+}
+
+/* ── Sentiment meter bar ────────────────────────────────── */
+.sentiment-meter {
+  position: relative;
+  margin-top: 0.65rem;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(
+    to right,
+    #bd3e2b 0%,
+    #d8dedc 45%,
+    #d8dedc 55%,
+    #0f7a6d 100%
+  );
+}
+
+.sentiment-meter-indicator {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2px solid var(--card);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
 @keyframes page-enter {
