@@ -63,6 +63,32 @@ vi.mock("../hooks/use-dashboard-data", () => {
       ],
     }),
     useBills: () => ({ isLoading: false, isError: false, data: [] }),
+    useSentimentSummary: () => ({
+      isLoading: false,
+      isError: false,
+      data: [
+        {
+          brand_name: "Cann",
+          brand_slug: "cann",
+          score: "0.420",
+          signal_count: 18,
+          captured_at: "2026-02-20T00:00:00Z",
+        },
+      ],
+    }),
+    useSentimentSnapshots: () => ({
+      isLoading: false,
+      isError: false,
+      data: [
+        {
+          brand_name: "Cann",
+          brand_slug: "cann",
+          score: "0.420",
+          signal_count: 18,
+          captured_at: "2026-02-20T00:00:00Z",
+        },
+      ],
+    }),
   };
 });
 
