@@ -1571,3 +1571,39 @@ async fn list_brands_without_profiles_returns_unprofiled(pool: sqlx::PgPool) {
     let ids = list_brands_without_profiles(&pool).await.unwrap();
     assert!(!ids.is_empty(), "should find brand without profile");
 }
+
+// ---------------------------------------------------------------------------
+// Section 10: Brand Signals
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_signal_upsert_and_list(pool: sqlx::PgPool) {
+    let brand_id: i64 = sqlx::query_scalar(
+        "INSERT INTO brands (name, slug, relationship, tier, is_active) \
+         VALUES ('SigBrand', 'sigbrand', 'competitor', 1, true) RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+
+    let new = scbdb_db::NewBrandSignal {
+        brand_id,
+        signal_type: "article",
+        source_platform: Some("web"),
+        source_url: Some("https://example.com/article"),
+        external_id: Some("art-001"),
+        title: Some("Big News"),
+        summary: None,
+        content: None,
+        image_url: None,
+        qdrant_point_id: None,
+        published_at: None,
+    };
+    scbdb_db::upsert_brand_signal(&pool, &new).await.unwrap();
+
+    let signals = scbdb_db::list_brand_signals(&pool, brand_id, None, 10, None)
+        .await
+        .unwrap();
+    assert_eq!(signals.len(), 1);
+    assert_eq!(signals[0].title.as_deref(), Some("Big News"));
+}

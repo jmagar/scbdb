@@ -148,12 +148,15 @@ mod tests {
 pub mod api_queries;
 pub mod bills;
 pub mod brand_profiles;
+pub mod brand_signals;
 pub mod brands;
 pub mod collection_runs;
 pub mod locations;
 pub mod products;
 pub mod seed;
 pub mod sentiment;
+
+pub use brand_signals::{list_brand_signals, upsert_brand_signal, BrandSignalRow, NewBrandSignal};
 
 pub use api_queries::{
     list_price_snapshots_dashboard, list_pricing_summary, list_products_dashboard,
