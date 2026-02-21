@@ -233,6 +233,104 @@ Read-model view providing the most recent sentiment snapshot per brand.
 CREATE VIEW view_sentiment_summary AS SELECT ...
 ```
 
+## Phase 6: Brand Intelligence Layer
+
+These tables are added in Phase 6 to support the `scbdb-profiler` crate and brand profile dashboard. Full DDL lives in the `migrations/` directory.
+
+### `brand_profiles`
+
+Static profile data for each brand — extended metadata beyond what lives in the `brands` table.
+
+Key columns: `brand_id` (FK → `brands`), `tagline`, `description`, `hq_city`, `hq_state`, `hq_country`, `founded_year`, `funding_stage`, `employee_count_estimate`, `primary_channel` (`dtc`, `retail`, `hybrid`), `metadata` (JSONB), timestamps.
+
+### `brand_social_handles`
+
+Platform → handle mapping per brand. Supports multi-platform social presence tracking.
+
+Key columns: `brand_id` (FK → `brands`), `platform` (`twitter`, `instagram`, `youtube`, `tiktok`, `linkedin`, etc.), `handle`, `profile_url`, `is_active`, timestamps.
+
+Unique constraint: `(brand_id, platform)`.
+
+### `brand_domains`
+
+Domain registrations per brand. A brand may own multiple domains (redirect domains, regional TLDs, sub-brands).
+
+Key columns: `brand_id` (FK → `brands`), `domain`, `is_primary`, `is_active`, timestamps.
+
+Unique constraint: `(brand_id, domain)`.
+
+### `brand_signals`
+
+Unified signal stream for all brand intelligence content types — social posts, news articles, press releases, YouTube videos, RSS items, etc. Backed by Qdrant for embedding dedup.
+
+Key columns: `brand_id` (FK → `brands`), `signal_type` (`tweet`, `instagram_post`, `youtube_video`, `rss_item`, `press_release`, `news_article`, `newsletter`), `source_url`, `source_id` (platform-native ID), `title`, `body`, `published_at`, `author`, `metadata` (JSONB), `qdrant_id` (UUID — reference to Qdrant point), `embed_status` (`pending`, `embedded`, `skipped`, `failed`), timestamps.
+
+Unique constraint: `(brand_id, signal_type, source_id)`.
+
+### `brand_signal_embeds`
+
+Qdrant vector reference table. Records the relationship between a `brand_signals` row and its Qdrant point ID.
+
+Key columns: `signal_id` (FK → `brand_signals`), `qdrant_collection`, `qdrant_id` (UUID), `model`, `vector_dims`, `embedded_at`.
+
+### `brand_funding_events`
+
+Investment rounds, exits, and other financing events per brand.
+
+Key columns: `brand_id` (FK → `brands`), `event_type` (`seed`, `series_a`, `series_b`, `growth`, `acquisition`, `ipo`, `other`), `amount_usd`, `announced_date`, `investors` (TEXT[]), `source_url`, `notes`.
+
+### `brand_lab_tests`
+
+CoA (Certificate of Analysis) and lab test results per product variant.
+
+Key columns: `brand_id` (FK → `brands`), `variant_id` (FK → `product_variants`, nullable), `lab_name`, `test_date`, `thc_mg_per_serving`, `cbd_mg_per_serving`, `batch_id`, `coa_url`, `metadata` (JSONB), timestamps.
+
+### `brand_legal_proceedings`
+
+Lawsuits, regulatory actions, and enforcement events involving a brand.
+
+Key columns: `brand_id` (FK → `brands`), `proceeding_type` (`lawsuit`, `fda_warning`, `state_enforcement`, `class_action`, `settlement`, `other`), `title`, `filed_date`, `resolved_date`, `jurisdiction`, `outcome`, `source_url`, `notes`.
+
+### `brand_sponsorships`
+
+Sports, events, and influencer deal tracking per brand.
+
+Key columns: `brand_id` (FK → `brands`), `sponsorship_type` (`sports_team`, `event`, `athlete`, `influencer`, `venue`, `podcast`, `other`), `partner_name`, `deal_start`, `deal_end`, `territory`, `source_url`, `notes`.
+
+### `brand_distributors`
+
+Distribution relationships per brand per territory.
+
+Key columns: `brand_id` (FK → `brands`), `distributor_name`, `territory_state` (CHAR(2)), `territory_region`, `channel` (`on_premise`, `off_premise`, `dtc`, `dispensary`), `status` (`active`, `inactive`, `rumored`), `source_url`, `notes`.
+
+### `brand_competitor_relationships`
+
+Direct competitor mapping — records directional or symmetric relationships between brands.
+
+Key columns: `brand_id` (FK → `brands`), `competitor_brand_id` (FK → `brands`), `relationship_type` (`direct`, `adjacent`, `acqui_hire`, `distribution_overlap`), `notes`.
+
+Unique constraint: `(brand_id, competitor_brand_id)`.
+
+### `brand_newsletters`
+
+Newsletter subscription tracking — records newsletter sources associated with each brand.
+
+Key columns: `brand_id` (FK → `brands`), `list_name`, `subscribe_url`, `last_ingested_at`, `is_active`, timestamps.
+
+### `brand_media_appearances`
+
+Podcast, press, and video appearances by brand principals or featuring the brand.
+
+Key columns: `brand_id` (FK → `brands`), `media_type` (`podcast`, `press_article`, `video`, `interview`, `review`, `other`), `outlet_name`, `title`, `url`, `published_at`, `author`, `notes`.
+
+### `brand_profile_runs`
+
+Profiler job run log — records each execution of the `scbdb-profiler` pipeline per brand.
+
+Key columns: `brand_id` (FK → `brands`), `run_type` (e.g., `youtube`, `rss`, `newsroom`, `full`), `status` (`queued`, `running`, `succeeded`, `failed`), `signals_upserted`, `signals_embedded`, `started_at`, `completed_at`, `error_message`, `metadata` (JSONB).
+
+---
+
 ## Scope Status
 
 ### Defined for MVP Scope
@@ -247,6 +345,23 @@ CREATE VIEW view_sentiment_summary AS SELECT ...
 - `bill_events`
 - `sentiment_snapshots`
 
+### Defined for Phase 6 (Brand Intelligence Layer)
+
+- `brand_profiles`
+- `brand_social_handles`
+- `brand_domains`
+- `brand_signals`
+- `brand_signal_embeds`
+- `brand_funding_events`
+- `brand_lab_tests`
+- `brand_legal_proceedings`
+- `brand_sponsorships`
+- `brand_distributors`
+- `brand_competitor_relationships`
+- `brand_newsletters`
+- `brand_media_appearances`
+- `brand_profile_runs`
+
 ### Planned Post-MVP / Future Work
 
 - Any Spider-related schema extensions
@@ -256,3 +371,4 @@ CREATE VIEW view_sentiment_summary AS SELECT ...
 
 - Qdrant and TEI are integrated in Phase 4 for sentiment signal dedup and embedding storage. Future semantic search capabilities beyond dedup may add additional schema as needed.
 - Spider integration for non-Shopify crawling will add schema later as needed.
+- Phase 6 `brand_signals` rows reference Qdrant points via `qdrant_id`; the `brand_signal_embeds` table is the authoritative join between PostgreSQL rows and the Qdrant `brand_signals` collection.
