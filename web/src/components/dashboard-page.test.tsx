@@ -73,6 +73,22 @@ vi.mock("../hooks/use-dashboard-data", () => {
           score: "0.420",
           signal_count: 18,
           captured_at: "2026-02-20T00:00:00Z",
+          metadata: {
+            source_counts: {
+              google_news: 9,
+              reddit_post: 6,
+              reddit_comment: 3,
+              brand_newsroom: 2,
+            },
+            top_signals: [
+              {
+                source: "google_news",
+                url: "https://example.com/news/cann-positive",
+                score: 0.7,
+                text_preview: "Cann sees strong beverage demand this quarter.",
+              },
+            ],
+          },
         },
       ],
     }),
@@ -86,6 +102,29 @@ vi.mock("../hooks/use-dashboard-data", () => {
           score: "0.420",
           signal_count: 18,
           captured_at: "2026-02-20T00:00:00Z",
+          metadata: {
+            source_counts: {
+              google_news: 9,
+              reddit_post: 6,
+              reddit_comment: 3,
+              brand_newsroom: 2,
+            },
+          },
+        },
+        {
+          brand_name: "Cann",
+          brand_slug: "cann",
+          score: "0.300",
+          signal_count: 14,
+          captured_at: "2026-02-19T00:00:00Z",
+          metadata: {
+            source_counts: {
+              google_news: 7,
+              reddit_post: 5,
+              reddit_comment: 2,
+              brand_newsroom: 1,
+            },
+          },
         },
       ],
     }),
@@ -116,11 +155,21 @@ describe("DashboardPage", () => {
     expect(buttonCount).toBe(5);
   });
 
-  it("renders sentiment panel with score badge", () => {
+  it("renders sentiment panel with context and transparency", () => {
     const html = renderToStaticMarkup(<DashboardPage initialTab="sentiment" />);
     expect(html).toContain("Market Sentiment");
     expect(html).toContain("Cann");
     expect(html).toContain("+0.42");
     expect(html).toContain("sentiment-badge--positive");
+    expect(html).toContain("Data Transparency");
+    expect(html).toContain("Google News RSS");
+    expect(html).toContain("Reddit");
+    expect(html).toContain("Momentum");
+    expect(html).toContain("+0.12");
+    expect(html).toContain("Source mix:");
+    expect(html).toContain("google_news (25)");
+    expect(html).toContain("brand_newsroom (5)");
+    expect(html).toContain("Sample evidence:");
+    expect(html).toContain("https://example.com/news/cann-positive");
   });
 });

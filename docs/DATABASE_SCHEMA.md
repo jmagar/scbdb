@@ -207,6 +207,32 @@ CREATE TABLE sentiment_snapshots (
 CREATE INDEX idx_sentiment_snapshots_brand_captured ON sentiment_snapshots (brand_id, captured_at DESC);
 ```
 
+## Views
+
+### `view_products_dashboard`
+
+Read-model view aggregating product details, brand context, and latest pricing for the dashboard.
+
+```sql
+CREATE VIEW view_products_dashboard AS SELECT ...
+```
+
+### `view_pricing_summary`
+
+Read-model view aggregating pricing metrics (min/max/avg) per brand.
+
+```sql
+CREATE VIEW view_pricing_summary AS SELECT ...
+```
+
+### `view_sentiment_summary`
+
+Read-model view providing the most recent sentiment snapshot per brand.
+
+```sql
+CREATE VIEW view_sentiment_summary AS SELECT ...
+```
+
 ## Scope Status
 
 ### Defined for MVP Scope

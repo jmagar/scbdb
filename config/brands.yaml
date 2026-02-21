@@ -6,7 +6,7 @@ brands:
     tier: 2
     domain: highrisebev.com
     shop_url: https://highrisebev.com/collections/all-products
-    store_locator_url: https://highrisebev.com/pages/where-to-buy
+    store_locator_url: https://highrisebev.com/pages/store-locator
     notes: >
       Charleston SC local brand. 5mg, 10mg THC lines + CBD-only line +
       Adaptogen line. Founded 2022. Anchor brand for Reyes THC portfolio.
@@ -19,7 +19,8 @@ brands:
     tier: 1
     domain: drinkcann.com
     shop_url: https://drinkcann.com/collections/all
-    store_locator_url: https://drinkcann.com/pages/where-to-buy
+    store_locator_url: https://drinkcann.com/pages/store-locator
+    twitter_handle: drinkcann
     notes: >
       Three dosage tiers (2mg, 5mg Hi Boy, 10mg Hi'er Boy). Also distributed
       by United in GA — overlap brand. $34.7M raised, Total Wine in 20 states.
@@ -29,7 +30,8 @@ brands:
     tier: 1
     domain: drinkbrez.com
     shop_url: https://drinkbrez.com/collections
-    store_locator_url: https://drinkbrez.com/pages/where-to-buy
+    store_locator_url: https://www.drinkbrez.com/pages/storelocator
+    twitter_handle: drinkbrez
     notes: >
       Large catalog — OG, Amplify, Drift, Dream, Elevate, Spirit bottles,
       Shots. May need to hit sub-collections. $28M rev 2024, projecting $50M
@@ -41,6 +43,7 @@ brands:
     domain: cyclingfrog.com
     shop_url: https://cyclingfrog.com/collections/seltzers-and-drinks
     store_locator_url: https://cyclingfrog.com/pages/where-to-buy
+    twitter_handle: CyclingFrogCBD
     notes: >
       CBD:THC ratio products (5mg THC + 10mg CBD standard). Important to
       capture both values. Award-winning, Portland Pickles partnership.
@@ -50,7 +53,7 @@ brands:
     tier: 1
     domain: drinkwynk.com
     shop_url: https://drinkwynk.com/collections/all
-    store_locator_url: https://drinkwynk.com/pages/where-to-buy
+    store_locator_url: https://drinkwynk.com/pages/store-locator
     notes: >
       Zero-cal/zero-sugar positioning. Backed by cannabis MSO. 40 states DTC,
       20 retail markets.
@@ -60,6 +63,7 @@ brands:
     tier: 1
     domain: unclearnies.com
     shop_url: https://unclearnies.com
+    store_locator_url: https://unclearnies.com/pages/store-locator
     notes: >
       High-dose leader. #1 cannabis beverage in IL dispensaries. $7.5M
       Series A, Boston Beer Co. founder on board. 100% YoY growth.
@@ -70,6 +74,7 @@ brands:
     tier: 1
     domain: keefbrands.com
     shop_url: null
+    store_locator_url: https://keefbrands.com/find-products
     notes: >
       Dispensary + hemp dual play. 70+ SKUs, 14 states. Deploys branded
       retail fridges. $18.9M sales Jan–Aug 2024.
@@ -81,7 +86,7 @@ brands:
     tier: 1
     domain: drinkcantrip.com
     shop_url: https://drinkcantrip.com/collections/all
-    store_locator_url: https://drinkcantrip.com/pages/where-to-buy
+    twitter_handle: CantripDrinks
     notes: >
       Top-20 brand per Whitney. Seltzer focus.
 
@@ -90,6 +95,8 @@ brands:
     tier: 1
     domain: wanabrands.com
     shop_url: null
+    store_locator_url: https://www.wanabrands.com/find/
+    twitter_handle: WanaBrands
     notes: >
       Established edibles brand expanding into beverages. Multi-state
       presence. Boulder, CO HQ.
@@ -104,6 +111,7 @@ brands:
     tier: 2
     domain: ayrloom.com
     shop_url: https://ayrloom.com/collections/beverages
+    store_locator_url: https://ayrloom.com/pages/where-to-buy-new-york
     notes: >
       Also has shop.ayrloom.com for hemp DTC. Main collections page has full
       beverage lineup. Top-5 dispensary beverage (BDSA).
@@ -113,6 +121,7 @@ brands:
     tier: 2
     domain: drinkbetterthanbooze.com
     shop_url: https://drinkbetterthanbooze.com/collections/all
+    store_locator_url: https://drinkbetterthanbooze.com/pages/store-locator
     notes: >
       Shopify store. Has both CBD+THC and sober mocktail lines — filter for
       THC products.
@@ -122,6 +131,8 @@ brands:
     tier: 2
     domain: drinkdelta.com
     shop_url: null
+    store_locator_url: https://drinkdelta.com/store-locator
+    twitter_handle: DrinkDelta
     notes: >
       5/10/20mg tiers. Also has a Cannabis Spirit bottle. 2:1 THC:CBD ratio
       on some SKUs. drinkdelta.com/products.json returns 404 — likely custom
@@ -132,6 +143,7 @@ brands:
     tier: 2
     domain: findwunder.com
     shop_url: null
+    store_locator_url: https://findwunder.com/guides/where-to-buy-cbd-drinks/
     notes: >
       Also distributed by United in GA — overlap brand. Italian soda
       positioning. VC-backed, clean sparkling water positioning.
@@ -143,6 +155,8 @@ brands:
     tier: 2
     domain: greenmonkehemp.com
     shop_url: null
+    store_locator_url: https://www.greenmonkehemp.com/store-locator
+    twitter_handle: cbdgreenmonkey
     notes: >
       Squarespace /s/shop path — shop_url set to null to skip Shopify collection. Happy Soda line + Cookies collab. 8 SKUs in
       SHL.
@@ -152,6 +166,7 @@ brands:
     tier: 2
     domain: drinkhappyflower.com
     shop_url: https://drinkhappyflower.com/collections/all-products
+    store_locator_url: https://drinkhappyflower.com/pages/retailers
     notes: >
       Tilray Brands product. 5mg + 10mg SuperBloom lines. Also distributed
       by United in GA — overlap brand.
@@ -161,6 +176,7 @@ brands:
     tier: 2
     domain: drinktrailmagic.com
     shop_url: https://www.drinktrailmagic.com/collections/all-beverages-4-packs
+    store_locator_url: https://www.drinktrailmagic.com/pages/find
     notes: >
       Tea and lemonade focused, not seltzers. Real brewed tea. 3mg entry
       point. Strong in MN market.
@@ -170,6 +186,7 @@ brands:
     tier: 2
     domain: islandbrandsusa.com
     shop_url: https://www.islandbrandsusa.com
+    store_locator_url: https://www.islandbrandsusa.com/pages/beverage-finder
     notes: >
       Sub-brand of Island Brands USA (also makes Active beer). Individual
       products at /products/. 5mg THC + 10mg CBD.
@@ -179,6 +196,7 @@ brands:
     tier: 2
     domain: drinklevity.com
     shop_url: https://drinklevity.com/shop
+    store_locator_url: https://drinklevity.com/pages/store-locator
     notes: >
       Charleston SC based. Widest dosage range in portfolio (4mg cans to
       200mg Founder's Reserve bottle). Has 750ml spirit bottles.
@@ -198,6 +216,8 @@ brands:
     tier: 2
     domain: dadgrass.com
     shop_url: https://dadgrass.com/collections/all
+    store_locator_url: https://dadgrass.com/pages/locations
+    twitter_handle: DadGrass
     notes: >
       Low-dose lifestyle brand (3mg THC + CBD + Lion's Mane).
 
@@ -218,6 +238,7 @@ brands:
     tier: 3
     domain: senoritadrinks.com
     shop_url: https://senoritadrinks.com
+    store_locator_url: https://www.senoritadrinks.com/pages/store-locator
     notes: >
       THC margaritas, agave-based cocktail format. Confirmed Shopify store
       at senoritadrinks.com.
@@ -227,6 +248,8 @@ brands:
     tier: 3
     domain: takearecess.com
     shop_url: null
+    store_locator_url: https://takearecess.com/where-to-buy
+    twitter_handle: takearecess
     notes: >
       Mainstream CBD sparkling water, major retail. takearecess.com
       products.json redirects to a landing page — headless/custom storefront,
@@ -237,6 +260,8 @@ brands:
     tier: 3
     domain: drinkbuzzn.com
     shop_url: https://drinkbuzzn.com
+    store_locator_url: https://drinkbuzzn.com/pages/store-locator-1
+    twitter_handle: drinkbuzzn
     notes: >
       Minimalist seltzer, clean microdosing. Confirmed Shopify store at
       drinkbuzzn.com.

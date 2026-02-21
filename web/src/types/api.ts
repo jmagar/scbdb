@@ -66,6 +66,7 @@ export type SentimentSummaryItem = {
   score: string;
   signal_count: number;
   captured_at: string;
+  metadata?: SentimentMetadata;
 };
 
 export type SentimentSnapshotItem = {
@@ -74,6 +75,22 @@ export type SentimentSnapshotItem = {
   score: string;
   signal_count: number;
   captured_at: string;
+  metadata?: SentimentMetadata;
+};
+
+export type SentimentEvidence = {
+  source: string;
+  url: string;
+  score: number;
+  text_preview: string;
+};
+
+export type SentimentMetadata = {
+  version?: number;
+  brand_slug?: string;
+  source_counts?: Record<string, number>;
+  top_signals?: SentimentEvidence[];
+  captured_at?: string;
 };
 
 export type LocationBrandSummary = {

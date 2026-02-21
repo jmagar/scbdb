@@ -147,6 +147,7 @@ mod tests {
 
 pub mod api_queries;
 pub mod bills;
+pub mod brand_intel;
 pub mod brand_profiles;
 pub mod brand_signals;
 pub mod brands;
@@ -156,6 +157,13 @@ pub mod products;
 pub mod seed;
 pub mod sentiment;
 
+pub use brand_intel::{
+    insert_brand_funding_event, insert_brand_lab_test, insert_brand_legal_proceeding,
+    insert_brand_sponsorship, list_brand_funding_events, list_brand_lab_tests,
+    list_brand_legal_proceedings, list_brand_sponsorships, BrandFundingEventRow, BrandLabTestRow,
+    BrandLegalProceedingRow, BrandSponsorshipRow, NewBrandFundingEvent, NewBrandLabTest,
+    NewBrandLegalProceeding, NewBrandSponsorship,
+};
 pub use brand_signals::{list_brand_signals, upsert_brand_signal, BrandSignalRow, NewBrandSignal};
 
 pub use api_queries::{

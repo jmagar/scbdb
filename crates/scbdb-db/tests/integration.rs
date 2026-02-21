@@ -18,7 +18,6 @@ fn pool_config_from_app_config_uses_core_values() {
         bind_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3000),
         log_level: "info".to_string(),
         brands_path: PathBuf::from("./config/brands.yaml"),
-        api_key_hash_salt: Some("salt".to_string()),
         legiscan_api_key: None,
         db_max_connections: 42,
         db_min_connections: 7,

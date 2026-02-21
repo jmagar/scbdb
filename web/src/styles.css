@@ -464,3 +464,84 @@ button.tile:hover {
   border-radius: 0.3rem;
   cursor: default;
 }
+
+/* ── Sentiment context and transparency ─────────────────── */
+.sentiment-context-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.9rem;
+}
+
+.context-card {
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  background: #f7f8f8;
+  padding: 0.7rem 0.85rem;
+}
+
+.context-card h3 {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.context-card p {
+  margin: 0.25rem 0;
+  font-size: 0.86rem;
+}
+
+.sentiment-transparency {
+  border: 1px dashed var(--line);
+  border-radius: 0.8rem;
+  background: #fcfcfc;
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.sentiment-transparency h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+}
+
+.sentiment-transparency p {
+  margin: 0.35rem 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.sentiment-evidence-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1rem;
+}
+
+.sentiment-evidence-list li {
+  margin: 0.2rem 0;
+}
+
+.sentiment-evidence-list a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--line);
+}
+
+.sentiment-trend {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+.sentiment-trend--up {
+  color: var(--accent);
+}
+
+.sentiment-trend--down {
+  color: var(--warn);
+}
+
+.sentiment-trend--flat {
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  .sentiment-context-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

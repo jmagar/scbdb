@@ -22,6 +22,18 @@ if (apiBaseUrl) {
 
 const apiKey = import.meta.env.VITE_API_KEY as string | undefined;
 
+export class ApiError extends Error {
+  public status: number;
+  public code: string;
+
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
 export function withQuery(
   path: string,
   query?: Record<string, string | number | undefined>,
@@ -62,7 +74,27 @@ export async function apiGet<T>(
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${path}`);
+    let errorMessage = `Request failed (${response.status}) for ${path}`;
+    let errorCode = "unknown_error";
+
+    try {
+      const errorBody = await response.json();
+      if (
+        errorBody &&
+        typeof errorBody === "object" &&
+        "error" in errorBody &&
+        errorBody.error &&
+        typeof errorBody.error === "object"
+      ) {
+        const { code, message } = errorBody.error;
+        if (typeof code === "string") errorCode = code;
+        if (typeof message === "string") errorMessage = message;
+      }
+    } catch {
+      // Response was not JSON or did not match expected error format
+    }
+
+    throw new ApiError(response.status, errorCode, errorMessage);
   }
 
   const body = (await response.json()) as ApiResponse<T>;

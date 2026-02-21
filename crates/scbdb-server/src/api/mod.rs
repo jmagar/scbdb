@@ -226,6 +226,7 @@ mod tests {
             score: Decimal::new(42, 2), // 0.42
             signal_count: 18,
             captured_at: Utc::now(),
+            metadata: serde_json::json!({}),
         };
         let json = serde_json::to_string(&item).expect("serialize");
         assert!(json.contains("\"brand_slug\":\"cann\""));

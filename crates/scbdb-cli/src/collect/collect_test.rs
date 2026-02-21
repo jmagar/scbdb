@@ -72,7 +72,6 @@ async fn run_collect_products_dry_run_writes_zero_db_rows(pool: sqlx::PgPool) {
         bind_addr: "0.0.0.0:3000".parse().unwrap(),
         log_level: "info".to_string(),
         brands_path: std::path::PathBuf::from("config/brands.yaml"),
-        api_key_hash_salt: None,
         legiscan_api_key: None,
         db_max_connections: 10,
         db_min_connections: 1,

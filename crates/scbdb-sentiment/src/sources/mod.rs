@@ -22,6 +22,7 @@ use std::collections::HashSet;
 ///
 /// Continues past individual source failures, logging warnings.
 /// Returns an empty `Vec` if all sources fail.
+#[allow(clippy::too_many_lines)]
 pub(crate) async fn collect_signals(
     config: &SentimentConfig,
     brand_slug: &str,

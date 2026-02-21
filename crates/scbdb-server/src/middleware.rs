@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -18,6 +18,10 @@ use uuid::Uuid;
 /// Newtype wrapping a request ID string, stored as a request extension.
 #[derive(Debug, Clone)]
 pub struct RequestId(pub String);
+
+/// Marker for the authenticated token, used to key rate limits.
+#[derive(Debug, Clone)]
+struct AuthenticatedToken(String);
 
 /// API key auth settings used by middleware.
 #[derive(Debug, Clone)]
@@ -73,12 +77,12 @@ struct RateLimitWindow {
     count: usize,
 }
 
-/// Sliding fixed-window limiter for simple API protection.
+/// Sliding fixed-window limiter per client.
 #[derive(Debug, Clone)]
 pub struct RateLimitState {
     max_requests: usize,
     window: Duration,
-    state: Arc<Mutex<RateLimitWindow>>,
+    state: Arc<Mutex<HashMap<String, RateLimitWindow>>>,
 }
 
 impl RateLimitState {
@@ -87,10 +91,7 @@ impl RateLimitState {
         Self {
             max_requests,
             window,
-            state: Arc::new(Mutex::new(RateLimitWindow {
-                started_at: Instant::now(),
-                count: 0,
-            })),
+            state: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -139,17 +140,20 @@ pub async fn request_id(mut req: Request, next: Next) -> Response {
 /// Middleware enforcing Bearer token auth when enabled.
 pub async fn require_bearer_auth(
     State(auth): State<AuthState>,
-    req: Request,
+    mut req: Request,
     next: Next,
 ) -> Response {
     if !auth.enabled {
         return next.run(req).await;
     }
 
-    let token = extract_bearer_token(req.headers().get(AUTHORIZATION));
+    let token = extract_bearer_token(req.headers().get(AUTHORIZATION)).map(ToOwned::to_owned);
 
     match token {
-        Some(token) if auth.allows(token) => next.run(req).await,
+        Some(token) if auth.allows(&token) => {
+            req.extensions_mut().insert(AuthenticatedToken(token));
+            next.run(req).await
+        }
         _ => (
             StatusCode::UNAUTHORIZED,
             Json(MiddlewareErrorBody {
@@ -163,13 +167,33 @@ pub async fn require_bearer_auth(
     }
 }
 
-/// Middleware enforcing a fixed request-per-window limit.
+/// Middleware enforcing a request-per-window limit per client.
+///
+/// If authenticated, uses the bearer token as a key.
+/// Otherwise falls back to the `X-Forwarded-For` header or a global default.
 pub async fn enforce_rate_limit(
     State(rate_limit): State<RateLimitState>,
     req: Request,
     next: Next,
 ) -> Response {
-    let mut window = rate_limit.state.lock().await;
+    let client_key = if let Some(token) = req.extensions().get::<AuthenticatedToken>() {
+        token.0.clone()
+    } else {
+        req.headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.split(',').next())
+            .map_or_else(|| "global".to_string(), |ip| ip.trim().to_string())
+    };
+
+    let mut state = rate_limit.state.lock().await;
+    let window = state
+        .entry(client_key.clone())
+        .or_insert_with(|| RateLimitWindow {
+            started_at: Instant::now(),
+            count: 0,
+        });
+
     let elapsed = window.started_at.elapsed();
 
     if elapsed >= rate_limit.window {
@@ -178,6 +202,7 @@ pub async fn enforce_rate_limit(
     }
 
     if window.count >= rate_limit.max_requests {
+        tracing::warn!(client = %client_key, "rate limit exceeded");
         return (
             StatusCode::TOO_MANY_REQUESTS,
             Json(MiddlewareErrorBody {
@@ -191,7 +216,7 @@ pub async fn enforce_rate_limit(
     }
 
     window.count += 1;
-    drop(window);
+    drop(state);
 
     next.run(req).await
 }

@@ -220,7 +220,7 @@ async fn run_vtinfo_search_point(
 mod tests {
     use super::extract_vtinfo_embed;
     use super::vtinfo_http::{
-        build_vtinfo_form, vtinfo_brand_pacing_delay, vtinfo_retry_backoff_delay,
+        build_vtinfo_form, retry_after_delay, vtinfo_brand_pacing_delay, vtinfo_retry_backoff_delay,
     };
     use super::vtinfo_parse::parse_vtinfo_search_results;
 
@@ -285,5 +285,15 @@ mod tests {
         assert_eq!(a, b);
         assert!(a.as_millis() >= 120);
         assert!(a.as_millis() < 220);
+    }
+
+    #[test]
+    fn parses_retry_after_seconds() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            reqwest::header::HeaderValue::from_static("3"),
+        );
+        assert_eq!(retry_after_delay(&headers).map(|d| d.as_secs()), Some(3));
     }
 }

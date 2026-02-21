@@ -2,6 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use serde_json::Value;
 use sqlx::PgPool;
 
 use crate::DbError;
@@ -82,39 +83,17 @@ pub async fn list_products_dashboard(
 ) -> Result<Vec<ProductDashboardRow>, DbError> {
     let rows = sqlx::query_as::<_, ProductDashboardRow>(
         "SELECT \
-             p.id AS product_id, \
-             p.name AS product_name, \
-             p.status AS product_status, \
-             p.vendor, \
-             p.source_url, \
-             p.metadata->>'primary_image_url' AS primary_image_url, \
-             b.name AS brand_name, \
-             b.slug AS brand_slug, \
-             b.logo_url AS brand_logo_url, \
-             b.relationship, \
-             b.tier, \
-             COUNT(v.id)::bigint AS variant_count, \
-             latest.price AS latest_price, \
-             latest.captured_at AS latest_price_captured_at \
-         FROM products p \
-         JOIN brands b ON b.id = p.brand_id \
-         LEFT JOIN product_variants v ON v.product_id = p.id \
-         LEFT JOIN LATERAL ( \
-             SELECT ps.price, ps.captured_at \
-             FROM product_variants pv \
-             JOIN price_snapshots ps ON ps.variant_id = pv.id \
-             WHERE pv.product_id = p.id \
-             ORDER BY ps.captured_at DESC, ps.id DESC \
-             LIMIT 1 \
-         ) latest ON TRUE \
-         WHERE p.deleted_at IS NULL \
-           AND b.deleted_at IS NULL \
-           AND ($1::TEXT IS NULL OR b.slug = $1) \
-           AND ($2::TEXT IS NULL OR b.relationship = $2) \
-           AND ($3::SMALLINT IS NULL OR b.tier = $3) \
-         GROUP BY p.id, p.name, p.status, p.vendor, p.source_url, p.metadata, b.name, b.slug, \
-                  b.logo_url, b.relationship, b.tier, latest.price, latest.captured_at \
-         ORDER BY p.updated_at DESC \
+             product_id, product_name, product_status, vendor, source_url, \
+             primary_image_url, brand_name, brand_slug, brand_logo_url, \
+             relationship, tier, variant_count, latest_price, \
+             latest_price_captured_at \
+         FROM view_products_dashboard \
+         WHERE deleted_at IS NULL \
+           AND brand_deleted_at IS NULL \
+           AND ($1::TEXT IS NULL OR brand_slug = $1) \
+           AND ($2::TEXT IS NULL OR relationship = $2) \
+           AND ($3::SMALLINT IS NULL OR tier = $3) \
+         ORDER BY updated_at DESC \
          LIMIT $4",
     )
     .bind(filters.brand_slug)
@@ -177,32 +156,13 @@ pub async fn list_price_snapshots_dashboard(
 /// Returns [`DbError::Sqlx`] if the query fails.
 pub async fn list_pricing_summary(pool: &PgPool) -> Result<Vec<PricingSummaryRow>, DbError> {
     let rows = sqlx::query_as::<_, PricingSummaryRow>(
-        "WITH latest_variant_prices AS ( \
-             SELECT DISTINCT ON (ps.variant_id) \
-                 pv.product_id, \
-                 ps.variant_id, \
-                 ps.price, \
-                 ps.captured_at \
-             FROM price_snapshots ps \
-             JOIN product_variants pv ON pv.id = ps.variant_id \
-             ORDER BY ps.variant_id, ps.captured_at DESC, ps.id DESC \
-         ) \
-         SELECT \
-             b.name AS brand_name, \
-             b.slug AS brand_slug, \
-             b.logo_url AS brand_logo_url, \
-             COUNT(lvp.variant_id)::bigint AS variant_count, \
-             AVG(lvp.price)::numeric(10,2) AS avg_price, \
-             MIN(lvp.price) AS min_price, \
-             MAX(lvp.price) AS max_price, \
-             MAX(lvp.captured_at) AS latest_capture_at \
-         FROM latest_variant_prices lvp \
-         JOIN products p ON p.id = lvp.product_id \
-         JOIN brands b ON b.id = p.brand_id \
-         WHERE p.deleted_at IS NULL \
-           AND b.deleted_at IS NULL \
-         GROUP BY b.name, b.slug, b.logo_url \
-         ORDER BY b.name",
+        "SELECT \
+             brand_name, brand_slug, brand_logo_url, variant_count, \
+             avg_price, min_price, max_price, latest_capture_at \
+         FROM view_pricing_summary \
+         WHERE product_deleted_at IS NULL \
+           AND brand_deleted_at IS NULL \
+         ORDER BY brand_name",
     )
     .fetch_all(pool)
     .await?;
@@ -218,6 +178,7 @@ pub struct SentimentSummaryRow {
     pub score: Decimal,
     pub signal_count: i32,
     pub captured_at: DateTime<Utc>,
+    pub metadata: Value,
 }
 
 /// Recent sentiment snapshot with brand context.
@@ -228,6 +189,7 @@ pub struct SentimentSnapshotDashboardRow {
     pub score: Decimal,
     pub signal_count: i32,
     pub captured_at: DateTime<Utc>,
+    pub metadata: Value,
 }
 
 /// Returns the most recent sentiment snapshot per brand.
@@ -240,14 +202,15 @@ pub struct SentimentSnapshotDashboardRow {
 pub async fn list_sentiment_summary(pool: &PgPool) -> Result<Vec<SentimentSummaryRow>, DbError> {
     let rows = sqlx::query_as::<_, SentimentSummaryRow>(
         "SELECT \
-             b.name  AS brand_name, \
-             b.slug  AS brand_slug, \
+             b.name AS brand_name, \
+             b.slug AS brand_slug, \
              ss.score, \
              ss.signal_count, \
-             ss.captured_at \
+             ss.captured_at, \
+             ss.metadata \
          FROM ( \
              SELECT DISTINCT ON (brand_id) \
-                 brand_id, score, signal_count, captured_at \
+                 brand_id, score, signal_count, captured_at, metadata, id \
              FROM sentiment_snapshots \
              ORDER BY brand_id, captured_at DESC, id DESC \
          ) ss \
@@ -279,7 +242,8 @@ pub async fn list_sentiment_snapshots_dashboard(
              b.slug  AS brand_slug, \
              ss.score, \
              ss.signal_count, \
-             ss.captured_at \
+             ss.captured_at, \
+             ss.metadata \
          FROM sentiment_snapshots ss \
          JOIN brands b ON b.id = ss.brand_id \
          WHERE b.deleted_at IS NULL \

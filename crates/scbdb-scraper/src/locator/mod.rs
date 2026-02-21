@@ -1,8 +1,10 @@
 //! Store locator crawler.
 //!
 //! Tries extraction strategies in priority order (Locally.com, Storemapper,
-//! Stockist, Storepoint, Roseperl, JSON-LD, embedded JSON) and returns the first
-//! successful result.
+//! Stockist, Storepoint, Roseperl, `VTInfo`, `AskHoodie`, `BeverageFinder`,
+//! Agile Store Locator, `StoreRocket`, `Destini`, JSON-LD, embedded JSON) and
+//! returns the
+//! first successful result.
 
 pub(crate) mod fetch;
 mod formats;
@@ -12,25 +14,30 @@ pub use types::{LocatorError, RawStoreLocation};
 
 use fetch::fetch_html;
 use formats::{
-    extract_askhoodie_embed_id, extract_beveragefinder_key, extract_json_embed_locations,
-    extract_jsonld_locations, extract_locally_company_id, extract_roseperl_wtb_url,
-    extract_stockist_widget_tag, extract_storemapper_token, extract_storemapper_user_id,
-    extract_storepoint_widget_id, extract_vtinfo_embed, fetch_askhoodie_stores,
-    fetch_beveragefinder_stores, fetch_locally_stores, fetch_roseperl_stores,
-    fetch_stockist_stores, fetch_storemapper_stores, fetch_storemapper_stores_by_user_id,
-    fetch_storepoint_stores, fetch_vtinfo_stores,
+    discover_destini_locator_config, discover_storerocket_account,
+    extract_agile_store_locator_config, extract_askhoodie_embed_id, extract_beveragefinder_key,
+    extract_json_embed_locations, extract_jsonld_locations, extract_locally_company_id,
+    extract_roseperl_wtb_url, extract_stockist_widget_tag, extract_storemapper_token,
+    extract_storemapper_user_id, extract_storepoint_widget_id, extract_vtinfo_embed,
+    fetch_agile_store_locator_stores, fetch_askhoodie_stores, fetch_beveragefinder_stores,
+    fetch_destini_stores, fetch_locally_stores, fetch_roseperl_stores, fetch_stockist_stores,
+    fetch_storemapper_stores, fetch_storemapper_stores_by_user_id, fetch_storepoint_stores,
+    fetch_storerocket_stores, fetch_vtinfo_stores,
 };
 
 /// Fetch store locations from a brand's store locator page.
 ///
 /// Tries extraction strategies in order (Locally.com, Storemapper, Stockist,
-/// Storepoint, Roseperl, JSON-LD, embedded JSON) and returns the first successful
-/// result. Returns
-/// `Ok(vec![])` when the page is reachable but no locations can be parsed.
+/// Storepoint, Roseperl, `VTInfo`, `AskHoodie`, `BeverageFinder`, Agile
+/// Store Locator, `StoreRocket`, `Destini`, JSON-LD, embedded JSON) and
+/// returns the
+/// first successful result. Returns `Ok(vec![])` when the page is reachable
+/// but no locations can be parsed.
 ///
 /// # Errors
 ///
 /// Returns [`LocatorError::Http`] if the locator page cannot be fetched.
+#[allow(clippy::too_many_lines)]
 pub async fn fetch_store_locations(
     locator_url: &str,
     timeout_secs: u64,
@@ -123,7 +130,53 @@ pub async fn fetch_store_locations(
         }
     }
 
-    // Strategy 9: schema.org JSON-LD
+    // Strategy 9: WordPress Agile Store Locator
+    if let Some((ajax_url, nonce, lang, load_all, layout, stores_filter)) =
+        extract_agile_store_locator_config(&html)
+    {
+        tracing::debug!(locator_url, ajax_url, "detected Agile Store Locator widget");
+        let stores = fetch_agile_store_locator_stores(
+            &ajax_url,
+            &nonce,
+            &lang,
+            &load_all,
+            &layout,
+            stores_filter.as_deref(),
+            timeout_secs,
+            user_agent,
+        )
+        .await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 10: StoreRocket widget
+    if let Some(account) = discover_storerocket_account(&html, timeout_secs, user_agent).await {
+        tracing::debug!(locator_url, account, "detected StoreRocket widget");
+        let stores = fetch_storerocket_stores(&account, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 11: Destini / lets.shop locator
+    if let Some(config) =
+        discover_destini_locator_config(&html, locator_url, timeout_secs, user_agent).await
+    {
+        tracing::debug!(
+            locator_url,
+            locator_id = config.locator_id,
+            alpha_code = config.alpha_code,
+            "detected Destini locator"
+        );
+        let stores = fetch_destini_stores(&config, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 12: schema.org JSON-LD
     let jsonld_stores = extract_jsonld_locations(&html);
     if !jsonld_stores.is_empty() {
         tracing::debug!(
@@ -134,7 +187,7 @@ pub async fn fetch_store_locations(
         return Ok(jsonld_stores);
     }
 
-    // Strategy 10: Embedded JSON arrays in script tags
+    // Strategy 13: Embedded JSON arrays in script tags
     let embed_stores = extract_json_embed_locations(&html);
     if !embed_stores.is_empty() {
         tracing::debug!(
@@ -145,7 +198,7 @@ pub async fn fetch_store_locations(
         return Ok(embed_stores);
     }
 
-    // Strategy 11: give up gracefully
+    // Strategy 14: give up gracefully
     tracing::warn!(locator_url, "no parseable locator found");
     Ok(vec![])
 }
@@ -153,8 +206,8 @@ pub async fn fetch_store_locations(
 /// Validate whether a scrape result is trusted enough to mutate stored data.
 ///
 /// Trusted sources: `locally`, `storemapper`, `stockist`, `storepoint`,
-/// `roseperl`,
-/// `jsonld`.
+/// `roseperl`, `vtinfo`, `askhoodie`, `beveragefinder`, `storerocket`,
+/// `agile_store_locator`, `jsonld`.
 ///
 /// `json_embed` is a fallback parser and is accepted only when quality is
 /// high enough to reduce false positives.
@@ -173,8 +226,17 @@ pub fn validate_store_locations_trust(locations: &[RawStoreLocation]) -> Result<
         .map_or("unknown", |loc| loc.locator_source.as_str());
 
     match source {
-        "locally" | "storemapper" | "stockist" | "storepoint" | "roseperl" | "vtinfo"
-        | "askhoodie" | "beveragefinder" | "jsonld" => Ok(()),
+        "locally"
+        | "storemapper"
+        | "stockist"
+        | "storepoint"
+        | "roseperl"
+        | "vtinfo"
+        | "askhoodie"
+        | "beveragefinder"
+        | "storerocket"
+        | "agile_store_locator"
+        | "jsonld" => Ok(()),
         "json_embed" => {
             let quality_count = locations
                 .iter()

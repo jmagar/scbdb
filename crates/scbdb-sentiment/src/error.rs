@@ -19,4 +19,7 @@ pub enum SentimentError {
 
     #[error("normalization error: {0}")]
     Normalization(String),
+
+    #[error("Twitter error: {0}")]
+    Twitter(String),
 }

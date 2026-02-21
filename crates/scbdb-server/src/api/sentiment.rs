@@ -5,6 +5,7 @@ use axum::{
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::middleware::RequestId;
 
@@ -17,6 +18,7 @@ pub(super) struct SentimentSummaryItem {
     pub score: Decimal,
     pub signal_count: i32,
     pub captured_at: DateTime<Utc>,
+    pub metadata: Value,
 }
 
 #[derive(Debug, Serialize)]
@@ -26,6 +28,7 @@ pub(super) struct SentimentSnapshotItem {
     pub score: Decimal,
     pub signal_count: i32,
     pub captured_at: DateTime<Utc>,
+    pub metadata: Value,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +52,7 @@ pub(super) async fn list_sentiment_summary(
             score: row.score,
             signal_count: row.signal_count,
             captured_at: row.captured_at,
+            metadata: row.metadata,
         })
         .collect();
 
@@ -76,6 +80,7 @@ pub(super) async fn list_sentiment_snapshots(
             score: row.score,
             signal_count: row.signal_count,
             captured_at: row.captured_at,
+            metadata: row.metadata,
         })
         .collect();
 

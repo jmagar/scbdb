@@ -17,7 +17,10 @@ pub struct RawStoreLocation {
     pub phone: Option<String>,
     /// Which extraction strategy produced this record.
     ///
-    /// One of: `"locally"`, `"storemapper"`, `"jsonld"`, `"json_embed"`.
+    /// One of: `"locally"`, `"storemapper"`, `"stockist"`, `"storepoint"`,
+    /// `"roseperl"`, `"vtinfo"`, `"askhoodie"`, `"beveragefinder"`,
+    /// `"storerocket"`, `"agile_store_locator"`, `"destini"`, `"jsonld"`,
+    /// `"json_embed"`.
     pub locator_source: String,
     /// The raw provider JSON object for this store, preserved for debugging.
     pub raw_data: serde_json::Value,

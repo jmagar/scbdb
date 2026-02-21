@@ -4,18 +4,24 @@
 pub(super) const LOCATOR_PATHS: &[&str] = &[
     "/pages/where-to-buy",
     "/pages/store-locator",
+    "/pages/storelocator",
     "/pages/find-us",
     "/pages/locations",
     "/pages/retailers",
+    "/pages/find",
+    "/pages/beverage-finder",
     "/locator",
+    "/storelocator",
+    "/find-products",
+    "/find",
+    "/beverage-finder",
     "/stores",
 ];
 
 /// Resolve a locator URL for a brand.
 ///
 /// Returns `brand.store_locator_url` if set, otherwise delegates to
-/// [`discover_locator_url`].  If discovery finds a URL, it is persisted
-/// back to the `brands` table so future runs skip the discovery step.
+/// [`discover_locator_url`].
 pub(super) async fn resolve_locator_url(
     brand: &scbdb_db::BrandRow,
     config: &scbdb_core::AppConfig,

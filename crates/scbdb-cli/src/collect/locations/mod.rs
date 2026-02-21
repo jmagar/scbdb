@@ -198,6 +198,25 @@ async fn collect_brand_locations(
 
     let source: Option<String> = raw_locations.first().map(|loc| loc.locator_source.clone());
 
+    if let Err(reason) = scbdb_scraper::validate_store_locations_trust(&raw_locations) {
+        let err_msg = format!("untrusted scrape result: {reason}");
+        tracing::warn!(
+            brand = %brand.slug,
+            locator_url = %locator_url,
+            source = source.as_deref().unwrap_or("none"),
+            "location scrape rejected: {err_msg}"
+        );
+        record_brand_failure(pool, run_id, brand, &err_msg).await;
+        return BrandLocationOutcome {
+            active: 0,
+            new: 0,
+            lost: 0,
+            source,
+            succeeded: false,
+            error: Some(err_msg),
+        };
+    }
+
     let new_locations: Vec<scbdb_db::NewStoreLocation> = raw_locations
         .iter()
         .map(|loc| {

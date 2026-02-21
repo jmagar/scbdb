@@ -34,6 +34,12 @@ pub(super) async fn fetch_vtinfo_iframe(
             else {
                 continue;
             };
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                if let Some(delay) = retry_after_delay(response.headers()) {
+                    tokio::time::sleep(delay).await;
+                }
+                continue;
+            }
             if !is_retryable_status(response.status()) {
                 continue;
             }
@@ -131,6 +137,12 @@ pub(super) async fn fetch_vtinfo_search(
             else {
                 continue;
             };
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                if let Some(delay) = retry_after_delay(response.headers()) {
+                    tokio::time::sleep(delay).await;
+                }
+                continue;
+            }
             if !is_retryable_status(response.status()) {
                 continue;
             }
@@ -191,6 +203,19 @@ pub(super) fn vtinfo_brand_pacing_delay(
         stable_hash(cust_id, request_index) % VTINFO_BRAND_PACING_SPREAD_MS
     };
     std::time::Duration::from_millis(VTINFO_BRAND_PACING_BASE_MS + spread)
+}
+
+pub(super) fn retry_after_delay(
+    headers: &reqwest::header::HeaderMap,
+) -> Option<std::time::Duration> {
+    let retry_after = headers
+        .get(reqwest::header::RETRY_AFTER)?
+        .to_str()
+        .ok()?
+        .trim();
+
+    let seconds = retry_after.parse::<u64>().ok()?;
+    Some(std::time::Duration::from_secs(seconds.min(10)))
 }
 
 fn stable_hash(seed: &str, request_index: usize) -> u64 {

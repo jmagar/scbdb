@@ -9,7 +9,7 @@ use crate::types::SentimentSignal;
 
 /// Fetch signals from Google News RSS for a brand.
 ///
-/// Searches for `{brand_name} hemp OR cbd beverage` and returns up to 25 signals.
+/// Searches for `{brand_name}` with hemp/cbd/thc beverage terms and returns up to 50 signals.
 /// Each `<item>` title + description becomes one `SentimentSignal`.
 ///
 /// # Errors
@@ -20,9 +20,11 @@ pub(crate) async fn fetch_google_news_rss(
     brand_slug: &str,
     brand_name: &str,
 ) -> Result<Vec<SentimentSignal>, SentimentError> {
-    let query = format!("{brand_name} hemp OR cbd beverage");
+    let query =
+        format!("{brand_name} (hemp OR cbd OR thc OR cannabis) (beverage OR drink OR seltzer)");
     let encoded = utf8_percent_encode(&query, NON_ALPHANUMERIC).to_string();
-    let url = format!("https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en");
+    let url =
+        format!("https://news.google.com/rss/search?q={encoded}&hl=en-US&gl=US&ceid=US:en&num=100");
 
     let body = reqwest::get(&url).await?.text().await?;
     parse_rss_feed(&body, brand_slug)
@@ -37,7 +39,7 @@ pub(crate) fn parse_rss_feed(
     xml: &str,
     brand_slug: &str,
 ) -> Result<Vec<SentimentSignal>, SentimentError> {
-    const MAX_SIGNALS: usize = 25;
+    const MAX_SIGNALS: usize = 50;
 
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
