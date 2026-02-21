@@ -1,18 +1,22 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 
-use scbdb_legiscan::{normalize_bill, normalize_bill_events, LegiscanClient, LegiscanError};
+use scbdb_legiscan::{
+    normalize_bill, normalize_bill_events, normalize_bill_texts, LegiscanClient, LegiscanError,
+};
 
 /// Ingest bills from the `LegiScan` API for one or more states and keywords.
 ///
-/// Searches every (state × keyword) combination, deduplicates results by
-/// `bill_id` across all searches, then fetches full detail for each unique
-/// bill and upserts it into the database.
+/// Uses `getMasterList` (1 request per state) to discover bills, then filters
+/// locally by keyword match on title. Cross-references incoming `change_hash`
+/// values against stored hashes in a single batch DB query, and only calls
+/// `getBill` for new or changed bills. This reduces steady-state API spend
+/// from `N_pages + N_bills` to `N_states + N_changed_bills`.
 ///
-/// **Request budget:** every page fetch and every `getBill` call counts against
-/// `max_requests`. When the budget is reached the search or detail phase stops
+/// **Request budget:** every `getMasterList` and every `getBill` call counts
+/// against `max_requests`. When the budget is reached the fetch phase stops
 /// early and the run is marked succeeded with whatever was collected. A
-/// [`LegiscanError::QuotaExceeded`] (API-level quota exhausted) aborts the run
-/// immediately and is treated as an error.
+/// [`LegiscanError::QuotaExceeded`] (API-level quota exhausted) aborts the
+/// run immediately and is treated as an error.
 ///
 /// When `dry_run` is `true` the function prints what would be ingested and
 /// returns without touching the database.
@@ -22,13 +26,13 @@ use scbdb_legiscan::{normalize_bill, normalize_bill_events, LegiscanClient, Legi
 /// Returns an error if the API key is missing, the client cannot be built,
 /// or the collection run cannot be created. Individual bill fetch failures
 /// are logged and skipped. Quota exhaustion is propagated as an error.
-#[allow(clippy::too_many_lines)] // Orchestration: search phase, dedup, detail-fetch phase, collection-run lifecycle
+#[allow(clippy::too_many_lines)] // Orchestration: discovery, hash-check, fetch, and collection-run lifecycle
 pub(crate) async fn run_regs_ingest(
     pool: &sqlx::PgPool,
     config: &scbdb_core::AppConfig,
     states: &[String],
     keywords: &[String],
-    max_pages: u32,
+    _max_pages: u32,
     max_requests: u32,
     dry_run: bool,
 ) -> anyhow::Result<()> {
@@ -47,7 +51,7 @@ pub(crate) async fn run_regs_ingest(
 
     if dry_run {
         println!(
-            "dry-run: would ingest bills for states [{}] keywords [{}] (max_pages={max_pages}, max_requests={max_requests})",
+            "dry-run: would ingest bills for states [{}] keywords [{}] (max_requests={max_requests})",
             states.join(", "),
             keywords.join(", "),
         );
@@ -64,84 +68,112 @@ pub(crate) async fn run_regs_ingest(
     }
 
     let result: anyhow::Result<(i32, i32)> = async {
-        // ── Search phase ──────────────────────────────────────────────────────
-        // Collect unique bill_ids across all (state × keyword) combinations to
-        // avoid redundant getBill calls when keywords overlap.
-        let mut seen: HashSet<i64> = HashSet::new();
-        let mut search_items = Vec::new();
+        // ── Phase 1: Discover bills via getMasterList ─────────────────────────
+        // One request per state; filter locally by keyword — free and fast.
+        // Keyed by legiscan_bill_id → (change_hash, MasterListEntry).
+        let mut candidates: HashMap<i64, (String, scbdb_legiscan::types::MasterListEntry)> =
+            HashMap::new();
         let mut budget_hit = false;
 
-        'search: for state in states {
-            for keyword in keywords {
-                tracing::info!(state, keyword, "searching LegiScan");
-                match client.search_bills(keyword, Some(state.as_str()), max_pages).await {
-                    Ok(items) => {
-                        for item in items {
-                            if seen.insert(item.bill_id) {
-                                search_items.push(item);
-                            }
-                        }
-                    }
-                    Err(LegiscanError::BudgetExceeded { used, limit }) => {
-                        tracing::warn!(
-                            used,
-                            limit,
-                            state,
-                            keyword,
-                            "request budget reached — stopping search phase early"
-                        );
-                        budget_hit = true;
-                        break 'search;
-                    }
-                    Err(LegiscanError::QuotaExceeded(ref msg)) => {
-                        return Err(anyhow::anyhow!(
-                            "LegiScan quota exhausted during search (state={state}, keyword={keyword}): {msg}"
-                        ));
-                    }
-                    Err(e) => {
-                        tracing::warn!(
-                            state,
-                            keyword,
-                            error = %e,
-                            "search failed — skipping keyword"
-                        );
-                    }
+        'discovery: for state in states {
+            tracing::info!(state, "getMasterList");
+            let entries = match client.get_master_list(state).await {
+                Ok((_session, entries)) => entries,
+                Err(LegiscanError::BudgetExceeded { used, limit }) => {
+                    tracing::warn!(
+                        used,
+                        limit,
+                        state,
+                        "request budget reached — stopping discovery phase early"
+                    );
+                    budget_hit = true;
+                    break 'discovery;
+                }
+                Err(LegiscanError::QuotaExceeded(ref msg)) => {
+                    return Err(anyhow::anyhow!(
+                        "LegiScan quota exhausted during getMasterList(state={state}): {msg}"
+                    ));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        state,
+                        error = %e,
+                        "getMasterList failed — skipping state"
+                    );
+                    continue;
+                }
+            };
+
+            // Local keyword filter — no API requests consumed.
+            for entry in entries {
+                let title_lower = entry.title.to_lowercase();
+                let matches = keywords
+                    .iter()
+                    .any(|kw| title_lower.contains(kw.to_lowercase().as_str()));
+                if matches {
+                    candidates
+                        .entry(entry.bill_id)
+                        .or_insert_with(|| (entry.change_hash.clone(), entry));
                 }
             }
         }
 
         tracing::info!(
-            unique_bills = search_items.len(),
+            candidates = candidates.len(),
             requests_used = client.requests_used(),
             budget_hit,
-            "search phase complete"
+            "discovery phase complete"
         );
 
-        // ── Detail fetch + upsert phase ───────────────────────────────────────
+        // ── Phase 2: Hash check — skip unchanged bills ────────────────────────
+        let all_ids: Vec<i64> = candidates.keys().copied().collect();
+        let stored_hashes = scbdb_db::get_bills_stored_hashes(pool, &all_ids).await?;
+
+        let to_fetch: Vec<i64> = candidates
+            .iter()
+            .filter(|(id, (incoming_hash, _))| {
+                stored_hashes
+                    .get(*id)
+                    .is_none_or(|stored| stored != incoming_hash)
+            })
+            .map(|(id, _)| *id)
+            .collect();
+
+        let skipped = candidates.len().saturating_sub(to_fetch.len());
+        tracing::info!(
+            to_fetch = to_fetch.len(),
+            skipped_unchanged = skipped,
+            "hash-check phase complete"
+        );
+
+        // ── Phase 3: Fetch + upsert changed/new bills ─────────────────────────
         let mut total_bills: i32 = 0;
         let mut total_events: i32 = 0;
 
-        for item in &search_items {
-            let detail = match client.get_bill(item.bill_id).await {
+        for bill_id in &to_fetch {
+            let (incoming_hash, _entry) = candidates
+                .get(bill_id)
+                .expect("bill_id must be in candidates");
+
+            let detail = match client.get_bill(*bill_id).await {
                 Ok(d) => d,
                 Err(LegiscanError::BudgetExceeded { used, limit }) => {
                     tracing::warn!(
                         used,
                         limit,
-                        bill_id = item.bill_id,
+                        bill_id,
                         "request budget reached — stopping detail fetch early"
                     );
                     break;
                 }
                 Err(LegiscanError::QuotaExceeded(ref msg)) => {
                     return Err(anyhow::anyhow!(
-                        "LegiScan quota exhausted during getBill(id={}): {msg}",
-                        item.bill_id
+                        "LegiScan quota exhausted during getBill(id={bill_id}): {msg}"
                     ));
                 }
                 Err(e) => {
                     tracing::warn!(
-                        bill_id = item.bill_id,
+                        bill_id,
                         error = %e,
                         "skipping bill — failed to fetch detail"
                     );
@@ -151,8 +183,9 @@ pub(crate) async fn run_regs_ingest(
 
             let normalized = normalize_bill(&detail);
             let events = normalize_bill_events(&detail);
+            let texts = normalize_bill_texts(&detail);
 
-            let bill_id = scbdb_db::upsert_bill(
+            let db_bill_id = scbdb_db::upsert_bill(
                 pool,
                 &normalized.jurisdiction,
                 &normalized.bill_number,
@@ -164,18 +197,33 @@ pub(crate) async fn run_regs_ingest(
                 normalized.last_action_date,
                 normalized.session.as_deref(),
                 normalized.source_url.as_deref(),
+                Some(*bill_id),
+                Some(incoming_hash.as_str()),
             )
             .await?;
 
             for event in &events {
                 scbdb_db::upsert_bill_event(
                     pool,
-                    bill_id,
+                    db_bill_id,
                     event.event_date,
                     event.event_type.as_deref(),
                     event.chamber.as_deref(),
                     &event.description,
                     event.source_url.as_deref(),
+                )
+                .await?;
+            }
+
+            for text in &texts {
+                scbdb_db::upsert_bill_text(
+                    pool,
+                    db_bill_id,
+                    text.legiscan_text_id,
+                    text.text_date,
+                    &text.text_type,
+                    &text.mime,
+                    text.legiscan_url.as_deref(),
                 )
                 .await?;
             }
