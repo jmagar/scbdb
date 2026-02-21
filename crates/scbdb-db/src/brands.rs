@@ -179,7 +179,8 @@ pub async fn create_brand(
 /// Updates core metadata fields for an existing brand.
 ///
 /// All `Option` fields are overlaid onto the existing row: `Some(v)` sets the value,
-/// `None` preserves the existing value.
+/// `None` preserves the existing value. Uses `COALESCE` in a single `UPDATE … RETURNING`
+/// statement to eliminate the race condition of a separate SELECT + UPDATE.
 ///
 /// # Errors
 ///
@@ -197,42 +198,51 @@ pub async fn update_brand(
     twitter_handle: Option<Option<&str>>,
     notes: Option<Option<&str>>,
 ) -> Result<BrandRow, DbError> {
-    // Load existing row first, then overlay supplied values.
-    let existing = sqlx::query_as::<_, BrandRow>(
-        "SELECT id, public_id, name, slug, relationship, tier, domain, shop_url, logo_url, \
-                store_locator_url, notes, twitter_handle, is_active, created_at, updated_at, deleted_at \
-         FROM brands WHERE id = $1",
-    )
-    .bind(brand_id)
-    .fetch_one(pool)
-    .await?;
-
-    let new_name = name.unwrap_or(&existing.name).to_owned();
-    let new_relationship = relationship.unwrap_or(&existing.relationship).to_owned();
-    let new_tier = tier.unwrap_or(existing.tier);
-    let new_domain = domain.unwrap_or(existing.domain.as_deref());
-    let new_shop_url = shop_url.unwrap_or(existing.shop_url.as_deref());
-    let new_store_locator_url = store_locator_url.unwrap_or(existing.store_locator_url.as_deref());
-    let new_twitter_handle = twitter_handle.unwrap_or(existing.twitter_handle.as_deref());
-    let new_notes = notes.unwrap_or(existing.notes.as_deref());
+    // For nullable columns (Option<Option<&str>>), we need to distinguish between:
+    //   - None        => keep existing value
+    //   - Some(None)  => set to NULL
+    //   - Some(value) => set to value
+    // We use a bool flag to indicate "was supplied" and the value itself.
+    let domain_supplied = domain.is_some();
+    let domain_val = domain.flatten();
+    let shop_url_supplied = shop_url.is_some();
+    let shop_url_val = shop_url.flatten();
+    let store_locator_url_supplied = store_locator_url.is_some();
+    let store_locator_url_val = store_locator_url.flatten();
+    let twitter_handle_supplied = twitter_handle.is_some();
+    let twitter_handle_val = twitter_handle.flatten();
+    let notes_supplied = notes.is_some();
+    let notes_val = notes.flatten();
 
     let row = sqlx::query_as::<_, BrandRow>(
         "UPDATE brands \
-         SET name = $2, relationship = $3, tier = $4, domain = $5, shop_url = $6, \
-             store_locator_url = $7, twitter_handle = $8, notes = $9, updated_at = NOW() \
+         SET name              = COALESCE($2, name), \
+             relationship      = COALESCE($3, relationship), \
+             tier              = COALESCE($4, tier), \
+             domain            = CASE WHEN $5::BOOL THEN $6  ELSE domain END, \
+             shop_url          = CASE WHEN $7::BOOL THEN $8  ELSE shop_url END, \
+             store_locator_url = CASE WHEN $9::BOOL THEN $10 ELSE store_locator_url END, \
+             twitter_handle    = CASE WHEN $11::BOOL THEN $12 ELSE twitter_handle END, \
+             notes             = CASE WHEN $13::BOOL THEN $14 ELSE notes END, \
+             updated_at        = NOW() \
          WHERE id = $1 \
          RETURNING id, public_id, name, slug, relationship, tier, domain, shop_url, logo_url, \
                    store_locator_url, notes, twitter_handle, is_active, created_at, updated_at, deleted_at",
     )
     .bind(brand_id)
-    .bind(&new_name)
-    .bind(&new_relationship)
-    .bind(new_tier)
-    .bind(new_domain)
-    .bind(new_shop_url)
-    .bind(new_store_locator_url)
-    .bind(new_twitter_handle)
-    .bind(new_notes)
+    .bind(name)
+    .bind(relationship)
+    .bind(tier)
+    .bind(domain_supplied)
+    .bind(domain_val)
+    .bind(shop_url_supplied)
+    .bind(shop_url_val)
+    .bind(store_locator_url_supplied)
+    .bind(store_locator_url_val)
+    .bind(twitter_handle_supplied)
+    .bind(twitter_handle_val)
+    .bind(notes_supplied)
+    .bind(notes_val)
     .fetch_one(pool)
     .await?;
     Ok(row)

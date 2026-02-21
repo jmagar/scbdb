@@ -22,6 +22,9 @@ use super::types::NewStoreLocation;
 /// # Errors
 ///
 /// Returns [`sqlx::Error`] if any query fails.
+// TODO: batch insert using UNNEST for performance — each location currently
+// issues a separate INSERT (N+1). For brands with hundreds of stores this
+// should be a single round-trip.
 pub async fn upsert_store_locations(
     pool: &PgPool,
     brand_id: i64,
@@ -40,16 +43,21 @@ pub async fn upsert_store_locations(
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, \
                      $9::NUMERIC(9,6), $10::NUMERIC(9,6), $11, $12, $13, $14::JSONB) \
              ON CONFLICT (brand_id, location_key) DO UPDATE SET \
-                 last_seen_at  = NOW(), \
-                 is_active     = TRUE, \
-                 updated_at    = NOW(), \
-                 name          = EXCLUDED.name, \
-                 address_line1 = EXCLUDED.address_line1, \
-                 city          = EXCLUDED.city, \
-                 state         = EXCLUDED.state, \
-                 zip           = EXCLUDED.zip, \
-                 phone         = EXCLUDED.phone, \
-                 external_id   = EXCLUDED.external_id \
+                 last_seen_at    = NOW(), \
+                 is_active       = TRUE, \
+                 updated_at      = NOW(), \
+                 name            = EXCLUDED.name, \
+                 address_line1   = EXCLUDED.address_line1, \
+                 city            = EXCLUDED.city, \
+                 state           = EXCLUDED.state, \
+                 zip             = EXCLUDED.zip, \
+                 country         = EXCLUDED.country, \
+                 latitude        = EXCLUDED.latitude, \
+                 longitude       = EXCLUDED.longitude, \
+                 phone           = EXCLUDED.phone, \
+                 external_id     = EXCLUDED.external_id, \
+                 locator_source  = EXCLUDED.locator_source, \
+                 raw_data        = EXCLUDED.raw_data \
              RETURNING (xmax = 0) AS is_new",
         )
         .bind(brand_id)

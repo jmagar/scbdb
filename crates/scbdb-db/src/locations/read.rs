@@ -7,6 +7,15 @@ use sqlx::PgPool;
 
 use super::types::{LocationPinRow, LocationsByStateRow, LocationsDashboardRow, StoreLocationRow};
 
+/// Shared column list for `StoreLocationRow` queries to avoid duplication.
+const STORE_LOCATION_COLUMNS: &str = "\
+    sl.id, sl.public_id, sl.brand_id, sl.location_key, \
+    sl.name, sl.address_line1, sl.city, sl.state, sl.zip, \
+    sl.country, sl.latitude, sl.longitude, sl.phone, \
+    sl.external_id, sl.locator_source, \
+    sl.first_seen_at, sl.last_seen_at, sl.is_active, \
+    sl.created_at, sl.updated_at";
+
 /// Query locations first seen since the given timestamp.
 ///
 /// If `brand_slug` is provided, filters to that brand only; otherwise returns
@@ -23,41 +32,33 @@ pub async fn list_new_locations_since(
     brand_slug: Option<&str>,
 ) -> Result<Vec<StoreLocationRow>, sqlx::Error> {
     if let Some(slug) = brand_slug {
-        sqlx::query_as::<_, StoreLocationRow>(
-            "SELECT sl.id, sl.public_id, sl.brand_id, sl.location_key, \
-                    sl.name, sl.address_line1, sl.city, sl.state, sl.zip, \
-                    sl.country, sl.latitude, sl.longitude, sl.phone, \
-                    sl.external_id, sl.locator_source, \
-                    sl.first_seen_at, sl.last_seen_at, sl.is_active, \
-                    sl.created_at, sl.updated_at \
+        let query = format!(
+            "SELECT {STORE_LOCATION_COLUMNS} \
              FROM store_locations sl \
              JOIN brands b ON b.id = sl.brand_id \
              WHERE sl.first_seen_at > $1 \
                AND sl.is_active = TRUE \
                AND b.slug = $2 \
-             ORDER BY sl.first_seen_at DESC",
-        )
-        .bind(since)
-        .bind(slug)
-        .fetch_all(pool)
-        .await
+             ORDER BY sl.first_seen_at DESC"
+        );
+        sqlx::query_as::<_, StoreLocationRow>(&query)
+            .bind(since)
+            .bind(slug)
+            .fetch_all(pool)
+            .await
     } else {
-        sqlx::query_as::<_, StoreLocationRow>(
-            "SELECT sl.id, sl.public_id, sl.brand_id, sl.location_key, \
-                    sl.name, sl.address_line1, sl.city, sl.state, sl.zip, \
-                    sl.country, sl.latitude, sl.longitude, sl.phone, \
-                    sl.external_id, sl.locator_source, \
-                    sl.first_seen_at, sl.last_seen_at, sl.is_active, \
-                    sl.created_at, sl.updated_at \
+        // No brand filter — no need to JOIN brands since no brand columns are selected.
+        let query = format!(
+            "SELECT {STORE_LOCATION_COLUMNS} \
              FROM store_locations sl \
-             JOIN brands b ON b.id = sl.brand_id \
              WHERE sl.first_seen_at > $1 \
                AND sl.is_active = TRUE \
-             ORDER BY sl.first_seen_at DESC",
-        )
-        .bind(since)
-        .fetch_all(pool)
-        .await
+             ORDER BY sl.first_seen_at DESC"
+        );
+        sqlx::query_as::<_, StoreLocationRow>(&query)
+            .bind(since)
+            .fetch_all(pool)
+            .await
     }
 }
 
@@ -124,9 +125,12 @@ pub async fn list_locations_by_state(
             COUNT(DISTINCT sl.brand_id) AS brand_count, \
             COUNT(*) AS location_count \
          FROM store_locations sl \
+         JOIN brands b ON b.id = sl.brand_id \
          WHERE sl.is_active = TRUE \
            AND sl.state IS NOT NULL \
            AND sl.state != '' \
+           AND b.is_active = TRUE \
+           AND b.deleted_at IS NULL \
          GROUP BY sl.state \
          ORDER BY location_count DESC",
     )

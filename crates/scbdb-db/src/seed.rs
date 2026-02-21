@@ -110,6 +110,10 @@ pub async fn upsert_brand_social_handles<S: std::hash::BuildHasher>(
 
 /// Upsert domain entries for a brand from config.
 ///
+/// Note: Also used by the server API enrichment endpoint
+/// (`scbdb-server::api::brands::write_enrichment::upsert_brand_domains`),
+/// not only by the seed workflow.
+///
 /// # Errors
 ///
 /// Returns `DbError` on database query failure.

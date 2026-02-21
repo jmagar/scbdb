@@ -184,6 +184,8 @@ pub struct SentimentSummaryRow {
 }
 
 /// Recent sentiment snapshot with brand context.
+// TODO: consider merging with `SentimentSummaryRow` if these remain structurally identical.
+// They are separate types in case the dashboard row gains extra fields (e.g. brand_logo_url).
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct SentimentSnapshotDashboardRow {
     pub brand_name: String,
@@ -249,6 +251,7 @@ pub async fn list_sentiment_snapshots_dashboard(
          FROM sentiment_snapshots ss \
          JOIN brands b ON b.id = ss.brand_id \
          WHERE b.deleted_at IS NULL \
+           AND b.is_active = TRUE \
          ORDER BY ss.captured_at DESC, ss.id DESC \
          LIMIT $1",
     )

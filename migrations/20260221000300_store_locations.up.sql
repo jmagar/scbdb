@@ -31,7 +31,8 @@ CREATE TABLE store_locations (
   CONSTRAINT uq_store_location_key UNIQUE (brand_id, location_key)
 );
 
-CREATE INDEX idx_store_locations_brand_id   ON store_locations (brand_id);
+-- Note: No standalone brand_id index needed — the UNIQUE (brand_id, location_key) constraint
+-- already creates a composite index with brand_id as leading column.
 CREATE INDEX idx_store_locations_state      ON store_locations (state);
 CREATE INDEX idx_store_locations_first_seen ON store_locations (first_seen_at DESC);
 CREATE INDEX idx_store_locations_active     ON store_locations (brand_id, is_active);
