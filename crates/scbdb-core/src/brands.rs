@@ -39,6 +39,11 @@ pub struct BrandConfig {
     #[serde(default)]
     pub domains: Vec<String>,
     /// Twitter/X handle for the brand account (without @), e.g. `"drinkcann"`.
+    ///
+    /// This is the canonical handle used by the sentiment pipeline for brand-timeline
+    /// and reply collection. It is stored as a dedicated column on `brands` for efficient
+    /// access. The generic [`BrandConfig::social`] map may also contain a `twitter` key
+    /// but the two fields are independent — `twitter_handle` is the authoritative source.
     #[serde(default)]
     pub twitter_handle: Option<String>,
 }

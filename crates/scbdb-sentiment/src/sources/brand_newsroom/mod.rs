@@ -5,7 +5,7 @@ mod urls;
 
 use crate::types::SentimentSignal;
 
-use html::{extract_article_text, extract_links};
+use html::{extract_article_text, extract_article_text_with_llm, extract_links};
 use urls::{
     canonicalize_url, looks_like_article_url, looks_like_sitemap_url, newsroom_seed_urls,
     parse_robots_sitemaps, parse_sitemap_locs, resolve_and_canonicalize,
@@ -17,6 +17,8 @@ const MAX_SITEMAPS_PER_BRAND: usize = 12;
 const MAX_INDEX_PAGES_PER_BRAND: usize = 10;
 /// Upper bound for article pages fetched per brand.
 const MAX_ARTICLES_PER_BRAND: usize = 10;
+/// Upper bound for LLM enrich calls per brand.
+const MAX_LLM_ENRICH_CALLS_PER_BRAND: usize = 4;
 
 /// Crawl likely newsroom paths for a brand and return article-derived signals.
 ///
@@ -192,6 +194,7 @@ pub(crate) async fn fetch_brand_newsroom_signals(
     article_urls.truncate(MAX_ARTICLES_PER_BRAND);
 
     let mut signals = Vec::new();
+    let mut llm_enrich_calls = 0usize;
     for article_url in article_urls {
         let body = match client.get(&article_url).send().await {
             Ok(resp) if resp.status().is_success() => match resp.text().await {
@@ -201,7 +204,15 @@ pub(crate) async fn fetch_brand_newsroom_signals(
             _ => continue,
         };
 
-        let Some(text) = extract_article_text(&body) else {
+        let deterministic_text = extract_article_text(&body);
+        let llm_text = if llm_enrich_calls < MAX_LLM_ENRICH_CALLS_PER_BRAND {
+            llm_enrich_calls += 1;
+            extract_article_text_with_llm(&client, &body).await
+        } else {
+            None
+        };
+
+        let Some(text) = merge_extracted_text(deterministic_text, llm_text) else {
             continue;
         };
 
@@ -216,6 +227,23 @@ pub(crate) async fn fetch_brand_newsroom_signals(
     }
 
     signals
+}
+
+fn merge_extracted_text(deterministic: Option<String>, llm: Option<String>) -> Option<String> {
+    match (deterministic, llm) {
+        (Some(a), Some(b)) => {
+            if a == b || a.contains(&b) {
+                Some(a)
+            } else if b.contains(&a) {
+                Some(b)
+            } else {
+                Some(format!("{a} {b}"))
+            }
+        }
+        (Some(a), None) => Some(a),
+        (None, Some(b)) => Some(b),
+        (None, None) => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -359,6 +387,54 @@ mod tests {
     fn extraction_rejects_short_text_payloads() {
         let html = r#"<html><head><title>Hi</title><meta name='description' content='Too short'></head></html>"#;
         assert!(extract_article_text(html).is_none());
+    }
+
+    #[test]
+    fn extraction_uses_json_ld_article_when_present() {
+        let html = r#"
+            <html>
+                <head>
+                    <script type="application/ld+json">
+                    {
+                      "@context":"https://schema.org",
+                      "@type":"NewsArticle",
+                      "headline":"Cann opens new production line",
+                      "description":"The company announced expanded capacity and multi-state distribution this quarter."
+                    }
+                    </script>
+                </head>
+                <body><h1>Fallback heading</h1><p>fallback text</p></body>
+            </html>
+        "#;
+
+        let extracted = extract_article_text(html).expect("expected json-ld extraction");
+        assert!(extracted.starts_with("Cann opens new production line"));
+    }
+
+    #[test]
+    fn extraction_uses_json_ld_graph_article_nodes() {
+        let html = r#"
+            <html>
+                <head>
+                    <script type="application/ld+json">
+                    {
+                      "@context":"https://schema.org",
+                      "@graph":[
+                        { "@type":"Organization", "name":"Cann" },
+                        {
+                          "@type":"PressRelease",
+                          "headline":"Cann announces seasonal release",
+                          "description":"Seasonal SKU expansion with new retail partnerships and broader distribution footprint."
+                        }
+                      ]
+                    }
+                    </script>
+                </head>
+            </html>
+        "#;
+
+        let extracted = extract_article_text(html).expect("expected graph json-ld extraction");
+        assert!(extracted.contains("Cann announces seasonal release"));
     }
 
     #[test]

@@ -76,7 +76,13 @@ pub(crate) async fn fetch_twitter_signals(
             continue;
         }
 
-        let tweets: Vec<BirdTweet> = serde_json::from_slice(&output.stdout).unwrap_or_default();
+        let tweets: Vec<BirdTweet> = match serde_json::from_slice(&output.stdout) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(brand = brand_slug, error = %e, "bird JSON parse failed");
+                vec![]
+            }
+        };
 
         for tweet in tweets {
             let url = format!(
@@ -142,7 +148,13 @@ pub(crate) async fn fetch_twitter_brand_and_replies(
         return Ok(vec![]);
     }
 
-    let brand_tweets: Vec<BirdTweet> = serde_json::from_slice(&output.stdout).unwrap_or_default();
+    let brand_tweets: Vec<BirdTweet> = match serde_json::from_slice(&output.stdout) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(brand = brand_slug, handle, error = %e, "bird user-tweets JSON parse failed");
+            vec![]
+        }
+    };
     let mut signals = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
 
@@ -160,8 +172,10 @@ pub(crate) async fn fetch_twitter_brand_and_replies(
     }
 
     // Fetch replies for the 10 most recent brand tweets, capped at 20 replies each
-    for tweet in brand_tweets.iter().take(10) {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    for (i, tweet) in brand_tweets.iter().take(10).enumerate() {
+        if i > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        }
 
         let output = tokio::process::Command::new("bird")
             .args([
@@ -188,7 +202,13 @@ pub(crate) async fn fetch_twitter_brand_and_replies(
             continue;
         }
 
-        let replies: Vec<BirdTweet> = serde_json::from_slice(&output.stdout).unwrap_or_default();
+        let replies: Vec<BirdTweet> = match serde_json::from_slice(&output.stdout) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!(brand = brand_slug, tweet_id = %tweet.id, error = %e, "bird replies JSON parse failed");
+                vec![]
+            }
+        };
         for reply in replies {
             let url = format!(
                 "https://x.com/{}/status/{}",

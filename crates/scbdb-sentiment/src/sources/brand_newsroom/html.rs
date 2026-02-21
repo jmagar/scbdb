@@ -1,6 +1,7 @@
 //! HTML text extraction helpers for brand newsroom articles.
 
 use regex::Regex;
+use serde_json::json;
 use serde_json::Value;
 
 const MIN_TEXT_LEN: usize = 40;
@@ -47,6 +48,95 @@ pub(super) fn extract_article_text(html: &str) -> Option<String> {
     }
 
     Some(cleaned)
+}
+
+pub(super) async fn extract_article_text_with_llm(
+    client: &reqwest::Client,
+    html: &str,
+) -> Option<String> {
+    if !llm_enabled() {
+        return None;
+    }
+
+    let api_key = std::env::var("OPENAI_API_KEY").ok()?;
+    let model =
+        std::env::var("SENTIMENT_NEWSROOM_LLM_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+
+    let html_excerpt: String = html.chars().take(12_000).collect();
+    let req_body = json!({
+        "model": model,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            {
+                "role": "system",
+                "content": "Extract sentiment-relevant newsroom article content. Return JSON with keys: title, summary."
+            },
+            {
+                "role": "user",
+                "content": format!(
+                    "Extract the main article title and a concise factual summary from this HTML. If no clear article is present, return empty strings.\n\nHTML:\n{}",
+                    html_excerpt
+                )
+            }
+        ],
+        "temperature": 0.1
+    });
+
+    let response = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .bearer_auth(api_key)
+        .json(&req_body)
+        .send()
+        .await
+        .ok()?;
+
+    if !response.status().is_success() {
+        return None;
+    }
+
+    let body: Value = response.json().await.ok()?;
+    let content = body
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|msg| msg.get("content"))
+        .and_then(Value::as_str)?;
+
+    parse_llm_json_response(content)
+}
+
+fn llm_enabled() -> bool {
+    std::env::var("SENTIMENT_NEWSROOM_LLM_ENABLED")
+        .ok()
+        .is_some_and(|v| matches!(v.as_str(), "1" | "true" | "TRUE" | "yes" | "YES"))
+}
+
+fn parse_llm_json_response(content: &str) -> Option<String> {
+    let parsed: Value = serde_json::from_str(content).ok()?;
+    let title = parsed
+        .get("title")
+        .and_then(Value::as_str)
+        .map(clean_text)
+        .unwrap_or_default();
+    let summary = parsed
+        .get("summary")
+        .and_then(Value::as_str)
+        .map(clean_text)
+        .unwrap_or_default();
+
+    let combined = if !title.is_empty() && !summary.is_empty() {
+        format!("{title} {summary}")
+    } else if !title.is_empty() {
+        title
+    } else {
+        summary
+    };
+
+    if combined.len() < MIN_TEXT_LEN {
+        return None;
+    }
+    Some(combined)
 }
 
 fn extract_json_ld_article_text(html: &str) -> Option<String> {
@@ -149,6 +239,25 @@ fn looks_like_article_node(node_type: Option<&Value>) -> bool {
             .filter_map(Value::as_str)
             .any(contains_article_token),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_llm_json_response;
+
+    #[test]
+    fn parse_llm_json_response_combines_title_and_summary() {
+        let raw = r#"{"title":"Cann expands distribution","summary":"The brand announced broader retail partnerships and seasonal launches this quarter."}"#;
+        let text = parse_llm_json_response(raw).expect("expected parsed llm content");
+        assert!(text.contains("Cann expands distribution"));
+        assert!(text.contains("broader retail partnerships"));
+    }
+
+    #[test]
+    fn parse_llm_json_response_rejects_short_payload() {
+        let raw = r#"{"title":"Hi","summary":"Short"}"#;
+        assert!(parse_llm_json_response(raw).is_none());
     }
 }
 
