@@ -90,6 +90,7 @@ impl IntoResponse for ApiError {
             "unauthorized" => StatusCode::UNAUTHORIZED,
             "bad_request" | "validation_error" => StatusCode::BAD_REQUEST,
             "conflict" => StatusCode::CONFLICT,
+            "rate_limited" => StatusCode::TOO_MANY_REQUESTS,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()

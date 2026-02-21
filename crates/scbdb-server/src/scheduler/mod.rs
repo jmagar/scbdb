@@ -107,6 +107,12 @@ async fn collect_brand_locations(
     {
         Ok(locs) => locs,
         Err(e) => {
+            // NOTE: a scrape failure aborts this entire brand — no partial results are
+            // processed. This is intentional: partial scrape output is unreliable, and
+            // deactivating locations based on incomplete data would be worse than skipping
+            // the brand entirely. If partial-result handling is needed in the future,
+            // the scraper should return a structured result distinguishing "no data" from
+            // "partial data" so this function can decide accordingly.
             tracing::error!(brand = %brand.slug, error = %e, "scheduler: location scrape failed");
             return;
         }
@@ -126,6 +132,20 @@ async fn collect_brand_locations(
         return;
     }
 
+    // Guard: if the scrape returned zero locations, skip upsert and deactivation.
+    // An empty result likely means a transient failure or a parse miss — deactivating
+    // all existing locations would be destructive and incorrect.
+    if raw.is_empty() {
+        tracing::warn!(
+            brand = %brand.slug,
+            locator_url,
+            "scheduler: scrape returned 0 locations; skipping upsert and deactivation"
+        );
+        return;
+    }
+
+    // TODO: de-duplicate with CLI raw_to_new_location helper
+    //       (see crates/scbdb-cli/src/collect/locations/helpers.rs)
     let new_locations: Vec<scbdb_db::NewStoreLocation> = raw
         .iter()
         .map(|loc| scbdb_db::NewStoreLocation {

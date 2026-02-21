@@ -66,6 +66,13 @@ impl AuthState {
         })
     }
 
+    // SECURITY TODO: API keys are stored and compared in plaintext using a
+    // HashSet lookup, which is not constant-time and leaks timing information.
+    // Migrate to hashed keys (argon2 or SHA-256 with a salt) and use
+    // `subtle::ConstantTimeEq` for comparison. This requires:
+    //   1. Add `subtle` and `sha2` (or `argon2`) to Cargo.toml
+    //   2. Hash keys on load (in `from_env`) and compare hashes here
+    //   3. Store only hashes in `api_keys`, never plaintext
     fn allows(&self, token: &str) -> bool {
         self.api_keys.contains(token)
     }
@@ -107,11 +114,10 @@ struct MiddlewareError {
     message: &'static str,
 }
 
-impl IntoResponse for MiddlewareErrorBody {
-    fn into_response(self) -> Response {
-        (StatusCode::UNAUTHORIZED, Json(self)).into_response()
-    }
-}
+// MiddlewareErrorBody intentionally does NOT implement IntoResponse — callers
+// construct `(StatusCode, Json(body))` tuples directly so each call site can
+// specify the correct status code (UNAUTHORIZED for auth, TOO_MANY_REQUESTS
+// for rate limiting, etc.).
 
 /// Axum middleware that extracts or generates a request ID.
 ///
@@ -221,10 +227,20 @@ pub async fn enforce_rate_limit(
     next.run(req).await
 }
 
+/// Extract the token from a `Bearer <token>` Authorization header.
+///
+/// The "Bearer" scheme is case-insensitive per RFC 6750 §1.1, so we compare
+/// the first 7 characters in a case-insensitive manner.
 fn extract_bearer_token(value: Option<&HeaderValue>) -> Option<&str> {
     value
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|v| {
+            if v.len() > 7 && v[..7].eq_ignore_ascii_case("bearer ") {
+                Some(&v[7..])
+            } else {
+                None
+            }
+        })
         .filter(|s| !s.trim().is_empty())
 }
 
@@ -242,6 +258,32 @@ mod tests {
     fn extract_bearer_token_rejects_non_bearer_header() {
         let header = HeaderValue::from_static("Basic abc123");
         assert_eq!(extract_bearer_token(Some(&header)), None);
+    }
+
+    #[test]
+    fn extract_bearer_token_is_case_insensitive() {
+        let lower = HeaderValue::from_static("bearer my-token");
+        assert_eq!(extract_bearer_token(Some(&lower)), Some("my-token"));
+
+        let upper = HeaderValue::from_static("BEARER my-token");
+        assert_eq!(extract_bearer_token(Some(&upper)), Some("my-token"));
+
+        let mixed = HeaderValue::from_static("bEaReR my-token");
+        assert_eq!(extract_bearer_token(Some(&mixed)), Some("my-token"));
+    }
+
+    #[test]
+    fn extract_bearer_token_rejects_empty_token() {
+        let header = HeaderValue::from_static("Bearer ");
+        assert_eq!(extract_bearer_token(Some(&header)), None);
+
+        let header_spaces = HeaderValue::from_static("Bearer   ");
+        assert_eq!(extract_bearer_token(Some(&header_spaces)), None);
+    }
+
+    #[test]
+    fn extract_bearer_token_rejects_none() {
+        assert_eq!(extract_bearer_token(None), None);
     }
 
     #[test]

@@ -168,9 +168,9 @@ pub(in crate::api) async fn update_brand(
     let rid = &req_id.0;
     let brand = resolve_brand(&state.pool, &slug, rid).await?;
 
-    if let Some(ref name) = body.name {
-        let trimmed = name.trim();
-        if trimmed.is_empty() || trimmed.len() > 200 {
+    let trimmed_name = body.name.as_ref().map(|n| n.trim().to_owned());
+    if let Some(ref name) = trimmed_name {
+        if name.is_empty() || name.len() > 200 {
             return Err(ApiError::new(
                 rid,
                 "validation_error",
@@ -194,7 +194,7 @@ pub(in crate::api) async fn update_brand(
     scbdb_db::update_brand(
         &state.pool,
         brand.id,
-        body.name.as_deref(),
+        trimmed_name.as_deref(),
         body.relationship.as_deref(),
         body.tier,
         body.domain.as_ref().map(|opt| opt.as_deref()),

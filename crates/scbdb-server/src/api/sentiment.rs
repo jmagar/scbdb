@@ -21,6 +21,9 @@ pub(super) struct SentimentSummaryItem {
     pub metadata: Value,
 }
 
+// TODO: consider merging with SentimentSummaryItem if these remain identical —
+// both structs have the same five fields. Kept separate for now in case the
+// snapshot view diverges (e.g. adds a `window` or `delta` column).
 #[derive(Debug, Serialize)]
 pub(super) struct SentimentSnapshotItem {
     pub brand_name: String,
