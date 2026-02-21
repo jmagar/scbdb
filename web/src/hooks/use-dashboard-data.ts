@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   fetchBillEvents,
+  fetchBillTexts,
   fetchBills,
   fetchBrandCompetitors,
   fetchBrandDistributors,
@@ -13,6 +14,7 @@ import {
   fetchBrandSignals,
   fetchBrandSponsorships,
   fetchBrands,
+  fetchLocationPins,
   fetchLocationsByState,
   fetchLocationsSummary,
   fetchPricingSnapshots,
@@ -66,6 +68,15 @@ export function useBillEvents(billId: string | null) {
   });
 }
 
+export function useBillTexts(billId: string | null) {
+  return useQuery({
+    queryKey: ["bill-texts", billId],
+    queryFn: () => fetchBillTexts(billId!),
+    enabled: billId !== null,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
 export function useSentimentSummary() {
   return useQuery({
     queryKey: ["sentiment-summary"],
@@ -94,6 +105,14 @@ export function useLocationsByState() {
   return useQuery({
     queryKey: ["locations-by-state"],
     queryFn: fetchLocationsByState,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useLocationPins() {
+  return useQuery({
+    queryKey: ["location-pins"],
+    queryFn: fetchLocationPins,
     staleTime: STALE_TIME_MS,
   });
 }

@@ -132,8 +132,8 @@ body {
 .stats-grid {
   margin-top: 1rem;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.55rem;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 0.9rem 1rem 0.85rem;
+  padding: 0.6rem 0.4rem 0.55rem;
   font: inherit;
   cursor: pointer;
   text-align: left;
@@ -227,7 +227,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .stat-icon {
@@ -243,6 +243,7 @@ body {
 }
 
 .stat-label {
+  display: none;
   font-size: 0.69rem;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -258,7 +259,7 @@ body {
 /* Big display number */
 .stat-value {
   font-family: var(--font-display);
-  font-size: 1.9rem;
+  font-size: 1.35rem;
   font-weight: 600;
   line-height: 1;
   color: var(--ink);
@@ -504,7 +505,23 @@ body {
   }
 
   .stats-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.55rem;
+  }
+
+  .stat-card {
+    padding: 0.9rem 1rem 0.85rem;
+  }
+
+  .stat-label {
+    display: inline;
+  }
+
+  .stat-card-top {
+    margin-bottom: 0.5rem;
+  }
+
+  .stat-value {
+    font-size: 1.9rem;
   }
 
   .card-stack {
@@ -1055,6 +1072,29 @@ button.tile:hover {
 .bill-source-link:hover {
   color: var(--accent);
   border-bottom-style: solid;
+}
+
+.bill-texts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.bill-text-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.75rem;
+  border-radius: 2rem;
+  border: 1px solid var(--border-mid);
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-decoration: none;
+  transition: background 120ms ease;
+}
+
+.bill-text-link:hover {
+  background: var(--accent-soft);
 }
 
 .bill-section-title {

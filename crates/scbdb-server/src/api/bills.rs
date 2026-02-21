@@ -22,6 +22,7 @@ pub(super) struct BillItem {
     session: Option<String>,
     bill_number: String,
     title: String,
+    summary: Option<String>,
     status: String,
     status_date: Option<chrono::NaiveDate>,
     last_action_date: Option<chrono::NaiveDate>,
@@ -64,11 +65,53 @@ pub(super) async fn list_bills(
             session: bill.session,
             bill_number: bill.bill_number,
             title: bill.title,
+            summary: bill.summary,
             status: bill.status,
             status_date: bill.status_date,
             last_action_date: bill.last_action_date,
             source_url: bill.source_url,
             event_count: events_by_bill.get(&bill.id).map_or(0, Vec::len),
+        })
+        .collect();
+
+    Ok(Json(ApiResponse {
+        data,
+        meta: ResponseMeta::new(req_id.0),
+    }))
+}
+
+#[derive(Debug, Serialize)]
+pub(super) struct BillTextItem {
+    text_date: Option<chrono::NaiveDate>,
+    text_type: String,
+    mime: String,
+    url: Option<String>,
+}
+
+pub(super) async fn list_bill_texts(
+    State(state): State<AppState>,
+    Extension(req_id): Extension<RequestId>,
+    Path(bill_id): Path<Uuid>,
+) -> Result<Json<ApiResponse<Vec<BillTextItem>>>, ApiError> {
+    let bill = scbdb_db::get_bill_by_public_id(&state.pool, bill_id)
+        .await
+        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
+
+    if bill.is_none() {
+        return Err(ApiError::new(req_id.0, "not_found", "bill not found"));
+    }
+
+    let rows = scbdb_db::list_bill_texts_by_public_id(&state.pool, bill_id)
+        .await
+        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
+
+    let data = rows
+        .into_iter()
+        .map(|t| BillTextItem {
+            text_date: t.text_date,
+            text_type: t.text_type,
+            mime: t.mime,
+            url: t.legiscan_url,
         })
         .collect();
 

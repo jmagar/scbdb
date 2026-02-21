@@ -146,6 +146,8 @@ mod tests {
 }
 
 pub mod api_queries;
+pub mod bill_events;
+pub mod bill_texts;
 pub mod bills;
 pub mod brand_completeness;
 pub mod brand_intel;
@@ -185,10 +187,15 @@ pub use api_queries::{
     SentimentSnapshotDashboardRow, SentimentSummaryRow,
 };
 
+pub use bill_events::{
+    list_bill_events, list_bill_events_batch, list_bill_events_by_public_id, upsert_bill_event,
+    BillEventRow,
+};
+pub use bill_texts::{
+    get_bills_stored_hashes, list_bill_texts_by_public_id, upsert_bill_text, BillTextRow,
+};
 pub use bills::{
-    get_bill_by_jurisdiction_number, get_bill_by_public_id, list_bill_events,
-    list_bill_events_batch, list_bill_events_by_public_id, list_bills, upsert_bill,
-    upsert_bill_event, BillEventRow, BillRow,
+    get_bill_by_jurisdiction_number, get_bill_by_public_id, list_bills, upsert_bill, BillRow,
 };
 pub use brand_profiles::{
     get_brand_profile, list_brand_social_handles, list_brands_without_profiles,
@@ -204,9 +211,10 @@ pub use collection_runs::{
     upsert_collection_run_brand, CollectionRunBrandRow, CollectionRunRow,
 };
 pub use locations::{
-    deactivate_missing_locations, list_active_locations_by_brand, list_locations_by_state,
-    list_locations_dashboard_summary, list_new_locations_since, upsert_store_locations,
-    LocationsByStateRow, LocationsDashboardRow, NewStoreLocation, StoreLocationRow,
+    deactivate_missing_locations, list_active_location_pins, list_active_locations_by_brand,
+    list_locations_by_state, list_locations_dashboard_summary, list_new_locations_since,
+    upsert_store_locations, LocationPinRow, LocationsByStateRow, LocationsDashboardRow,
+    NewStoreLocation, StoreLocationRow,
 };
 pub use products::{
     get_last_price_snapshot, insert_price_snapshot_if_changed, upsert_product, upsert_variant,

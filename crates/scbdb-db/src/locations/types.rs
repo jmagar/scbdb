@@ -74,3 +74,23 @@ pub struct LocationsByStateRow {
     pub brand_count: i64,
     pub location_count: i64,
 }
+
+/// A pin row for the map — active locations with coordinates joined with brand info.
+///
+/// Used to populate the interactive `MapLibre` GL JS map. Only locations where
+/// both `latitude` and `longitude` are non-null are included.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct LocationPinRow {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub store_name: String,
+    pub address_line1: Option<String>,
+    pub city: Option<String>,
+    pub state: Option<String>,
+    pub zip: Option<String>,
+    pub locator_source: Option<String>,
+    pub brand_name: String,
+    pub brand_slug: String,
+    pub brand_relationship: String,
+    pub brand_tier: i16,
+}

@@ -54,6 +54,57 @@ pub(super) async fn list_locations_summary(
     }))
 }
 
+#[derive(Debug, Serialize)]
+pub(super) struct LocationPinItem {
+    pub latitude: f64,
+    pub longitude: f64,
+    pub store_name: String,
+    pub address_line1: Option<String>,
+    pub city: Option<String>,
+    pub state: Option<String>,
+    pub zip: Option<String>,
+    pub locator_source: Option<String>,
+    pub brand_name: String,
+    pub brand_slug: String,
+    pub brand_relationship: String,
+    pub brand_tier: i16,
+}
+
+pub(super) async fn list_location_pins(
+    State(state): State<AppState>,
+    Extension(req_id): Extension<RequestId>,
+) -> Result<Json<ApiResponse<Vec<LocationPinItem>>>, ApiError> {
+    let rows = scbdb_db::list_active_location_pins(&state.pool)
+        .await
+        .map_err(|e| {
+            let db_err = scbdb_db::DbError::from(e);
+            map_db_error(req_id.0.clone(), &db_err)
+        })?;
+
+    let data = rows
+        .into_iter()
+        .map(|row| LocationPinItem {
+            latitude: row.latitude,
+            longitude: row.longitude,
+            store_name: row.store_name,
+            address_line1: row.address_line1,
+            city: row.city,
+            state: row.state,
+            zip: row.zip,
+            locator_source: row.locator_source,
+            brand_name: row.brand_name,
+            brand_slug: row.brand_slug,
+            brand_relationship: row.brand_relationship,
+            brand_tier: row.brand_tier,
+        })
+        .collect();
+
+    Ok(Json(ApiResponse {
+        data,
+        meta: ResponseMeta::new(req_id.0),
+    }))
+}
+
 pub(super) async fn list_locations_by_state(
     State(state): State<AppState>,
     Extension(req_id): Extension<RequestId>,

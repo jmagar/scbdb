@@ -39,13 +39,28 @@ Guardrails:
 - `MAX_INDEX_PAGES_PER_BRAND`
 - `MAX_ARTICLES_PER_BRAND`
 - `MIN_TEXT_LEN`
+- `MAX_LLM_FALLBACKS_PER_BRAND`
 
 Extraction fallback priority:
 1. `og:title` + `meta[name=description]`
 2. `<title>` + `meta[name=description]`
 3. first `<h1>` + first meaningful paragraph
+4. optional LLM JSON extraction (`title` + `summary`) when deterministic extraction fails
 
 URLs are canonicalized (drop query/fragment, normalize trailing slash) before emission.
+
+### Optional LLM extraction mode
+
+For weak/noisy pages, an LLM fallback can be enabled:
+
+- `SENTIMENT_NEWSROOM_LLM_ENABLED=1`
+- `OPENAI_API_KEY=<key>`
+- optional `SENTIMENT_NEWSROOM_LLM_MODEL` (default: `gpt-4o-mini`)
+
+Behavior:
+- only used when deterministic extraction fails
+- bounded by `MAX_LLM_FALLBACKS_PER_BRAND`
+- fail-open (LLM errors never fail the brand run)
 
 ## Snapshot Metadata
 

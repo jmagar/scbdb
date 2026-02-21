@@ -3,7 +3,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
-use super::types::{LocationsByStateRow, LocationsDashboardRow, StoreLocationRow};
+use super::types::{LocationPinRow, LocationsByStateRow, LocationsDashboardRow, StoreLocationRow};
 
 /// Query locations first seen since the given timestamp.
 ///
@@ -127,6 +127,39 @@ pub async fn list_locations_by_state(
            AND sl.state != '' \
          GROUP BY sl.state \
          ORDER BY location_count DESC",
+    )
+    .fetch_all(pool)
+    .await
+}
+
+/// Return all active store locations with coordinates, joined with brand info.
+///
+/// Used to populate the interactive map pins. Only returns locations where
+/// both `latitude` and `longitude` are non-null. Results are ordered by
+/// `brand_slug ASC, name ASC`.
+///
+/// # Errors
+///
+/// Returns [`sqlx::Error`] if the query fails.
+pub async fn list_active_location_pins(pool: &PgPool) -> Result<Vec<LocationPinRow>, sqlx::Error> {
+    sqlx::query_as::<_, LocationPinRow>(
+        "SELECT \
+            sl.latitude::float8 AS latitude, \
+            sl.longitude::float8 AS longitude, \
+            sl.name AS store_name, \
+            sl.address_line1, sl.city, sl.state, sl.zip, sl.locator_source, \
+            b.name AS brand_name, \
+            b.slug AS brand_slug, \
+            b.relationship AS brand_relationship, \
+            b.tier AS brand_tier \
+         FROM store_locations sl \
+         JOIN brands b ON b.id = sl.brand_id \
+         WHERE sl.is_active = TRUE \
+           AND sl.latitude IS NOT NULL \
+           AND sl.longitude IS NOT NULL \
+           AND b.is_active = TRUE \
+           AND b.deleted_at IS NULL \
+         ORDER BY b.slug ASC, sl.name ASC",
     )
     .fetch_all(pool)
     .await

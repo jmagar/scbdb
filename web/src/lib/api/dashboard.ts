@@ -1,6 +1,7 @@
 import type {
   BillEventItem,
   BillItem,
+  BillTextItem,
   BrandProfileResponse,
   BrandSignalType,
   BrandSummaryItem,
@@ -10,6 +11,7 @@ import type {
   LabTestItem,
   LegalProceedingItem,
   LocationBrandSummary,
+  LocationPin,
   LocationsByState,
   MediaAppearanceItem,
   PaginatedSignals,
@@ -46,6 +48,10 @@ export async function fetchBillEvents(
   return apiGet<BillEventItem[]>(`/api/v1/bills/${billId}/events`);
 }
 
+export async function fetchBillTexts(billId: string): Promise<BillTextItem[]> {
+  return apiGet<BillTextItem[]>(`/api/v1/bills/${billId}/texts`);
+}
+
 export async function fetchSentimentSummary(): Promise<SentimentSummaryItem[]> {
   return apiGet<SentimentSummaryItem[]>("/api/v1/sentiment/summary");
 }
@@ -64,6 +70,10 @@ export async function fetchLocationsSummary(): Promise<LocationBrandSummary[]> {
 
 export async function fetchLocationsByState(): Promise<LocationsByState[]> {
   return apiGet<LocationsByState[]>("/api/v1/locations/by-state");
+}
+
+export async function fetchLocationPins(): Promise<LocationPin[]> {
+  return apiGet<LocationPin[]>("/api/v1/locations/pins");
 }
 
 // ── Brand Intelligence Layer ──────────────────────────────────────────────────

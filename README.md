@@ -4,7 +4,7 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 
 ## Status Snapshot (Verified)
 
-- Tracks 25 brands from `config/brands.yaml` (portfolio + competitor, tiered 1-3).
+- Tracks 24 brands from `config/brands.yaml` (portfolio + competitor, tiered 1-3); 16 brands have confirmed Twitter/X handles for brand-timeline monitoring.
 - Rust Cargo workspace with 7 crates:
   - `scbdb-cli`
   - `scbdb-server`

@@ -81,6 +81,22 @@ pub async fn fetch_store_locations(
             return Ok(stores);
         }
     }
+    if let Some(dealers_url) = extract_dealers_page_url(&html, locator_url) {
+        if let Ok(dealers_html) = fetch_html(&dealers_url, timeout_secs, user_agent).await {
+            if let Some(tag) = extract_stockist_widget_tag(&dealers_html) {
+                tracing::debug!(
+                    locator_url,
+                    dealers_url,
+                    tag,
+                    "detected Stockist widget on linked dealers page"
+                );
+                let stores = fetch_stockist_stores(&tag, timeout_secs, user_agent).await?;
+                if !stores.is_empty() {
+                    return Ok(stores);
+                }
+            }
+        }
+    }
 
     // Strategy 4: Storepoint widget
     if let Some(widget_id) = extract_storepoint_widget_id(&html) {
@@ -217,6 +233,26 @@ pub async fn fetch_store_locations(
 
 fn extract_store_locator_page_url(html: &str, locator_url: &str) -> Option<String> {
     let re = regex::Regex::new(r#"href=["']([^"']*/store-locator/?(?:[?#][^"']*)?)["']"#)
+        .expect("valid regex");
+    let href = re.captures(html)?.get(1)?.as_str();
+
+    if href.starts_with("http://") || href.starts_with("https://") {
+        return Some(href.to_string());
+    }
+    if href.starts_with('/') {
+        let scheme_split = locator_url.find("://")?;
+        let scheme = &locator_url[..scheme_split];
+        let remainder = &locator_url[(scheme_split + 3)..];
+        let host_end = remainder.find('/').unwrap_or(remainder.len());
+        let host = &remainder[..host_end];
+        return Some(format!("{scheme}://{host}{href}"));
+    }
+
+    None
+}
+
+fn extract_dealers_page_url(html: &str, locator_url: &str) -> Option<String> {
+    let re = regex::Regex::new(r#"href=["']([^"']*/pages/dealers/?(?:[?#][^"']*)?)["']"#)
         .expect("valid regex");
     let href = re.captures(html)?.get(1)?.as_str();
 
@@ -529,6 +565,20 @@ mod tests {
     fn returns_none_when_no_storemapper_signal() {
         let html = r#"<html><body><p>No store locator here.</p></body></html>"#;
         assert_eq!(extract_storemapper_token(html), None);
+    }
+
+    #[test]
+    fn extracts_absolute_dealers_page_url() {
+        let html = r#"<a href="https://dadgrass.com/pages/dealers">Dealers</a>"#;
+        let url = extract_dealers_page_url(html, "https://dadgrass.com/pages/locations");
+        assert_eq!(url.as_deref(), Some("https://dadgrass.com/pages/dealers"));
+    }
+
+    #[test]
+    fn resolves_relative_dealers_page_url() {
+        let html = r#"<a href="/pages/dealers">Dealers</a>"#;
+        let url = extract_dealers_page_url(html, "https://dadgrass.com/pages/locations");
+        assert_eq!(url.as_deref(), Some("https://dadgrass.com/pages/dealers"));
     }
 
     #[test]

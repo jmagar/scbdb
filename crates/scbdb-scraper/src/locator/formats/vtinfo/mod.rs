@@ -271,11 +271,11 @@ mod tests {
 
     #[test]
     fn retry_backoff_is_bounded_and_exponential() {
-        assert_eq!(vtinfo_retry_backoff_delay(0).as_millis(), 250);
-        assert_eq!(vtinfo_retry_backoff_delay(1).as_millis(), 500);
-        assert_eq!(vtinfo_retry_backoff_delay(2).as_millis(), 1_000);
-        assert_eq!(vtinfo_retry_backoff_delay(3).as_millis(), 2_000);
-        assert_eq!(vtinfo_retry_backoff_delay(10).as_millis(), 2_000);
+        assert_eq!(vtinfo_retry_backoff_delay(0).as_millis(), 500);
+        assert_eq!(vtinfo_retry_backoff_delay(1).as_millis(), 1_000);
+        assert_eq!(vtinfo_retry_backoff_delay(2).as_millis(), 2_000);
+        assert_eq!(vtinfo_retry_backoff_delay(3).as_millis(), 4_000);
+        assert_eq!(vtinfo_retry_backoff_delay(10).as_millis(), 6_000);
     }
 
     #[test]
@@ -283,8 +283,8 @@ mod tests {
         let a = vtinfo_brand_pacing_delay("S4V", 2);
         let b = vtinfo_brand_pacing_delay("S4V", 2);
         assert_eq!(a, b);
-        assert!(a.as_millis() >= 120);
-        assert!(a.as_millis() < 220);
+        assert!(a.as_millis() >= 350);
+        assert!(a.as_millis() < 750);
     }
 
     #[test]

@@ -122,7 +122,7 @@ pub fn normalize_bill_texts(detail: &BillDetail) -> Vec<NormalizedBillText> {
         .texts
         .iter()
         .map(|t| NormalizedBillText {
-            legiscan_text_id: t.text_id,
+            legiscan_text_id: t.doc_id,
             text_date: t.date.as_deref().and_then(parse_date),
             text_type: t.text_type.clone(),
             mime: t.mime.clone(),
@@ -250,14 +250,14 @@ mod tests {
             progress: vec![],
             texts: vec![
                 BillTextEntry {
-                    text_id: 9001,
+                    doc_id: 9001,
                     date: Some("2025-02-01".to_string()),
                     text_type: "Introduced".to_string(),
                     mime: "text/html".to_string(),
                     url: Some("https://legiscan.com/SC/text/HB200/intro".to_string()),
                 },
                 BillTextEntry {
-                    text_id: 9002,
+                    doc_id: 9002,
                     date: None,
                     text_type: "Engrossed".to_string(),
                     mime: "application/pdf".to_string(),

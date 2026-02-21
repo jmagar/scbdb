@@ -10,11 +10,12 @@ use rust_decimal::Decimal;
 use scbdb_core::{NormalizedProduct, NormalizedVariant};
 use scbdb_db::{
     complete_collection_run, create_collection_run, deactivate_missing_locations,
-    fail_collection_run, get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
-    get_last_price_snapshot, insert_brand_competitor_relationship, insert_brand_distributor,
-    insert_brand_funding_event, insert_brand_lab_test, insert_brand_legal_proceeding,
-    insert_brand_media_appearance, insert_brand_newsletter, insert_brand_sponsorship,
-    insert_price_snapshot_if_changed, list_active_brands, list_bill_events, list_bills,
+    fail_collection_run, get_bill_by_jurisdiction_number, get_brand_by_slug,
+    get_brand_completeness, get_collection_run, get_last_price_snapshot,
+    insert_brand_competitor_relationship, insert_brand_distributor, insert_brand_funding_event,
+    insert_brand_lab_test, insert_brand_legal_proceeding, insert_brand_media_appearance,
+    insert_brand_newsletter, insert_brand_sponsorship, insert_price_snapshot_if_changed,
+    list_active_brands, list_active_location_pins, list_bill_events, list_bills,
     list_brand_competitor_relationships, list_brand_distributors, list_brand_funding_events,
     list_brand_lab_tests, list_brand_legal_proceedings, list_brand_media_appearances,
     list_brand_newsletters, list_brand_sponsorships, list_brands_without_profiles,
@@ -848,6 +849,8 @@ async fn bill_upsert_is_idempotent(pool: sqlx::PgPool) {
         None,
         Some("2025-2026"),
         None,
+        None,
+        None,
     )
     .await
     .expect("first upsert_bill failed");
@@ -863,6 +866,8 @@ async fn bill_upsert_is_idempotent(pool: sqlx::PgPool) {
         None,
         None,
         Some("2025-2026"),
+        None,
+        None,
         None,
     )
     .await
@@ -900,6 +905,8 @@ async fn bill_upsert_updates_status_on_conflict(pool: sqlx::PgPool) {
         None,
         None,
         None,
+        None,
+        None,
     )
     .await
     .expect("first upsert failed");
@@ -911,6 +918,8 @@ async fn bill_upsert_updates_status_on_conflict(pool: sqlx::PgPool) {
         "Test Bill",
         None,
         "passed",
+        None,
+        None,
         None,
         None,
         None,
@@ -946,6 +955,8 @@ async fn bill_upsert_does_not_overwrite_introduced_date(pool: sqlx::PgPool) {
         None,
         None,
         None,
+        None,
+        None,
     )
     .await
     .expect("first upsert failed");
@@ -960,6 +971,8 @@ async fn bill_upsert_does_not_overwrite_introduced_date(pool: sqlx::PgPool) {
         "passed",
         None,
         Some(different_date),
+        None,
+        None,
         None,
         None,
         None,
@@ -989,6 +1002,8 @@ async fn bill_event_not_duplicated_on_reingest(pool: sqlx::PgPool) {
         "Event Dedup Bill",
         None,
         "introduced",
+        None,
+        None,
         None,
         None,
         None,
@@ -1042,6 +1057,8 @@ async fn bill_event_different_description_creates_new_row(pool: sqlx::PgPool) {
         "Multi Event Bill",
         None,
         "introduced",
+        None,
+        None,
         None,
         None,
         None,
@@ -1103,6 +1120,8 @@ async fn list_bills_filters_by_jurisdiction(pool: sqlx::PgPool) {
         None,
         None,
         None,
+        None,
+        None,
     )
     .await
     .unwrap();
@@ -1113,6 +1132,8 @@ async fn list_bills_filters_by_jurisdiction(pool: sqlx::PgPool) {
         "NC Bill",
         None,
         "introduced",
+        None,
+        None,
         None,
         None,
         None,
@@ -1141,6 +1162,8 @@ async fn list_bills_returns_all_when_no_filter(pool: sqlx::PgPool) {
         None,
         None,
         None,
+        None,
+        None,
     )
     .await
     .unwrap();
@@ -1151,6 +1174,8 @@ async fn list_bills_returns_all_when_no_filter(pool: sqlx::PgPool) {
         "NC Bill 2",
         None,
         "introduced",
+        None,
+        None,
         None,
         None,
         None,
@@ -1177,6 +1202,8 @@ async fn list_bill_events_ordered_by_date_desc(pool: sqlx::PgPool) {
         "Ordering Bill",
         None,
         "introduced",
+        None,
+        None,
         None,
         None,
         None,
@@ -1220,6 +1247,8 @@ async fn get_bill_by_jurisdiction_number_found(pool: sqlx::PgPool) {
         None,
         None,
         Some("2025-2026"),
+        None,
+        None,
         None,
     )
     .await
@@ -2049,4 +2078,283 @@ async fn brand_media_appearance_round_trip(pool: sqlx::PgPool) {
         Some("https://example.com/podcast/ep42")
     );
     assert_eq!(row.notes.as_deref(), Some("CEO interview"));
+}
+
+// ---------------------------------------------------------------------------
+// Section 19: Brand Completeness Score
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_completeness_score_nonexistent_brand(pool: sqlx::PgPool) {
+    let result = get_brand_completeness(&pool, 999_999)
+        .await
+        .expect("query should not fail");
+
+    assert!(
+        result.is_none(),
+        "expected None for nonexistent brand, got Some"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_completeness_score_empty_brand(pool: sqlx::PgPool) {
+    // Brand with no profile, no signals, no anything.
+    let brand_id = insert_test_brand(&pool, "completeness-empty", true).await;
+
+    let result = get_brand_completeness(&pool, brand_id)
+        .await
+        .expect("query should not fail")
+        .expect("brand exists, expected Some");
+
+    assert_eq!(result.brand_id, brand_id);
+    assert_eq!(result.score, 0, "empty brand should have score 0");
+    assert!(!result.has_profile);
+    assert!(!result.has_description);
+    assert!(!result.has_tagline);
+    assert!(!result.has_founded_year);
+    assert!(!result.has_location);
+    assert!(!result.has_social_handles);
+    assert!(!result.has_domains);
+    assert!(!result.has_signals);
+    assert!(!result.has_funding);
+    assert!(!result.has_lab_tests);
+    assert!(!result.has_legal);
+    assert!(!result.has_sponsorships);
+    assert!(!result.has_distributors);
+    assert!(!result.has_media);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_completeness_score_with_profile(pool: sqlx::PgPool) {
+    use scbdb_db::brand_completeness::{
+        W_DESCRIPTION, W_FOUNDED_YEAR, W_LOCATION, W_PROFILE, W_TAGLINE,
+    };
+
+    let brand_id = insert_test_brand(&pool, "completeness-profile", true).await;
+
+    // Upsert a profile with all core fields filled.
+    upsert_brand_profile(
+        &pool,
+        brand_id,
+        Some("Refreshingly different"),
+        Some("Premium hemp-derived THC seltzers"),
+        Some(2020_i16),
+        Some("Charleston"),
+        Some("SC"),
+        Some("ParentCo"),
+    )
+    .await
+    .expect("upsert_brand_profile failed");
+
+    let result = get_brand_completeness(&pool, brand_id)
+        .await
+        .expect("query should not fail")
+        .expect("brand exists, expected Some");
+
+    let expected_score = W_PROFILE + W_DESCRIPTION + W_TAGLINE + W_FOUNDED_YEAR + W_LOCATION;
+
+    assert_eq!(result.brand_id, brand_id);
+    assert_eq!(
+        result.score, expected_score,
+        "score should be {expected_score} (profile + desc + tagline + year + location), got {}",
+        result.score
+    );
+    assert!(result.has_profile);
+    assert!(result.has_description);
+    assert!(result.has_tagline);
+    assert!(result.has_founded_year);
+    assert!(result.has_location);
+    // These should still be false.
+    assert!(!result.has_social_handles);
+    assert!(!result.has_domains);
+    assert!(!result.has_signals);
+    assert!(!result.has_funding);
+    assert!(!result.has_lab_tests);
+    assert!(!result.has_legal);
+    assert!(!result.has_sponsorships);
+    assert!(!result.has_distributors);
+    assert!(!result.has_media);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_completeness_score_partial_profile(pool: sqlx::PgPool) {
+    use scbdb_db::brand_completeness::{W_DESCRIPTION, W_PROFILE};
+
+    let brand_id = insert_test_brand(&pool, "completeness-partial", true).await;
+
+    // Profile with only description filled (no tagline, no year, no location).
+    upsert_brand_profile(
+        &pool,
+        brand_id,
+        None,                                   // tagline
+        Some("A description but nothing else"), // description
+        None,                                   // founded_year
+        None,                                   // hq_city
+        None,                                   // hq_state
+        None,                                   // parent_company
+    )
+    .await
+    .expect("upsert_brand_profile failed");
+
+    let result = get_brand_completeness(&pool, brand_id)
+        .await
+        .expect("query should not fail")
+        .expect("brand exists, expected Some");
+
+    let expected_score = W_PROFILE + W_DESCRIPTION;
+
+    assert_eq!(
+        result.score, expected_score,
+        "score should be {expected_score} (profile + description only), got {}",
+        result.score
+    );
+    assert!(result.has_profile);
+    assert!(result.has_description);
+    assert!(!result.has_tagline);
+    assert!(!result.has_founded_year);
+    assert!(!result.has_location);
+}
+
+// ---------------------------------------------------------------------------
+// Section: Location Pins
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_active_location_pins_empty_when_no_locations(pool: sqlx::PgPool) {
+    let pins = list_active_location_pins(&pool)
+        .await
+        .expect("query failed");
+    assert!(pins.is_empty());
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_active_location_pins_returns_rows_with_coords(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "pin-brand-coords", true).await;
+    upsert_store_locations(
+        &pool,
+        brand_id,
+        &[NewStoreLocation {
+            location_key: "pin-loc-1".to_string(),
+            name: "Pin Store".to_string(),
+            address_line1: Some("123 Main St".to_string()),
+            city: Some("Austin".to_string()),
+            state: Some("TX".to_string()),
+            zip: Some("78701".to_string()),
+            country: Some("US".to_string()),
+            latitude: Some(30.2672),
+            longitude: Some(-97.7431),
+            phone: None,
+            external_id: None,
+            locator_source: Some("locally".to_string()),
+            raw_data: serde_json::json!({}),
+        }],
+    )
+    .await
+    .expect("upsert");
+    let pins = list_active_location_pins(&pool)
+        .await
+        .expect("query failed");
+    assert_eq!(pins.len(), 1);
+    assert!((pins[0].latitude - 30.2672).abs() < 0.001);
+    assert_eq!(pins[0].store_name, "Pin Store");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_active_location_pins_excludes_null_coords(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "pin-brand-null-coords", true).await;
+    upsert_store_locations(
+        &pool,
+        brand_id,
+        &[NewStoreLocation {
+            location_key: "pin-loc-null".to_string(),
+            name: "No Coords Store".to_string(),
+            address_line1: None,
+            city: None,
+            state: None,
+            zip: None,
+            country: Some("US".to_string()),
+            latitude: None,
+            longitude: None,
+            phone: None,
+            external_id: None,
+            locator_source: None,
+            raw_data: serde_json::json!({}),
+        }],
+    )
+    .await
+    .expect("upsert");
+    let pins = list_active_location_pins(&pool)
+        .await
+        .expect("query failed");
+    assert!(pins.is_empty(), "null coords should be excluded");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_active_location_pins_excludes_inactive_locations(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "pin-brand-inactive", true).await;
+    upsert_store_locations(
+        &pool,
+        brand_id,
+        &[NewStoreLocation {
+            location_key: "pin-loc-inactive".to_string(),
+            name: "Inactive Store".to_string(),
+            address_line1: None,
+            city: None,
+            state: None,
+            zip: None,
+            country: Some("US".to_string()),
+            latitude: Some(30.0),
+            longitude: Some(-97.0),
+            phone: None,
+            external_id: None,
+            locator_source: None,
+            raw_data: serde_json::json!({}),
+        }],
+    )
+    .await
+    .expect("upsert");
+    // Set is_active = false
+    sqlx::query(
+        "UPDATE store_locations SET is_active = false WHERE location_key = 'pin-loc-inactive'",
+    )
+    .execute(&pool)
+    .await
+    .expect("deactivate");
+    let pins = list_active_location_pins(&pool)
+        .await
+        .expect("query failed");
+    assert!(pins.is_empty(), "inactive locations should be excluded");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn list_active_location_pins_includes_brand_fields(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "pin-brand-fields", true).await;
+    upsert_store_locations(
+        &pool,
+        brand_id,
+        &[NewStoreLocation {
+            location_key: "pin-loc-fields".to_string(),
+            name: "Fields Store".to_string(),
+            address_line1: None,
+            city: Some("Denver".to_string()),
+            state: Some("CO".to_string()),
+            zip: None,
+            country: Some("US".to_string()),
+            latitude: Some(39.7392),
+            longitude: Some(-104.9903),
+            phone: None,
+            external_id: None,
+            locator_source: Some("storemapper".to_string()),
+            raw_data: serde_json::json!({}),
+        }],
+    )
+    .await
+    .expect("upsert");
+    let pins = list_active_location_pins(&pool)
+        .await
+        .expect("query failed");
+    assert_eq!(pins.len(), 1);
+    assert_eq!(pins[0].brand_slug, "pin-brand-fields");
+    assert_eq!(pins[0].brand_relationship, "portfolio");
+    assert_eq!(pins[0].brand_tier, 1);
 }

@@ -69,6 +69,13 @@ export type BillEventItem = {
   source_url: string | null;
 };
 
+export type BillTextItem = {
+  text_date: string | null;
+  text_type: string;
+  mime: string;
+  url: string | null;
+};
+
 export type SentimentSummaryItem = {
   brand_name: string;
   brand_slug: string;
@@ -116,6 +123,21 @@ export type LocationsByState = {
   state: string;
   brand_count: number;
   location_count: number;
+};
+
+export type LocationPin = {
+  latitude: number;
+  longitude: number;
+  store_name: string;
+  address_line1: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  locator_source: string | null;
+  brand_name: string;
+  brand_slug: string;
+  brand_relationship: string;
+  brand_tier: number;
 };
 
 // ── Brand Intelligence Layer — re-exported from ./brands ──────────────────────

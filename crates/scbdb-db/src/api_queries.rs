@@ -27,12 +27,14 @@ pub struct ProductDashboardRow {
 }
 
 /// Input filters for product listing.
+///
+/// `limit` is `None` to return all products, or `Some(n)` to cap results.
 #[derive(Debug, Clone, Default)]
 pub struct ProductListFilters<'a> {
     pub brand_slug: Option<&'a str>,
     pub relationship: Option<&'a str>,
     pub tier: Option<i16>,
-    pub limit: i64,
+    pub limit: Option<i64>,
 }
 
 /// Price snapshot row for API/dashboard views.
@@ -94,7 +96,7 @@ pub async fn list_products_dashboard(
            AND ($2::TEXT IS NULL OR relationship = $2) \
            AND ($3::SMALLINT IS NULL OR tier = $3) \
          ORDER BY updated_at DESC \
-         LIMIT $4",
+         LIMIT COALESCE($4, 9223372036854775807)",
     )
     .bind(filters.brand_slug)
     .bind(filters.relationship)

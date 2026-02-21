@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useBillEvents } from "../hooks/use-dashboard-data";
+import { useBillEvents, useBillTexts } from "../hooks/use-dashboard-data";
 import { type BillItem } from "../types/api";
 import { ErrorState, LoadingState, formatDate } from "./dashboard-utils";
 
@@ -37,6 +37,7 @@ type DetailProps = {
 
 function BillDetail({ bill, onBack }: DetailProps) {
   const events = useBillEvents(bill.bill_id);
+  const texts = useBillTexts(bill.bill_id);
 
   return (
     <div className="bill-detail">
@@ -58,18 +59,40 @@ function BillDetail({ bill, onBack }: DetailProps) {
               {formatDate(bill.status_date)}
             </span>
           )}
-          {bill.source_url && (
-            <a
-              className="bill-source-link"
-              href={bill.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Read full text ↗
-            </a>
-          )}
+          {/* Only show the generic source link when no versioned texts are available */}
+          {bill.source_url &&
+            (!texts.data || texts.data.length === 0) &&
+            !texts.isLoading && (
+              <a
+                className="bill-source-link"
+                href={bill.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Read full text ↗
+              </a>
+            )}
         </div>
       </div>
+
+      {/* Versioned text links (Introduced, Engrossed, etc.) */}
+      {texts.data && texts.data.length > 0 && (
+        <div className="bill-texts">
+          {texts.data.map((t, i) =>
+            t.url ? (
+              <a
+                key={i}
+                className="bill-text-link"
+                href={t.url}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {t.text_type} text ↗
+              </a>
+            ) : null,
+          )}
+        </div>
+      )}
 
       {bill.summary && (
         <section className="bill-summary" aria-label="bill summary">
@@ -77,6 +100,12 @@ function BillDetail({ bill, onBack }: DetailProps) {
           <p className="bill-summary-text">{bill.summary}</p>
         </section>
       )}
+
+      {!bill.summary &&
+        (!texts.data || texts.data.length === 0) &&
+        !texts.isLoading && (
+          <p className="panel-status">No description available.</p>
+        )}
 
       <h3 className="bill-section-title">Activity</h3>
 

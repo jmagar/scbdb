@@ -12,7 +12,7 @@ pub(in crate::locator) const DEFAULT_LONGITUDE: f64 = -98.579_5;
 pub(in crate::locator) const DEFAULT_DISTANCE_MILES: u64 = 100;
 pub(in crate::locator) const DEFAULT_MAX_STORES: u64 = 100;
 pub(in crate::locator) const DEFAULT_TEXT_STYLE_BM: &str = "RESPECTCASINGPASSED";
-const MAX_SCRIPT_PROBES: usize = 24;
+const MAX_SCRIPT_PROBES: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(in crate::locator) struct DestiniLocatorConfig {
@@ -29,15 +29,28 @@ pub(in crate::locator) struct DestiniLocatorConfig {
 pub(in crate::locator) fn extract_destini_locator_config(
     html: &str,
 ) -> Option<DestiniLocatorConfig> {
-    if !html.contains("destini-locator") && !html.contains("lets.shop") {
+    let normalized = html.replace("\\/", "/").replace("\\\"", "\"");
+    if !normalized.contains("destini-locator") && !normalized.contains("lets.shop") {
         return None;
     }
 
-    let mut alpha_code = capture_first(html, r#"alpha-code\s*=\s*["']([A-Za-z0-9_-]{1,64})["']"#);
-    let mut locator_id = capture_first(html, r#"locator-id\s*=\s*["']([A-Za-z0-9_-]{1,64})["']"#);
+    let mut alpha_code = capture_any(
+        &normalized,
+        &[
+            r#"alpha-code\s*=\s*["']([A-Za-z0-9_-]{1,64})["']"#,
+            r#"["']alpha-code["']\s*:\s*["']([A-Za-z0-9_-]{1,64})["']"#,
+        ],
+    );
+    let mut locator_id = capture_any(
+        &normalized,
+        &[
+            r#"locator-id\s*=\s*["']([A-Za-z0-9_-]{1,64})["']"#,
+            r#"["']locator-id["']\s*:\s*["']([A-Za-z0-9_-]{1,64})["']"#,
+        ],
+    );
 
     if alpha_code.is_none() || locator_id.is_none() {
-        if let Some((url_alpha, url_locator)) = extract_locator_json_path_parts(html) {
+        if let Some((url_alpha, url_locator)) = extract_locator_json_path_parts(&normalized) {
             if alpha_code.is_none() {
                 alpha_code = Some(url_alpha);
             }
@@ -50,7 +63,13 @@ pub(in crate::locator) fn extract_destini_locator_config(
     let alpha_code = alpha_code?;
     let locator_id = locator_id?;
 
-    let client_id = capture_first(html, r#"client-id\s*=\s*["']([A-Za-z0-9_-]{1,128})["']"#);
+    let client_id = capture_any(
+        &normalized,
+        &[
+            r#"client-id\s*=\s*["']([A-Za-z0-9_-]{1,128})["']"#,
+            r#"["']client-id["']\s*:\s*["']([A-Za-z0-9_-]{1,128})["']"#,
+        ],
+    );
 
     Some(DestiniLocatorConfig {
         alpha_code,
@@ -96,6 +115,12 @@ pub(in crate::locator) async fn discover_destini_locator_config(
 
 fn capture_first(haystack: &str, pattern: &str) -> Option<String> {
     capture_groups(haystack, pattern, 1)
+}
+
+fn capture_any(haystack: &str, patterns: &[&str]) -> Option<String> {
+    patterns
+        .iter()
+        .find_map(|pattern| capture_first(haystack, pattern))
 }
 
 fn capture_groups(haystack: &str, pattern: &str, group: usize) -> Option<String> {
@@ -166,6 +191,20 @@ mod tests {
         let config = extract_destini_locator_config(html).expect("should extract config");
         assert_eq!(config.alpha_code, "E93");
         assert_eq!(config.locator_id, "3731");
+    }
+
+    #[test]
+    fn extracts_destini_config_from_json_object_notation() {
+        let html = r#"
+            <script>
+                const x = {"id":"destini-locator","locator-id":"3731","alpha-code":"E93","client-id":"recessocl"};
+            </script>
+        "#;
+
+        let config = extract_destini_locator_config(html).expect("should extract config");
+        assert_eq!(config.alpha_code, "E93");
+        assert_eq!(config.locator_id, "3731");
+        assert_eq!(config.client_id.as_deref(), Some("recessocl"));
     }
 
     #[test]
