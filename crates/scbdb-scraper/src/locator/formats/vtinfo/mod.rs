@@ -59,17 +59,21 @@ pub(in crate::locator) fn extract_vtinfo_embed(html: &str) -> Option<VtinfoEmbed
 ///
 /// Zip codes are form-submission hints only; lat/lng drives the actual
 /// geographic search.
+///
+/// The `VTInfo` search loop breaks at 100 deduplicated results. `STRATEGIC_US_POINTS`
+/// places Charlotte at index 1 so Southeast coverage is always reached before that
+/// break fires, even for large national brands.
 fn vtinfo_search_points() -> Vec<(f64, f64, &'static str)> {
     const ZIPS: &[&str] = &[
-        "55401", // Minneapolis
         "67202", // Kansas
+        "28201", // Charlotte
+        "55401", // Minneapolis
         "90001", // Los Angeles
         "10001", // New York
         "60601", // Chicago
         "77001", // Houston
         "80202", // Denver
         "85001", // Phoenix
-        "28201", // Charlotte
     ];
     crate::locator::STRATEGIC_US_POINTS
         .iter()

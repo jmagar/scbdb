@@ -24,7 +24,7 @@ pub struct GridConfig {
 }
 
 impl GridConfig {
-    /// SC + immediate neighbors. 30-mile step → ~60 points.
+    /// SC + immediate neighbors. 30-mile step → 82 points.
     #[allow(dead_code)] // available for future SC-specific scraping tasks
     pub fn sc_region() -> Self {
         Self {
@@ -36,7 +36,17 @@ impl GridConfig {
         }
     }
 
-    /// CONUS at 200-mile step → ~100–150 points. Pair with 100-mile search radius.
+    /// CONUS at 200-mile step → 168 points. Pair with 100-mile search radius.
+    ///
+    /// **Coverage note:** The 0.5-step overshoot adds one latitude band at
+    /// ~50.5°N (southern Canada). The Knox API filters non-US stores, so no
+    /// bad data enters the DB, but those ~10 extra grid points generate real
+    /// HTTP calls.
+    ///
+    /// **Gap note:** A 200-mile grid with a 100-mile radius circle leaves
+    /// 41-mile dead zones at cell corners (diagonal = 141 mi > 100-mi radius).
+    /// This is accepted: the affected areas are sparsely populated rural regions
+    /// where hemp beverage retail penetration is negligible.
     pub fn conus_coarse() -> Self {
         Self {
             min_lat: 24.4,
@@ -50,15 +60,24 @@ impl GridConfig {
 
 /// Strategic US city centers covering all major population regions including the Southeast.
 /// Shared by Destini and `VTInfo` as their default search origin set.
+///
+/// **Ordering matters for `VTInfo`**, which breaks its search loop at 100 deduplicated
+/// results. Charlotte is placed at index 1 to guarantee Southeast coverage is always
+/// searched before the break fires, regardless of how many national locations appear
+/// from other cities first.
 pub const STRATEGIC_US_POINTS: &[GridPoint] = &[
-    GridPoint {
-        lat: 44.977_8,
-        lng: -93.265_0,
-    }, // Minneapolis — Upper Midwest
     GridPoint {
         lat: 39.828_3,
         lng: -98.579_5,
     }, // Kansas — US geographic center
+    GridPoint {
+        lat: 35.227_1,
+        lng: -80.843_1,
+    }, // Charlotte — Southeast (SC, NC, GA, VA) — index 1: always reached before VTInfo break
+    GridPoint {
+        lat: 44.977_8,
+        lng: -93.265_0,
+    }, // Minneapolis — Upper Midwest
     GridPoint {
         lat: 34.052_2,
         lng: -118.243_7,
@@ -83,10 +102,6 @@ pub const STRATEGIC_US_POINTS: &[GridPoint] = &[
         lat: 33.448_4,
         lng: -112.074_0,
     }, // Phoenix — Southwest
-    GridPoint {
-        lat: 35.227_1,
-        lng: -80.843_1,
-    }, // Charlotte — Southeast (SC, NC, GA, VA)
 ];
 
 /// Generate a uniform lat/lng grid across the given bounds.

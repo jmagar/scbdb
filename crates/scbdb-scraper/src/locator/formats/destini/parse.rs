@@ -25,9 +25,12 @@ fn coord_key(lat: Option<f64>, lng: Option<f64>) -> Option<String> {
     }
 }
 
-/// Deduplicate a vec of locations by coordinate key. First occurrence wins.
-/// Locations with no coordinates bypass the dedup map and are kept in full.
-#[allow(dead_code)] // used in tests; mirrors the inline dedup in fetch_destini_stores
+/// Deduplicate a flat vec of locations gathered across all grid points.
+/// First occurrence wins. Locations with no coordinates bypass the dedup
+/// map and are kept in full.
+///
+/// Coord-less stores are rare in practice (Destini is map-based), so the
+/// `no_coords` accumulator stays near-empty in normal operation.
 fn dedup_by_coordinates(locs: Vec<RawStoreLocation>) -> Vec<RawStoreLocation> {
     let mut seen: HashMap<String, RawStoreLocation> = HashMap::new();
     let mut no_coords: Vec<RawStoreLocation> = Vec::new();
@@ -142,9 +145,8 @@ pub(in crate::locator) async fn fetch_destini_stores(
         return Ok(vec![]);
     }
 
-    let grid = generate_grid(&GridConfig::conus_coarse()); // ~168 points
-    let mut seen: HashMap<String, RawStoreLocation> = HashMap::new();
-    let mut no_coords: Vec<RawStoreLocation> = Vec::new();
+    let grid = generate_grid(&GridConfig::conus_coarse()); // 168 points
+    let mut all_locs: Vec<RawStoreLocation> = Vec::new();
 
     for point in &grid {
         let locs = match fetch_knox_for_point(
@@ -182,22 +184,13 @@ pub(in crate::locator) async fn fetch_destini_stores(
             );
         }
 
-        for loc in locs {
-            match coord_key(loc.latitude, loc.longitude) {
-                Some(key) => {
-                    seen.entry(key).or_insert(loc);
-                }
-                None => no_coords.push(loc),
-            }
-        }
+        all_locs.extend(locs);
 
         // Courtesy delay — 168 calls at 500ms ≈ 84 s total per brand
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
-    let mut result: Vec<_> = seen.into_values().collect();
-    result.extend(no_coords);
-    Ok(result)
+    Ok(dedup_by_coordinates(all_locs))
 }
 
 async fn fetch_product_ids(
@@ -229,7 +222,7 @@ async fn fetch_product_ids(
 }
 
 fn join_url(base: &str, path: &str) -> String {
-    format!("{}{path}", base.trim_end_matches('/').to_string() + "/")
+    format!("{}/{path}", base.trim_end_matches('/'))
 }
 
 #[cfg(test)]

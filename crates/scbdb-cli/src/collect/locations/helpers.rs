@@ -47,8 +47,14 @@ pub(super) async fn record_brand_failure(
 
 /// Log added/removed store location counts after upsert+deactivate.
 ///
-/// `prev` is the active key set snapshotted **before** the upsert.
-/// `curr_keys` is the list of keys from the current scrape.
+/// `prev` is the active key set snapshotted **before** the upsert (`is_active = TRUE`
+/// only). `curr_keys` is the list of keys from the current scrape.
+///
+/// **Note:** a location that was previously deactivated and reappears in the current
+/// scrape is not in `prev` (inactive rows are excluded from the snapshot), so it is
+/// logged as "new store locations detected" rather than "reactivated". The DB state is
+/// correct; only the log message is imprecise. Distinguishing the two cases would
+/// require a second query for all-time keys including inactive rows.
 pub(super) fn log_location_changeset(
     brand_slug: &str,
     prev: &std::collections::HashSet<String>,
