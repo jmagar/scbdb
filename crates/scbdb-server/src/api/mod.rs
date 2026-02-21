@@ -9,7 +9,7 @@ use axum::{
     extract::State,
     http::{header, HeaderName, Method, StatusCode},
     response::IntoResponse,
-    routing::get,
+    routing::{get, put},
     Extension, Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -89,6 +89,7 @@ impl IntoResponse for ApiError {
             "not_found" => StatusCode::NOT_FOUND,
             "unauthorized" => StatusCode::UNAUTHORIZED,
             "bad_request" | "validation_error" => StatusCode::BAD_REQUEST,
+            "conflict" => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self)).into_response()
@@ -104,19 +105,25 @@ pub(super) fn map_db_error(request_id: String, error: &scbdb_db::DbError) -> Api
     ApiError::new(request_id, "internal_error", "database query failed")
 }
 
-pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -> Router {
-    let cors = CorsLayer::new()
+fn build_cors() -> CorsLayer {
+    CorsLayer::new()
         .allow_origin(tower_http::cors::Any)
-        .allow_methods([Method::GET])
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::PUT,
+            Method::PATCH,
+            Method::DELETE,
+        ])
         .allow_headers([
             header::CONTENT_TYPE,
             header::AUTHORIZATION,
             HeaderName::from_static("x-request-id"),
-        ]);
+        ])
+}
 
-    let public_routes = Router::new().route("/api/v1/health", get(health));
-
-    let protected_routes = Router::new()
+fn protected_router(auth: AuthState, rate_limit: RateLimitState) -> Router<AppState> {
+    Router::new()
         .route("/api/v1/products", get(products::list_products))
         .route(
             "/api/v1/pricing/snapshots",
@@ -149,8 +156,16 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
             get(locations::list_locations_by_state),
         )
         .route("/api/v1/locations/pins", get(locations::list_location_pins))
-        .route("/api/v1/brands", get(brands::list_brands))
-        .route("/api/v1/brands/{slug}", get(brands::get_brand))
+        .route(
+            "/api/v1/brands",
+            get(brands::list_brands).post(brands::create_brand),
+        )
+        .route(
+            "/api/v1/brands/{slug}",
+            get(brands::get_brand)
+                .patch(brands::update_brand)
+                .delete(brands::deactivate_brand),
+        )
         .route(
             "/api/v1/brands/{slug}/signals",
             get(brands::list_brand_signals),
@@ -174,6 +189,18 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
             get(brands::list_competitors),
         )
         .route("/api/v1/brands/{slug}/media", get(brands::list_media))
+        .route(
+            "/api/v1/brands/{slug}/profile",
+            put(brands::upsert_brand_profile),
+        )
+        .route(
+            "/api/v1/brands/{slug}/social",
+            put(brands::upsert_brand_social),
+        )
+        .route(
+            "/api/v1/brands/{slug}/domains",
+            put(brands::upsert_brand_domains),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn_with_state(
@@ -184,14 +211,18 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
                     auth,
                     require_bearer_auth,
                 )),
-        );
+        )
+}
+
+pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -> Router {
+    let public_routes = Router::new().route("/api/v1/health", get(health));
 
     Router::new()
         .merge(public_routes)
-        .merge(protected_routes)
+        .merge(protected_router(auth, rate_limit))
         .layer(
             ServiceBuilder::new()
-                .layer(cors)
+                .layer(build_cors())
                 .layer(axum::middleware::from_fn(request_id)),
         )
         .with_state(state)

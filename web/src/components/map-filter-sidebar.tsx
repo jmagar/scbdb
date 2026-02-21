@@ -1,42 +1,4 @@
-import type { LocationBrandSummary } from "../types/api";
-
-export type Relationship = "all" | "portfolio" | "competitor";
-
-/**
- * Extended brand type used by the filter function.
- * `LocationBrandSummary` carries only location stats; `relationship` and `tier`
- * must be joined in from the brands registry before passing here.
- */
-export type BrandForFilter = LocationBrandSummary & {
-  relationship: "portfolio" | "competitor";
-  tier: 1 | 2 | 3;
-};
-
-/**
- * Pure function: given the full brand list and filter state, returns the
- * array of brand slugs whose pins should be visible on the map.
- *
- * A slug is visible if ALL three conditions hold:
- *   1. Its brand's `relationship` matches the `relationship` filter (or "all")
- *   2. Its brand's `tier` is in the `tiers` set
- *   3. The slug is in `enabledSlugs` (manual per-brand toggle)
- */
-export function computeVisibleSlugs(
-  brands: BrandForFilter[],
-  relationship: Relationship,
-  tiers: Set<number>,
-  enabledSlugs: Set<string>,
-): string[] {
-  return brands
-    .filter((b) => {
-      if (relationship !== "all" && b.relationship !== relationship)
-        return false;
-      if (!tiers.has(b.tier)) return false;
-      if (!enabledSlugs.has(b.brand_slug)) return false;
-      return true;
-    })
-    .map((b) => b.brand_slug);
-}
+import type { BrandForFilter, Relationship } from "./map-filter-utils";
 
 type MapFilterSidebarProps = {
   brands: BrandForFilter[];
@@ -47,6 +9,10 @@ type MapFilterSidebarProps = {
   setTiers: (t: Set<1 | 2 | 3>) => void;
   enabledSlugs: Set<string>;
   setEnabledSlugs: (s: Set<string>) => void;
+  /** Mobile overlay: whether the panel is open */
+  isOpen?: boolean;
+  /** Mobile overlay: called when the user closes the panel */
+  onClose?: () => void;
 };
 
 export function MapFilterSidebar({
@@ -58,6 +24,8 @@ export function MapFilterSidebar({
   setTiers,
   enabledSlugs,
   setEnabledSlugs,
+  isOpen,
+  onClose,
 }: MapFilterSidebarProps) {
   // Tier toggle helper
   function toggleTier(tier: 1 | 2 | 3) {
@@ -89,17 +57,51 @@ export function MapFilterSidebar({
     setEnabledSlugs(new Set());
   }
 
-  return (
+  // In mobile-overlay mode, the sidebar is wrapped in a backdrop + slide-up panel.
+  // isOpen === undefined means desktop mode (always visible, no overlay behaviour).
+  const isMobileOverlay = isOpen !== undefined;
+
+  const panel = (
     <div
       className="map-filter-sidebar"
       style={{
-        width: "280px",
+        width: isMobileOverlay ? "100%" : "280px",
         flexShrink: 0,
         padding: "1rem",
         overflowY: "auto",
-        borderRight: "1px solid var(--border, #e5e7eb)",
+        borderRight: isMobileOverlay
+          ? "none"
+          : "1px solid var(--border, #e5e7eb)",
       }}
     >
+      {isMobileOverlay && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "0.75rem",
+          }}
+        >
+          <strong style={{ fontSize: "0.95rem" }}>Filters</strong>
+          <button
+            type="button"
+            aria-label="Close filters"
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontSize: "1.25rem",
+              lineHeight: 1,
+              padding: "0.25rem",
+              color: "inherit",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
       {/* Section 1: Relationship filter */}
       <section className="filter-section">
         <h4 className="filter-label">Relationship</h4>
@@ -268,4 +270,30 @@ export function MapFilterSidebar({
       </section>
     </div>
   );
+
+  if (isMobileOverlay) {
+    return (
+      <>
+        {/* Backdrop — click to close */}
+        {isOpen && (
+          <div
+            className="map-filter-backdrop"
+            aria-hidden="true"
+            onClick={onClose}
+          />
+        )}
+        {/* Slide-up panel */}
+        <div
+          className={`map-filter-overlay${isOpen ? " open" : ""}`}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Map filters"
+        >
+          {panel}
+        </div>
+      </>
+    );
+  }
+
+  return panel;
 }

@@ -15,6 +15,8 @@ mod detail;
 mod intel;
 mod list;
 mod signals;
+mod write;
+mod write_enrichment;
 
 pub(super) use detail::get_brand;
 pub(super) use intel::{
@@ -23,6 +25,10 @@ pub(super) use intel::{
 };
 pub(super) use list::list_brands;
 pub(super) use signals::list_brand_signals;
+pub(super) use write::{create_brand, deactivate_brand, update_brand};
+pub(super) use write_enrichment::{
+    upsert_brand_domains, upsert_brand_profile, upsert_brand_social,
+};
 
 use super::{map_db_error, ApiError};
 

@@ -144,3 +144,27 @@ fn validate_brands(brands_file: &BrandsFile) -> Result<(), ConfigError> {
 #[cfg(test)]
 #[path = "brands_test.rs"]
 mod tests;
+
+/// Generate a URL-safe slug from an arbitrary brand name string.
+///
+/// Identical logic to [`BrandConfig::slug`] but usable without a `BrandConfig`.
+#[must_use]
+pub fn slug_from_name(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else if c == ' ' {
+                '-'
+            } else {
+                '\0'
+            }
+        })
+        .filter(|&c| c != '\0')
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}

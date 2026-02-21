@@ -1,6 +1,7 @@
 import type { BrandSummaryItem } from "../types/api";
 import { useBrands } from "../hooks/use-dashboard-data";
 import { ErrorState, LoadingState } from "./dashboard-utils";
+import { BrandCreateDialog } from "./brand-create-dialog";
 
 export function BrandsPage() {
   const { data: brands, isLoading, error } = useBrands();
@@ -16,6 +17,11 @@ export function BrandsPage() {
           ← Dashboard
         </a>
       </div>
+      <BrandCreateDialog
+        onCreated={(slug) => {
+          window.location.hash = `#/brands/${slug}`;
+        }}
+      />
       <div className="brand-grid">
         {brands?.map((brand) => (
           <BrandCard key={brand.slug} brand={brand} />

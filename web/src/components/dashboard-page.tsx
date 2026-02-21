@@ -204,6 +204,12 @@ export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
         />
       </header>
 
+      <nav className="hero-nav" aria-label="Main navigation">
+        <a href="#/brands" className="hero-nav-link">
+          Brands
+        </a>
+      </nav>
+
       <section className="stats-grid" aria-label="dashboard-summary">
         {tabStats.map((stat) => (
           <button

@@ -5,8 +5,9 @@ import type { LocationBrandSummary } from "../types/api";
 import { useLocationPins } from "../hooks/use-dashboard-data";
 import { ErrorState, LoadingState, formatDate } from "./dashboard-utils";
 import { LocationMapView } from "./location-map-view";
-import { computeVisibleSlugs, MapFilterSidebar } from "./map-filter-sidebar";
-import type { BrandForFilter, Relationship } from "./map-filter-sidebar";
+import { computeVisibleSlugs } from "./map-filter-utils";
+import type { BrandForFilter, Relationship } from "./map-filter-utils";
+import { MapFilterSidebar } from "./map-filter-sidebar";
 
 function sourceLabel(source: string | null): string {
   switch (source) {
@@ -46,6 +47,8 @@ export function LocationsPanel({ summary, byState }: Props) {
   const [tiers, setTiers] = useState<Set<1 | 2 | 3>>(new Set([1, 2, 3]));
   // null = "all brands enabled" (initial state before user makes any selection)
   const [enabledSlugs, setEnabledSlugs] = useState<Set<string> | null>(null);
+  // Mobile: whether the filter overlay is open
+  const [filterOpen, setFilterOpen] = useState(false);
 
   // Derived: brands with relationship/tier, sourced from pins data
   const brandsForFilter = useMemo((): BrandForFilter[] => {
@@ -57,10 +60,12 @@ export function LocationsPanel({ summary, byState }: Props) {
     >();
     for (const pin of pins.data) {
       if (!pinMeta.has(pin.brand_slug)) {
-        pinMeta.set(pin.brand_slug, {
-          relationship: pin.brand_relationship as "portfolio" | "competitor",
-          tier: pin.brand_tier as 1 | 2 | 3,
-        });
+        const rel = pin.brand_relationship;
+        const tier = pin.brand_tier;
+        // Guard against unknown values that could arrive from future DB changes
+        if (rel !== "portfolio" && rel !== "competitor") continue;
+        if (tier !== 1 && tier !== 2 && tier !== 3) continue;
+        pinMeta.set(pin.brand_slug, { relationship: rel, tier });
       }
     }
     return summary.data
@@ -142,16 +147,44 @@ export function LocationsPanel({ summary, byState }: Props) {
 
           {/* Interactive map + filter sidebar */}
           <h3>US Coverage Map</h3>
-          <div
-            style={{
-              display: "flex",
-              gap: 0,
-              height: "500px",
-              border: "1px solid var(--border, #e5e7eb)",
-              borderRadius: "8px",
-              overflow: "hidden",
-            }}
-          >
+          <div className="map-layout">
+            {/* Desktop sidebar — hidden on mobile via CSS */}
+            <div className="map-desktop-sidebar">
+              <MapFilterSidebar
+                brands={brandsForFilter}
+                brandColors={brandColors}
+                relationship={relationship}
+                setRelationship={setRelationship}
+                tiers={tiers}
+                setTiers={setTiers}
+                enabledSlugs={effectiveEnabledSlugs}
+                setEnabledSlugs={setEnabledSlugs}
+              />
+            </div>
+
+            {/* Map area */}
+            <div className="map-canvas-area">
+              <LocationMapView
+                pins={pins.data ?? []}
+                selectedSlugs={selectedSlugs}
+                brandColors={brandColors}
+                isLoading={pins.isLoading}
+                isError={pins.isError}
+              />
+
+              {/* Mobile filter toggle button */}
+              <button
+                type="button"
+                className="map-filter-toggle-btn"
+                aria-label="Open map filters"
+                aria-expanded={filterOpen}
+                onClick={() => setFilterOpen(true)}
+              >
+                <span aria-hidden="true">⚙</span> Filters
+              </button>
+            </div>
+
+            {/* Mobile overlay — only rendered on small screens via CSS */}
             <MapFilterSidebar
               brands={brandsForFilter}
               brandColors={brandColors}
@@ -161,16 +194,9 @@ export function LocationsPanel({ summary, byState }: Props) {
               setTiers={setTiers}
               enabledSlugs={effectiveEnabledSlugs}
               setEnabledSlugs={setEnabledSlugs}
+              isOpen={filterOpen}
+              onClose={() => setFilterOpen(false)}
             />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <LocationMapView
-                pins={pins.data ?? []}
-                selectedSlugs={selectedSlugs}
-                brandColors={brandColors}
-                isLoading={pins.isLoading}
-                isError={pins.isError}
-              />
-            </div>
           </div>
 
           {/* Per-brand cards */}

@@ -89,7 +89,7 @@ body {
 .app-shell {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 0.75rem;
   animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -130,10 +130,10 @@ body {
    Stats Grid
 ───────────────────────────────────────────────────────── */
 .stats-grid {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 0.45rem;
+  gap: 0.3rem;
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -143,12 +143,12 @@ body {
   position: relative;
   min-height: 44px;
   border: 1px solid var(--border-neutral);
-  border-radius: 1rem;
+  border-radius: 0.875rem;
   background: var(--surface);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  padding: 0.6rem 0.4rem 0.55rem;
+  padding: 0.5rem 0.4rem 0.45rem;
   font: inherit;
   cursor: pointer;
   text-align: left;
@@ -226,8 +226,8 @@ body {
 .stat-card-top {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.35rem;
+  gap: 0.25rem;
+  margin-bottom: 0.25rem;
 }
 
 .stat-icon {
@@ -259,13 +259,17 @@ body {
 /* Big display number */
 .stat-value {
   font-family: var(--font-display);
-  font-size: 1.35rem;
+  font-size: clamp(0.85rem, 4vw, 1.35rem);
   font-weight: 600;
   line-height: 1;
   color: var(--ink);
   font-variant-numeric: oldstyle-nums;
   letter-spacing: -0.02em;
   transition: color 200ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .stat-card.is-active .stat-value {
@@ -280,7 +284,7 @@ body {
   background: var(--surface);
   border: 1px solid var(--border-neutral);
   border-radius: 1.25rem;
-  padding: 1.5rem 1.75rem;
+  padding: 1rem 1rem;
   box-shadow: var(--shadow-md);
   animation: panel-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
   animation-delay: 310ms;
@@ -510,6 +514,7 @@ body {
 
   .stat-card {
     padding: 0.9rem 1rem 0.85rem;
+    border-radius: 1rem;
   }
 
   .stat-label {
@@ -517,6 +522,7 @@ body {
   }
 
   .stat-card-top {
+    gap: 0.4rem;
     margin-bottom: 0.5rem;
   }
 
@@ -526,6 +532,14 @@ body {
 
   .card-stack {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .panel {
+    padding: 1.5rem 1.75rem;
+  }
+
+  .locations-stat strong {
+    font-size: 1.65rem;
   }
 }
 
@@ -664,7 +678,7 @@ body {
 .locations-stat strong {
   display: block;
   font-family: var(--font-display);
-  font-size: 1.65rem;
+  font-size: clamp(1.15rem, 5.5vw, 1.65rem);
   font-weight: 600;
   color: var(--accent);
   line-height: 1;
@@ -673,16 +687,128 @@ body {
 }
 
 .locations-stat span {
-  font-size: 0.72rem;
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.68rem;
   color: var(--muted);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 @media (min-width: 768px) {
   .locations-stats-bar {
     grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────
+   Interactive Map Layout (MapLibre + filter sidebar)
+───────────────────────────────────────────────────────── */
+
+/* Outer wrapper: full-width map on mobile, sidebar+map on desktop */
+.map-layout {
+  position: relative;
+  height: 420px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+/* Desktop sidebar hidden on mobile */
+.map-desktop-sidebar {
+  display: none;
+}
+
+/* Map canvas fills the full layout box on mobile */
+.map-canvas-area {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Mobile filter toggle button ── */
+.map-filter-toggle-btn {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  color: inherit;
+}
+
+.map-filter-toggle-btn:hover {
+  background: var(--surface-2, #f9fafb);
+}
+
+/* ── Mobile overlay backdrop ── */
+.map-filter-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 29;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* ── Mobile slide-up filter panel ── */
+.map-filter-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: var(--surface, #fff);
+  border-top: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px 12px 0 0;
+  max-height: 70%;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+
+.map-filter-overlay.open {
+  transform: translateY(0);
+}
+
+/* ── Desktop layout: sidebar left, map right ── */
+@media (min-width: 768px) {
+  .map-layout {
+    display: flex;
+    height: 500px;
+  }
+
+  .map-desktop-sidebar {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .map-canvas-area {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Hide mobile-only controls on desktop */
+  .map-filter-toggle-btn {
+    display: none;
+  }
+
+  /* The overlay MapFilterSidebar instance is invisible on desktop:
+     the backdrop never appears and the panel stays off-screen */
+  .map-filter-overlay {
+    display: none;
   }
 }
 
@@ -2084,4 +2210,260 @@ code {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
+}
+
+/* ── Hero navigation (standalone row between hero and stats) ── */
+.hero-nav {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.4rem 0 0.15rem;
+}
+
+.hero-nav-link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--border-neutral);
+  border-radius: 9999px;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+.hero-nav-link:hover {
+  color: var(--accent);
+  border-color: var(--accent-dim);
+  background: var(--accent-soft);
+}
+
+/* ── Form components ── */
+.brand-edit-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.form-section {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.25rem;
+  background: var(--surface);
+}
+
+.form-section--danger {
+  border-color: #7f2f2f;
+  background: rgba(127, 47, 47, 0.07);
+}
+
+.form-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.form-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+}
+
+.form-label {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+}
+
+.form-required {
+  color: #e05252;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.85rem;
+  padding: 0.45rem 0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.form-input.is-error {
+  border-color: #e05252;
+}
+
+.form-select-sm {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.85rem;
+  padding: 0.45rem 0.6rem;
+  font-family: inherit;
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 600px) {
+  .form-row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-save-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.form-error {
+  font-size: 0.75rem;
+  color: #e05252;
+}
+
+.form-hint {
+  font-size: 0.75rem;
+  color: var(--fg-muted);
+}
+
+/* Social handles */
+.social-entry-list,
+.domain-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.social-entry-row,
+.domain-entry-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.social-entry-row .form-input,
+.domain-entry-row .form-input {
+  flex: 1;
+}
+
+/* Buttons */
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: opacity 150ms ease;
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.btn-ghost-sm {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  padding: 0.3rem 0.65rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 150ms ease;
+}
+
+.btn-ghost-sm:hover {
+  background: var(--surface-2);
+}
+
+.btn-danger {
+  background: #7f2f2f;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-danger-ghost {
+  background: transparent;
+  border: 1px solid #7f2f2f;
+  border-radius: 4px;
+  color: #e05252;
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 150ms ease;
+}
+
+.btn-danger-ghost:hover {
+  background: rgba(127, 47, 47, 0.1);
+}
+
+/* Create dialog */
+.create-dialog {
+  margin-bottom: 1.25rem;
+}
+
+.deactivate-confirm p {
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  margin: 0 0 0.75rem;
 }

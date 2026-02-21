@@ -248,4 +248,10 @@ describe("DashboardPage", () => {
     expect(html).toContain("Sample evidence:");
     expect(html).toContain("https://example.com/news/cann-positive");
   });
+
+  it("renders brands nav link in the hero header", () => {
+    const html = renderToStaticMarkup(<DashboardPage />);
+    expect(html).toContain('href="#/brands"');
+    expect(html).toContain("hero-nav-link");
+  });
 });

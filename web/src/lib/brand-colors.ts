@@ -14,8 +14,9 @@ const PALETTE = [
 ] as const;
 
 /**
- * Returns a deterministic hex color for a brand slug using djb2 hash.
- * Same slug always maps to the same color from the 12-color PALETTE.
+ * Returns a deterministic hex color for a brand slug using a polynomial hash
+ * (multiplier 31, same as Java String.hashCode). Same slug always maps to the
+ * same color from the 12-color PALETTE.
  */
 export function getBrandColor(slug: string): string {
   let hash = 0;

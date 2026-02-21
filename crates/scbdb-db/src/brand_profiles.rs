@@ -161,3 +161,140 @@ pub async fn list_brand_social_handles(
     .fetch_all(pool)
     .await?)
 }
+
+/// Overwrite the brand profile row for the given brand.
+///
+/// Unlike [`upsert_brand_profile`], this does **not** use `COALESCE` — every supplied
+/// value (including `None`) is written directly, allowing the operator to clear fields.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on database query failure.
+#[allow(clippy::too_many_arguments)]
+pub async fn overwrite_brand_profile(
+    pool: &PgPool,
+    brand_id: i64,
+    tagline: Option<&str>,
+    description: Option<&str>,
+    founded_year: Option<i16>,
+    hq_city: Option<&str>,
+    hq_state: Option<&str>,
+    ceo_name: Option<&str>,
+    funding_stage: Option<&str>,
+    employee_count_approx: Option<i32>,
+) -> Result<(), DbError> {
+    sqlx::query(
+        "INSERT INTO brand_profiles \
+           (brand_id, tagline, description, founded_year, hq_city, hq_state, \
+            ceo_name, funding_stage, employee_count_approx, last_enriched_at) \
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW()) \
+         ON CONFLICT (brand_id) DO UPDATE SET \
+           tagline               = EXCLUDED.tagline, \
+           description           = EXCLUDED.description, \
+           founded_year          = EXCLUDED.founded_year, \
+           hq_city               = EXCLUDED.hq_city, \
+           hq_state              = EXCLUDED.hq_state, \
+           ceo_name              = EXCLUDED.ceo_name, \
+           funding_stage         = EXCLUDED.funding_stage, \
+           employee_count_approx = EXCLUDED.employee_count_approx, \
+           last_enriched_at      = NOW(), \
+           updated_at            = NOW()",
+    )
+    .bind(brand_id)
+    .bind(tagline)
+    .bind(description)
+    .bind(founded_year)
+    .bind(hq_city)
+    .bind(hq_state)
+    .bind(ceo_name)
+    .bind(funding_stage)
+    .bind(employee_count_approx)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// Replace all active social handles for a brand.
+///
+/// Deactivates all existing handles, then upserts the supplied map.
+/// Uses a transaction to keep the operation atomic.
+///
+/// # Errors
+/// Returns [`DbError`] on database query failure.
+#[allow(clippy::implicit_hasher)] // public API; callers pass HashMap directly
+pub async fn replace_brand_social_handles(
+    pool: &PgPool,
+    brand_id: i64,
+    handles: &std::collections::HashMap<String, String>,
+) -> Result<(), DbError> {
+    let mut tx = pool.begin().await?;
+
+    // Deactivate all existing handles for this brand.
+    sqlx::query(
+        "UPDATE brand_social_handles SET is_active = false, updated_at = NOW() \
+         WHERE brand_id = $1",
+    )
+    .bind(brand_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Upsert each supplied handle.
+    for (platform, handle) in handles {
+        sqlx::query(
+            "INSERT INTO brand_social_handles (brand_id, platform, handle, is_active) \
+             VALUES ($1, $2, $3, true) \
+             ON CONFLICT (brand_id, platform, handle) DO UPDATE \
+               SET is_active = true, updated_at = NOW()",
+        )
+        .bind(brand_id)
+        .bind(platform)
+        .bind(handle)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Replace all active domains for a brand.
+///
+/// Deactivates all existing domains, then upserts the supplied list.
+/// Uses a transaction to keep the operation atomic.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on database query failure.
+pub async fn replace_brand_domains(
+    pool: &PgPool,
+    brand_id: i64,
+    domains: &[String],
+) -> Result<(), DbError> {
+    let mut tx = pool.begin().await?;
+
+    // Deactivate all existing domains for this brand.
+    sqlx::query(
+        "UPDATE brand_domains SET is_active = false, updated_at = NOW() \
+         WHERE brand_id = $1",
+    )
+    .bind(brand_id)
+    .execute(&mut *tx)
+    .await?;
+
+    // Upsert each supplied domain.
+    for domain in domains {
+        sqlx::query(
+            "INSERT INTO brand_domains (brand_id, domain, domain_type, is_active) \
+             VALUES ($1, $2, 'primary', true) \
+             ON CONFLICT (brand_id, domain) DO UPDATE \
+               SET is_active = true, updated_at = NOW()",
+        )
+        .bind(brand_id)
+        .bind(domain)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(())
+}

@@ -213,10 +213,10 @@ pub use collection_runs::{
     upsert_collection_run_brand, CollectionRunBrandRow, CollectionRunRow,
 };
 pub use locations::{
-    deactivate_missing_locations, list_active_location_pins, list_active_locations_by_brand,
-    list_locations_by_state, list_locations_dashboard_summary, list_new_locations_since,
-    upsert_store_locations, LocationPinRow, LocationsByStateRow, LocationsDashboardRow,
-    NewStoreLocation, StoreLocationRow,
+    deactivate_missing_locations, get_active_location_keys_for_brand, list_active_location_pins,
+    list_active_locations_by_brand, list_locations_by_state, list_locations_dashboard_summary,
+    list_new_locations_since, upsert_store_locations, LocationPinRow, LocationsByStateRow,
+    LocationsDashboardRow, NewStoreLocation, StoreLocationRow,
 };
 pub use products::{
     get_last_price_snapshot, insert_price_snapshot_if_changed, upsert_product, upsert_variant,

@@ -24,7 +24,7 @@ use scbdb_legiscan::{
 /// Returns an error if the API key is missing, the client cannot be built,
 /// or the collection run cannot be created. Individual bill fetch failures
 /// are logged and skipped. Quota exhaustion is propagated as an error.
-#[allow(clippy::too_many_lines)] // Orchestration: discovery, hash-check, fetch, and collection-run lifecycle
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)] // Orchestration: discovery, hash-check, fetch, and collection-run lifecycle
 pub(crate) async fn run_regs_ingest(
     pool: &sqlx::PgPool,
     config: &scbdb_core::AppConfig,

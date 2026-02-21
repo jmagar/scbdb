@@ -33,6 +33,11 @@ export type BrandProfileResponse = {
   name: string;
   relationship: string;
   tier: number;
+  domain: string | null;
+  shop_url: string | null;
+  store_locator_url: string | null;
+  twitter_handle: string | null;
+  notes: string | null;
   logo_url: string | null;
   profile: BrandProfileDetail | null;
   social_handles: BrandSocialHandleItem[];
@@ -200,3 +205,46 @@ export type MediaAppearanceItem = {
   notes: string | null;
   created_at: string;
 };
+
+// ── Write body types ──────────────────────────────────────────────────────────
+
+export type BrandRelationship = "portfolio" | "competitor";
+
+export type CreateBrandBody = {
+  name: string;
+  relationship: BrandRelationship;
+  tier: 1 | 2 | 3;
+  domain?: string;
+  shop_url?: string;
+  store_locator_url?: string;
+  twitter_handle?: string;
+  notes?: string;
+};
+
+export type CreateBrandResponse = { id: number; slug: string };
+
+export type UpdateBrandMetaBody = {
+  name?: string;
+  relationship?: BrandRelationship;
+  tier?: 1 | 2 | 3;
+  domain?: string | null;
+  shop_url?: string | null;
+  store_locator_url?: string | null;
+  twitter_handle?: string | null;
+  notes?: string | null;
+};
+
+export type UpdateBrandProfileBody = {
+  tagline?: string | null;
+  description?: string | null;
+  founded_year?: number | null;
+  hq_city?: string | null;
+  hq_state?: string | null;
+  ceo_name?: string | null;
+  funding_stage?: string | null;
+  employee_count_approx?: number | null;
+};
+
+/** platform → handle */
+export type UpdateSocialHandlesBody = { handles: Record<string, string> };
+export type UpdateDomainsBody = { domains: string[] };

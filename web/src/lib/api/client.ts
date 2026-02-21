@@ -100,3 +100,57 @@ export async function apiGet<T>(
   const body = (await response.json()) as ApiResponse<T>;
   return body.data;
 }
+
+export async function apiMutate<TBody, TResponse>(
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  path: string,
+  body?: TBody,
+): Promise<TResponse> {
+  const url = `${apiBaseUrl}${path}`;
+
+  const headers = new Headers({
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  });
+
+  if (apiKey) {
+    headers.set("Authorization", `Bearer ${apiKey}`);
+  }
+
+  const response = await fetch(url, {
+    method,
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+
+  if (!response.ok) {
+    let errorMessage = `Request failed (${response.status}) for ${path}`;
+    let errorCode = "unknown_error";
+
+    try {
+      const errorBody = await response.json();
+      if (
+        errorBody &&
+        typeof errorBody === "object" &&
+        "error" in errorBody &&
+        errorBody.error &&
+        typeof errorBody.error === "object"
+      ) {
+        const { code, message } = errorBody.error as {
+          code?: string;
+          message?: string;
+        };
+        if (typeof code === "string") errorCode = code;
+        if (typeof message === "string") errorMessage = message;
+      }
+    } catch {
+      // Response was not JSON
+    }
+
+    throw new ApiError(response.status, errorCode, errorMessage);
+  }
+
+  if (response.status === 204) return undefined as TResponse;
+  const json = (await response.json()) as ApiResponse<TResponse>;
+  return json.data;
+}

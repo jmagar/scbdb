@@ -1,3 +1,4 @@
+import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import type { LocationPin } from "../types/api";
@@ -15,6 +16,34 @@ type MapCanvasProps = {
   selectedSlugs: string[];
   brandColors: Record<string, string>;
 };
+
+// Build a GeoJSON FeatureCollection from pins + brand colors.
+// Extracted so both the init effect and the data-update effect can share it.
+// Typed as any: @types/geojson is not installed separately;
+// maplibre-gl bundles GeoJSON types internally via @maplibre/geojson-vt.
+function buildGeojson(
+  pins: LocationPin[],
+  brandColors: Record<string, string>,
+): any {
+  return {
+    type: "FeatureCollection",
+    features: pins.map((pin) => ({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [pin.longitude, pin.latitude] },
+      properties: {
+        store_name: pin.store_name,
+        address_line1: pin.address_line1 ?? "",
+        city: pin.city ?? "",
+        state: pin.state ?? "",
+        zip: pin.zip ?? "",
+        locator_source: pin.locator_source ?? "",
+        brand_name: pin.brand_name,
+        brand_slug: pin.brand_slug,
+        color: brandColors[pin.brand_slug] ?? "#888888",
+      },
+    })),
+  };
+}
 
 // Inner component: owns all MapLibre hook-based lifecycle.
 // Isolated here so the outer LocationMapView can be called as a plain
@@ -38,29 +67,7 @@ function MapCanvas({ pins, selectedSlugs, brandColors }: MapCanvasProps) {
     mapRef.current = map;
 
     map.on("load", () => {
-      // GeoJSON typed as any: @types/geojson is not installed separately;
-      // maplibre-gl bundles GeoJSON types internally via @maplibre/geojson-vt.
-      const geojson: any = {
-        type: "FeatureCollection",
-        features: pins.map((pin) => ({
-          type: "Feature",
-          geometry: {
-            type: "Point",
-            coordinates: [pin.longitude, pin.latitude],
-          },
-          properties: {
-            store_name: pin.store_name,
-            address_line1: pin.address_line1 ?? "",
-            city: pin.city ?? "",
-            state: pin.state ?? "",
-            zip: pin.zip ?? "",
-            locator_source: pin.locator_source ?? "",
-            brand_name: pin.brand_name,
-            brand_slug: pin.brand_slug,
-            color: brandColors[pin.brand_slug] ?? "#888888",
-          },
-        })),
-      };
+      const geojson = buildGeojson(pins, brandColors);
 
       map.addSource("store-pins", {
         type: "geojson",
@@ -125,18 +132,32 @@ function MapCanvas({ pins, selectedSlugs, brandColors }: MapCanvasProps) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update layer filter when selectedSlugs changes
+  // Update GeoJSON source data when pins or colors change after initial mount.
+  // Without this, the map stays permanently stale after TanStack Query refetches.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || selectedSlugs.length === 0) return;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource("store-pins") as
+      | maplibregl.GeoJSONSource
+      | undefined;
+    if (!source) return;
+    source.setData(buildGeojson(pins, brandColors));
+  }, [pins, brandColors]);
 
-    // FilterSpecification is not re-exported at maplibre-gl top level in v5;
-    // it lives in @maplibre/maplibre-gl-style-spec, so use any here.
-    const slugFilter: any = [
-      "in",
-      ["get", "brand_slug"],
-      ["literal", selectedSlugs],
-    ];
+  // Update layer filter when selectedSlugs changes.
+  // FilterSpecification is not re-exported at maplibre-gl top level in v5;
+  // it lives in @maplibre/maplibre-gl-style-spec, so use any here.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // When no slugs are selected, apply a filter that matches nothing so no
+    // pins are visible (the overlay hides the map visually, but keeping the
+    // layer empty is the correct underlying state).
+    const slugFilter: any =
+      selectedSlugs.length > 0
+        ? ["in", ["get", "brand_slug"], ["literal", selectedSlugs]]
+        : ["==", ["get", "brand_slug"], ""];
 
     try {
       map.setFilter("pins", ["all", ["!", ["has", "point_count"]], slugFilter]);

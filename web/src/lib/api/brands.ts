@@ -2,6 +2,8 @@ import type {
   BrandSummaryItem,
   BrandProfileResponse,
   CompetitorItem,
+  CreateBrandBody,
+  CreateBrandResponse,
   DistributorItem,
   FundingEventItem,
   LabTestItem,
@@ -9,8 +11,12 @@ import type {
   MediaAppearanceItem,
   PaginatedSignals,
   SponsorshipItem,
+  UpdateBrandMetaBody,
+  UpdateBrandProfileBody,
+  UpdateDomainsBody,
+  UpdateSocialHandlesBody,
 } from "../../types/brands";
-import { apiGet } from "./client";
+import { apiGet, apiMutate } from "./client";
 
 export async function fetchBrands(): Promise<BrandSummaryItem[]> {
   return apiGet<BrandSummaryItem[]>("/api/v1/brands");
@@ -69,4 +75,64 @@ export async function fetchBrandMedia(
   slug: string,
 ): Promise<MediaAppearanceItem[]> {
   return apiGet<MediaAppearanceItem[]>(`/api/v1/brands/${slug}/media`);
+}
+
+// ── Write functions ───────────────────────────────────────────────────────────
+
+export async function createBrand(
+  body: CreateBrandBody,
+): Promise<CreateBrandResponse> {
+  return apiMutate<CreateBrandBody, CreateBrandResponse>(
+    "POST",
+    "/api/v1/brands",
+    body,
+  );
+}
+
+export async function updateBrandMeta(
+  slug: string,
+  body: UpdateBrandMetaBody,
+): Promise<void> {
+  return apiMutate<UpdateBrandMetaBody, void>(
+    "PATCH",
+    `/api/v1/brands/${slug}`,
+    body,
+  );
+}
+
+export async function updateBrandProfile(
+  slug: string,
+  body: UpdateBrandProfileBody,
+): Promise<void> {
+  return apiMutate<UpdateBrandProfileBody, void>(
+    "PUT",
+    `/api/v1/brands/${slug}/profile`,
+    body,
+  );
+}
+
+export async function updateBrandSocial(
+  slug: string,
+  body: UpdateSocialHandlesBody,
+): Promise<void> {
+  return apiMutate<UpdateSocialHandlesBody, void>(
+    "PUT",
+    `/api/v1/brands/${slug}/social`,
+    body,
+  );
+}
+
+export async function updateBrandDomains(
+  slug: string,
+  body: UpdateDomainsBody,
+): Promise<void> {
+  return apiMutate<UpdateDomainsBody, void>(
+    "PUT",
+    `/api/v1/brands/${slug}/domains`,
+    body,
+  );
+}
+
+export async function deactivateBrand(slug: string): Promise<void> {
+  return apiMutate<undefined, void>("DELETE", `/api/v1/brands/${slug}`);
 }

@@ -8,8 +8,9 @@ import { ErrorState, LoadingState } from "./dashboard-utils";
 import { BrandSignalFeed } from "./brand-signal-feed";
 import { BrandContentTab } from "./brand-content-tab";
 import { BrandReconTab } from "./brand-recon-tab";
+import { BrandEditTab } from "./brand-edit-tab";
 
-type ProfileTab = "feed" | "content" | "recon";
+type ProfileTab = "feed" | "content" | "recon" | "edit";
 
 function MetaItem({ label, value }: { label: string; value: string | number }) {
   return (
@@ -121,7 +122,7 @@ export function BrandProfilePage({ slug }: { slug: string }) {
       </div>
 
       <div className="profile-tabs">
-        {(["feed", "content", "recon"] as const).map((tab) => (
+        {(["feed", "content", "recon", "edit"] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -137,6 +138,7 @@ export function BrandProfilePage({ slug }: { slug: string }) {
         {activeTab === "feed" && <BrandSignalFeed slug={slug} />}
         {activeTab === "content" && <BrandContentTab slug={slug} />}
         {activeTab === "recon" && <BrandReconTab slug={slug} />}
+        {activeTab === "edit" && <BrandEditTab slug={slug} brand={brand} />}
       </div>
     </div>
   );

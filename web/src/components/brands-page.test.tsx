@@ -18,6 +18,12 @@ vi.mock("../hooks/use-dashboard-data", () => ({
     isLoading: false,
     error: null,
   }),
+  useCreateBrand: () => ({
+    isPending: false,
+    isError: false,
+    mutateAsync: async () => {},
+    reset: () => {},
+  }),
 }));
 
 describe("BrandsPage", () => {

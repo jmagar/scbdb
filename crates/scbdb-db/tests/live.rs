@@ -10,8 +10,8 @@ use rust_decimal::Decimal;
 use scbdb_core::{NormalizedProduct, NormalizedVariant};
 use scbdb_db::{
     complete_collection_run, create_collection_run, deactivate_missing_locations,
-    fail_collection_run, get_bill_by_jurisdiction_number, get_brand_by_slug,
-    get_brand_completeness, get_collection_run, get_last_price_snapshot,
+    fail_collection_run, get_active_location_keys_for_brand, get_bill_by_jurisdiction_number,
+    get_brand_by_slug, get_brand_completeness, get_collection_run, get_last_price_snapshot,
     insert_brand_competitor_relationship, insert_brand_distributor, insert_brand_funding_event,
     insert_brand_lab_test, insert_brand_legal_proceeding, insert_brand_media_appearance,
     insert_brand_newsletter, insert_brand_sponsorship, insert_price_snapshot_if_changed,
@@ -2357,4 +2357,48 @@ async fn list_active_location_pins_includes_brand_fields(pool: sqlx::PgPool) {
     assert_eq!(pins[0].brand_slug, "pin-brand-fields");
     assert_eq!(pins[0].brand_relationship, "portfolio");
     assert_eq!(pins[0].brand_tier, 1);
+}
+
+// ---------------------------------------------------------------------------
+// Section: get_active_location_keys_for_brand
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn get_active_location_keys_returns_empty_for_unknown_brand(pool: sqlx::PgPool) {
+    let keys = get_active_location_keys_for_brand(&pool, 999_999)
+        .await
+        .expect("query should succeed even with no rows");
+    assert!(keys.is_empty());
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn get_active_location_keys_returns_only_active_keys(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "active-keys-brand", true).await;
+
+    let locs = vec![
+        make_test_location("ak-1", "Active Store A", Some("SC"), None),
+        make_test_location("ak-2", "Active Store B", Some("NC"), None),
+    ];
+    upsert_store_locations(&pool, brand_id, &locs)
+        .await
+        .expect("upsert failed");
+
+    // Deactivate one location to verify the filter.
+    sqlx::query(
+        "UPDATE store_locations SET is_active = false WHERE location_key = 'test-loc-ak-2'",
+    )
+    .execute(&pool)
+    .await
+    .expect("deactivate failed");
+
+    let keys = get_active_location_keys_for_brand(&pool, brand_id)
+        .await
+        .expect("query failed");
+
+    assert_eq!(keys.len(), 1, "should return only the one active key");
+    assert!(keys.contains("test-loc-ak-1"), "active key must be present");
+    assert!(
+        !keys.contains("test-loc-ak-2"),
+        "deactivated key must not be present"
+    );
 }

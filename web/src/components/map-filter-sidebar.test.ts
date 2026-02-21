@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeVisibleSlugs } from "./map-filter-sidebar";
+import { computeVisibleSlugs } from "./map-filter-utils";
 import type { LocationBrandSummary } from "../types/api";
 
 // Use a local extended type for testing

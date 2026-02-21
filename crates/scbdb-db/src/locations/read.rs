@@ -1,5 +1,7 @@
 //! Read operations for the `store_locations` table.
 
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
@@ -190,4 +192,26 @@ pub async fn list_active_locations_by_brand(
     .bind(brand_id)
     .fetch_all(pool)
     .await
+}
+
+/// Return the set of active `location_key` values for a brand.
+///
+/// Call this **before** [`crate::upsert_store_locations`] to enable
+/// before/after diffing: subtract the new key set from the returned set to
+/// find removed locations and vice-versa for additions.
+///
+/// # Errors
+///
+/// Returns [`sqlx::Error`] if the query fails.
+pub async fn get_active_location_keys_for_brand(
+    pool: &PgPool,
+    brand_id: i64,
+) -> Result<HashSet<String>, sqlx::Error> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT location_key FROM store_locations WHERE brand_id = $1 AND is_active = TRUE",
+    )
+    .bind(brand_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(k,)| k).collect())
 }
