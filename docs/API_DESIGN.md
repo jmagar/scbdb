@@ -2,9 +2,9 @@
 
 ## Document Metadata
 
-- Version: 1.1
+- Version: 1.2
 - Status: Active
-- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+- Last Updated (EST): 21:30:00 | 02/20/2026 EST
 
 ## Purpose
 
@@ -113,23 +113,32 @@ All `{*_id}` path parameters accept the **public UUID** (`public_id` column), no
 - `GET /bills/{bill_id}`
 - `GET /bills/{bill_id}/events`
 
-### Sentiment (Post-MVP)
+### Sentiment
 
-- `GET /sentiment/snapshots`
 - `GET /sentiment/summary`
+  - Returns most recent snapshot per active brand, ordered by brand name.
+  - Fields: `brand_name`, `brand_slug`, `score` (string-encoded decimal), `signal_count`, `captured_at`.
+- `GET /sentiment/snapshots`
+  - Query params: `limit` (default `50`, max `200`).
+  - Returns recent snapshots across all brands, ordered by `captured_at DESC`.
+  - Fields: same as summary.
 
 ## Scope Status
 
-### Defined for MVP Scope
+### Implemented
 
 - API versioning convention (`/api/v1`)
 - Auth convention (`Authorization: Bearer <api_key>`)
 - Response envelope format
-- Endpoint contract definitions for brands, products, pricing, collection runs, and bills
+- `GET /health`
+- `GET /products`
+- `GET /pricing/snapshots`, `GET /pricing/summary`
+- `GET /bills`, `GET /bills/{bill_id}/events`
+- `GET /sentiment/summary`, `GET /sentiment/snapshots`
 
 ### Planned Post-MVP / Future Work
 
-- Sentiment endpoints
+- Brand and product detail endpoints
 - Idempotency key enforcement across write operations
 - OpenAPI generation and publication endpoint
 

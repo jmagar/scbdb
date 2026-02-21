@@ -15,9 +15,9 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
   - `scbdb-sentiment`
 - Two binaries:
   - `scbdb-cli`: operator workflows (collect, regs, sentiment, db)
-  - `scbdb-server`: Axum API (currently health endpoint only)
+  - `scbdb-server`: Axum API for health, products, pricing, regulatory, and sentiment views
 - PostgreSQL 16 with sqlx migrations.
-- Current schema includes 9 tables:
+- Current schema includes 10 tables:
   - `brands`
   - `products`
   - `product_variants`
@@ -27,7 +27,8 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
   - `bills`
   - `bill_events`
   - `sentiment_snapshots`
-- Frontend (`web/`) is a Vite + React 19 + TypeScript scaffold (no Tailwind/shadcn implementation yet).
+  - `store_locations`
+- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with four data tabs: Products, Pricing, Regulatory, and Sentiment. Styling uses raw CSS variables (no Tailwind/shadcn).
 
 ## Implemented Capabilities
 
@@ -35,14 +36,15 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 - Pricing snapshot collection tied to auditable collection runs.
 - Legislative ingestion and reporting via LegiScan.
 - Sentiment collection and scoring pipeline (Google News RSS + Reddit sources), with snapshot persistence.
-- Health-check API at `GET /api/v1/health`.
+- Store locator crawler — detects Locally.com, Storemapper, JSON-LD, and embedded JSON formats; tracks `first_seen_at` per location for territory monitoring.
+- Health-check API at `GET /api/v1/health` plus dashboard endpoints for products, pricing snapshots/summary, bills, and sentiment summary/snapshots.
 
 ## Known Limitations
 
-- `scbdb-server` currently exposes only health (`/api/v1/health`); broader query/report endpoints are not yet implemented.
+- API auth is enabled when `SCBDB_API_KEYS` is set (comma-separated bearer tokens); in development, auth is disabled when keys are omitted.
 - `scbdb-cli report` exists as a stub and exits with an error.
 - `SCBDB_SCRAPER_MAX_CONCURRENT_BRANDS` is parsed from env but currently not active (collection still runs one brand at a time).
-- Scheduler is initialized in server startup, but no jobs are registered yet.
+- Store locator URLs in `brands.yaml` are best-guess defaults for most brands; run `collect locations --dry-run` to validate and update via auto-discovery.
 
 ## Quickstart
 
@@ -145,6 +147,14 @@ cargo run --bin scbdb-cli -- sentiment report
 cargo run --bin scbdb-cli -- sentiment report --brand cann
 ```
 
+### Store Locator
+
+```bash
+cargo run --bin scbdb-cli -- collect locations
+cargo run --bin scbdb-cli -- collect locations --brand cann
+cargo run --bin scbdb-cli -- collect locations --dry-run
+```
+
 ### Not Yet Implemented
 
 ```bash
@@ -203,3 +213,5 @@ Copy `.env.example` to `.env`.
 - `docs/TESTING.md`
 - `docs/LOGGING.md`
 - `docs/EXTRACTION_PROMPT_SCHEMA.md`
+- `docs/SENTIMENT_PIPELINE.md`
+- `docs/STORE_LOCATOR.md`
