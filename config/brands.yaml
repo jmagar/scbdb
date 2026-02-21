@@ -7,6 +7,7 @@ brands:
     domain: highrisebev.com
     shop_url: https://highrisebev.com/collections/all-products
     store_locator_url: https://highrisebev.com/pages/store-locator
+    twitter_handle: highrisebev
     notes: >
       Charleston SC local brand. 5mg, 10mg THC lines + CBD-only line +
       Adaptogen line. Founded 2022. Anchor brand for Reyes THC portfolio.
@@ -54,6 +55,7 @@ brands:
     domain: drinkwynk.com
     shop_url: https://drinkwynk.com/collections/all
     store_locator_url: https://drinkwynk.com/pages/store-locator
+    twitter_handle: DrinkWynk
     notes: >
       Zero-cal/zero-sugar positioning. Backed by cannabis MSO. 40 states DTC,
       20 retail markets.
@@ -64,6 +66,7 @@ brands:
     domain: unclearnies.com
     shop_url: https://unclearnies.com
     store_locator_url: https://unclearnies.com/pages/store-locator
+    twitter_handle: OfficialArnies
     notes: >
       High-dose leader. #1 cannabis beverage in IL dispensaries. $7.5M
       Series A, Boston Beer Co. founder on board. 100% YoY growth.
@@ -75,6 +78,7 @@ brands:
     domain: keefbrands.com
     shop_url: null
     store_locator_url: https://keefbrands.com/find-products
+    twitter_handle: Keefbrands
     notes: >
       Dispensary + hemp dual play. 70+ SKUs, 14 states. Deploys branded
       retail fridges. $18.9M sales Jan–Aug 2024.
@@ -187,6 +191,7 @@ brands:
     domain: islandbrandsusa.com
     shop_url: https://www.islandbrandsusa.com
     store_locator_url: https://www.islandbrandsusa.com/pages/beverage-finder
+    twitter_handle: islandbrandsusa
     notes: >
       Sub-brand of Island Brands USA (also makes Active beer). Individual
       products at /products/. 5mg THC + 10mg CBD.
@@ -206,6 +211,7 @@ brands:
     tier: 2
     domain: maryjones.com
     shop_url: null
+    twitter_handle: MaryJonesBrand
     notes: >
       Retro soda branding, conventional retail push.
       drinkmaryjones.com 404s; maryjones.com returns error page — likely
