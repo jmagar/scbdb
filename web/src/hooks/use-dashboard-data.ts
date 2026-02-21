@@ -117,11 +117,18 @@ export function useBrandProfile(slug: string) {
   });
 }
 
-export function useBrandSignals(slug: string, type?: BrandSignalType) {
+export function useBrandSignals(
+  slug: string,
+  type?: BrandSignalType,
+  cursor?: number,
+) {
   return useQuery({
-    queryKey: ["brand-signals", slug, type],
+    queryKey: ["brand-signals", slug, type, cursor],
     queryFn: () =>
-      fetchBrandSignals(slug, type ? { type, limit: 50 } : { limit: 50 }),
+      fetchBrandSignals(
+        slug,
+        type ? { type, limit: 50, cursor } : { limit: 50, cursor },
+      ),
     enabled: !!slug,
     staleTime: STALE_TIME_MS,
   });

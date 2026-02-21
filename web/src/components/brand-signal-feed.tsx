@@ -60,7 +60,7 @@ function SignalRow({ signal }: { signal: SignalItem }) {
 
 export function BrandSignalFeed({ slug }: { slug: string }) {
   const [cursor, setCursor] = useState<number | undefined>(undefined);
-  const { data, isLoading, error } = useBrandSignals(slug);
+  const { data, isLoading, error } = useBrandSignals(slug, undefined, cursor);
 
   if (isLoading) return <LoadingState label="signals" />;
   if (error) return <ErrorState label="signals" />;
@@ -88,8 +88,6 @@ export function BrandSignalFeed({ slug }: { slug: string }) {
           Load More
         </button>
       )}
-      {/* cursor used to trigger refetch — suppress lint */}
-      {cursor !== undefined && null}
     </div>
   );
 }
