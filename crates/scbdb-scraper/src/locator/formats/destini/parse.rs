@@ -1,16 +1,81 @@
-//! `Destini` API fetch and response parsing.
+//! `Destini` API fetch orchestration.
+//!
+//! Iterates a CONUS geographic grid and deduplicates results by coordinate
+//! fingerprint. Response parsing lives in [`super::response`].
 
-use regex::Regex;
+use std::collections::HashMap;
+use std::time::Duration;
 
 use crate::locator::types::{LocatorError, RawStoreLocation};
+use crate::locator::{generate_grid, GridConfig};
 
+use super::response::{parse_knox_locations, parse_product_ids_from_categories, value_as_string};
 use super::{
-    DestiniLocatorConfig, DEFAULT_DISTANCE_MILES, DEFAULT_LATITUDE, DEFAULT_LONGITUDE,
-    DEFAULT_MAX_STORES, DEFAULT_TEXT_STYLE_BM,
+    DestiniLocatorConfig, DEFAULT_DISTANCE_MILES, DEFAULT_MAX_STORES, DEFAULT_TEXT_STYLE_BM,
 };
+
+/// Coordinate fingerprint for deduplication: 4-decimal lat,lng.
+fn coord_key(lat: Option<f64>, lng: Option<f64>) -> String {
+    match (lat, lng) {
+        (Some(la), Some(lo)) => format!("{la:.4},{lo:.4}"),
+        _ => format!("{lat:?},{lng:?}"),
+    }
+}
+
+/// Deduplicate a vec of locations by coordinate key. First occurrence wins.
+fn dedup_by_coordinates(locs: Vec<RawStoreLocation>) -> Vec<RawStoreLocation> {
+    let mut seen: HashMap<String, RawStoreLocation> = HashMap::new();
+    for loc in locs {
+        let key = coord_key(loc.latitude, loc.longitude);
+        seen.entry(key).or_insert(loc);
+    }
+    seen.into_values().collect()
+}
+
+/// Single Knox API call for one lat/lng center.
+async fn fetch_knox_for_point(
+    client: &reqwest::Client,
+    user_agent: &str,
+    knox_base: &str,
+    client_id: &str,
+    lat: f64,
+    lng: f64,
+    distance: u64,
+    max_stores: u64,
+    text_style_bm: &str,
+    product_ids: &[String],
+) -> Result<Vec<RawStoreLocation>, LocatorError> {
+    let knox_url = join_url(knox_base, "knox");
+    let payload = serde_json::json!({
+        "params": {
+            "distance": distance,
+            "products": product_ids,
+            "latitude": lat,
+            "longitude": lng,
+            "client": client_id,
+            "maxStores": max_stores,
+            "textStyleBm": text_style_bm,
+        }
+    });
+
+    let response = client
+        .post(knox_url)
+        .header(reqwest::header::USER_AGENT, user_agent)
+        .json(&payload)
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+
+    Ok(parse_knox_locations(&response))
+}
 
 /// Fetch store locations from `Destini` using the provider's own bootstrap and
 /// API contract.
+///
+/// Iterates a CONUS geographic grid (~140 points at 200-mile spacing) and
+/// deduplicates results by coordinate fingerprint so overlapping radius
+/// windows do not produce duplicate entries.
 pub(in crate::locator) async fn fetch_destini_stores(
     config: &DestiniLocatorConfig,
     timeout_secs: u64,
@@ -56,7 +121,7 @@ pub(in crate::locator) async fn fetch_destini_stores(
         .unwrap_or(DEFAULT_TEXT_STYLE_BM);
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout_secs))
+        .timeout(Duration::from_secs(timeout_secs))
         .build()?;
 
     let product_ids = fetch_product_ids(&client, user_agent, knox_base, &client_id).await?;
@@ -64,29 +129,43 @@ pub(in crate::locator) async fn fetch_destini_stores(
         return Ok(vec![]);
     }
 
-    let knox_url = join_url(knox_base, "knox");
-    let payload = serde_json::json!({
-        "params": {
-            "distance": distance,
-            "products": product_ids,
-            "latitude": DEFAULT_LATITUDE,
-            "longitude": DEFAULT_LONGITUDE,
-            "client": client_id,
-            "maxStores": max_stores,
-            "textStyleBm": text_style_bm,
-        }
-    });
+    let grid = generate_grid(&GridConfig::conus_coarse()); // ~140 points
+    let mut seen: HashMap<String, RawStoreLocation> = HashMap::new();
 
-    let response = client
-        .post(knox_url)
-        .header(reqwest::header::USER_AGENT, user_agent)
-        .json(&payload)
-        .send()
-        .await?
-        .json::<serde_json::Value>()
+    for point in &grid {
+        let locs = fetch_knox_for_point(
+            &client,
+            user_agent,
+            knox_base,
+            &client_id,
+            point.lat,
+            point.lng,
+            distance,
+            max_stores,
+            text_style_bm,
+            &product_ids,
+        )
         .await?;
 
-    Ok(parse_knox_locations(&response))
+        if locs.len() as u64 >= max_stores {
+            tracing::warn!(
+                lat = point.lat,
+                lng = point.lng,
+                max_stores,
+                "Knox returned max_stores; locations in this region may be truncated"
+            );
+        }
+
+        for loc in locs {
+            let key = coord_key(loc.latitude, loc.longitude);
+            seen.entry(key).or_insert(loc);
+        }
+
+        // Courtesy delay — 140 calls at 500ms ≈ 70 s total per brand
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+
+    Ok(seen.into_values().collect())
 }
 
 async fn fetch_product_ids(
@@ -117,173 +196,52 @@ async fn fetch_product_ids(
     Ok(parse_product_ids_from_categories(&response))
 }
 
-pub(super) fn parse_product_ids_from_categories(response: &serde_json::Value) -> Vec<String> {
-    let mut seen: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-
-    let categories = response
-        .get("categories")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-
-    for category in categories {
-        let sub_categories = category
-            .get("subCategories")
-            .and_then(serde_json::Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-
-        for sub_category in sub_categories {
-            let products = sub_category
-                .get("products")
-                .and_then(serde_json::Value::as_array)
-                .cloned()
-                .unwrap_or_default();
-
-            for product in products {
-                if let Some(product_id) = product
-                    .get("pID")
-                    .or_else(|| product.get("productId"))
-                    .and_then(value_as_string)
-                    .map(|value| value.trim().to_string())
-                    .filter(|value| !value.is_empty())
-                {
-                    seen.insert(product_id);
-                }
-            }
-        }
-    }
-
-    seen.into_iter().collect()
-}
-
-pub(super) fn parse_knox_locations(response: &serde_json::Value) -> Vec<RawStoreLocation> {
-    response
-        .get("data")
-        .and_then(serde_json::Value::as_array)
-        .into_iter()
-        .flat_map(|stores| stores.iter())
-        .filter_map(map_knox_store)
-        .collect()
-}
-
-fn map_knox_store(store: &serde_json::Value) -> Option<RawStoreLocation> {
-    let name = store
-        .get("name")
-        .and_then(serde_json::Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(str::to_string)?;
-
-    Some(RawStoreLocation {
-        external_id: store.get("id").and_then(value_as_string),
-        name,
-        address_line1: store
-            .get("address")
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-        city: store
-            .get("city")
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-        state: store
-            .get("state")
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-        zip: store
-            .get("postalCode")
-            .or_else(|| store.get("zip"))
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-        country: store
-            .get("country")
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-        latitude: store.get("latitude").and_then(value_as_f64),
-        longitude: store.get("longitude").and_then(value_as_f64),
-        phone: store
-            .get("phone")
-            .and_then(serde_json::Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_string),
-        locator_source: "destini".to_string(),
-        raw_data: store.clone(),
-    })
-}
-
 fn join_url(base: &str, path: &str) -> String {
     format!("{}{path}", base.trim_end_matches('/').to_string() + "/")
 }
 
-pub(super) fn extract_script_urls_for_destini_probe(html: &str, locator_url: &str) -> Vec<String> {
-    let script_src_re = Regex::new(r#"<script[^>]+src\s*=\s*["']([^"']+\.js[^"']*)["'][^>]*>"#)
-        .expect("valid regex");
-    let link_href_re = Regex::new(r#"<link[^>]+href\s*=\s*["']([^"']+\.js[^"']*)["'][^>]*>"#)
-        .expect("valid regex");
-    let base_url = reqwest::Url::parse(locator_url).ok();
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::locator::types::RawStoreLocation;
 
-    let mut urls = Vec::new();
-
-    for regex in [&script_src_re, &link_href_re] {
-        for captures in regex.captures_iter(html) {
-            let Some(source) = captures.get(1).map(|m| m.as_str().trim()) else {
-                continue;
-            };
-
-            let resolved = if source.starts_with("http://") || source.starts_with("https://") {
-                Some(source.to_string())
-            } else {
-                base_url
-                    .as_ref()
-                    .and_then(|base| base.join(source).ok())
-                    .map(|url| url.to_string())
-            };
-
-            let Some(url) = resolved else {
-                continue;
-            };
-
-            let lowered = url.to_ascii_lowercase();
-            if lowered.contains("/_nuxt/")
-                || lowered.contains("locator")
-                || lowered.contains("where-to-buy")
-                || lowered.contains("lets.shop")
-            {
-                urls.push(url);
-            }
+    fn make_loc(lat: f64, lng: f64) -> RawStoreLocation {
+        RawStoreLocation {
+            external_id: None,
+            name: "Store A".to_string(),
+            address_line1: None,
+            city: Some("Columbia".to_string()),
+            state: Some("SC".to_string()),
+            zip: None,
+            country: None,
+            latitude: Some(lat),
+            longitude: Some(lng),
+            phone: None,
+            locator_source: "destini".to_string(),
+            raw_data: serde_json::Value::Null,
         }
     }
 
-    // Preserve script order but deduplicate.
-    let mut seen = std::collections::BTreeSet::new();
-    urls.into_iter()
-        .filter(|url| seen.insert(url.clone()))
-        .collect()
-}
+    #[test]
+    fn deduplicates_overlapping_destini_results() {
+        // 33.12340 and 33.12341 both format to "33.1234" with {:.4} → same dedup key
+        let locs = vec![
+            make_loc(33.12340, -80.12340),
+            make_loc(33.12341, -80.12340), // duplicate — rounds to same key
+            make_loc(34.00000, -81.00000), // distinct
+        ];
+        let deduped = dedup_by_coordinates(locs);
+        assert_eq!(deduped.len(), 2);
+    }
 
-fn value_as_string(value: &serde_json::Value) -> Option<String> {
-    value.as_str().map(str::to_string).or_else(|| {
-        if value.is_number() {
-            Some(value.to_string())
-        } else {
-            None
-        }
-    })
-}
+    #[test]
+    fn coord_key_formats_to_four_decimals() {
+        assert_eq!(coord_key(Some(33.1234), Some(-80.9999)), "33.1234,-80.9999");
+    }
 
-fn value_as_f64(value: &serde_json::Value) -> Option<f64> {
-    value
-        .as_f64()
-        .or_else(|| value.as_str().and_then(|raw| raw.parse::<f64>().ok()))
+    #[test]
+    fn coord_key_handles_none() {
+        let key = coord_key(None, None);
+        assert!(key.contains("None"));
+    }
 }

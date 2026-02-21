@@ -1,14 +1,12 @@
 //! `Destini` / `lets.shop` locator extraction.
 
 mod parse;
+mod response;
 
 use regex::Regex;
 
-use parse::extract_script_urls_for_destini_probe;
 pub(in crate::locator) use parse::fetch_destini_stores;
 
-pub(in crate::locator) const DEFAULT_LATITUDE: f64 = 39.828_175;
-pub(in crate::locator) const DEFAULT_LONGITUDE: f64 = -98.579_5;
 pub(in crate::locator) const DEFAULT_DISTANCE_MILES: u64 = 100;
 pub(in crate::locator) const DEFAULT_MAX_STORES: u64 = 100;
 pub(in crate::locator) const DEFAULT_TEXT_STYLE_BM: &str = "RESPECTCASINGPASSED";
@@ -113,6 +111,55 @@ pub(in crate::locator) async fn discover_destini_locator_config(
     None
 }
 
+/// Enumerate JS/link URLs in `html` that are plausible `Destini` bundle locations.
+///
+/// Called by [`discover_destini_locator_config`] to probe SPA route chunks.
+fn extract_script_urls_for_destini_probe(html: &str, locator_url: &str) -> Vec<String> {
+    let script_src_re = Regex::new(r#"<script[^>]+src\s*=\s*["']([^"']+\.js[^"']*)["'][^>]*>"#)
+        .expect("valid regex");
+    let link_href_re = Regex::new(r#"<link[^>]+href\s*=\s*["']([^"']+\.js[^"']*)["'][^>]*>"#)
+        .expect("valid regex");
+    let base_url = reqwest::Url::parse(locator_url).ok();
+
+    let mut urls = Vec::new();
+
+    for regex in [&script_src_re, &link_href_re] {
+        for captures in regex.captures_iter(html) {
+            let Some(source) = captures.get(1).map(|m| m.as_str().trim()) else {
+                continue;
+            };
+
+            let resolved = if source.starts_with("http://") || source.starts_with("https://") {
+                Some(source.to_string())
+            } else {
+                base_url
+                    .as_ref()
+                    .and_then(|base| base.join(source).ok())
+                    .map(|url| url.to_string())
+            };
+
+            let Some(url) = resolved else {
+                continue;
+            };
+
+            let lowered = url.to_ascii_lowercase();
+            if lowered.contains("/_nuxt/")
+                || lowered.contains("locator")
+                || lowered.contains("where-to-buy")
+                || lowered.contains("lets.shop")
+            {
+                urls.push(url);
+            }
+        }
+    }
+
+    // Preserve script order but deduplicate.
+    let mut seen = std::collections::BTreeSet::new();
+    urls.into_iter()
+        .filter(|url| seen.insert(url.clone()))
+        .collect()
+}
+
 fn capture_first(haystack: &str, pattern: &str) -> Option<String> {
     capture_groups(haystack, pattern, 1)
 }
@@ -157,11 +204,8 @@ mod tests {
     use serde_json::json;
 
     use super::{
-        extract_destini_locator_config,
-        parse::{
-            extract_script_urls_for_destini_probe, parse_knox_locations,
-            parse_product_ids_from_categories,
-        },
+        extract_destini_locator_config, extract_script_urls_for_destini_probe,
+        response::{parse_knox_locations, parse_product_ids_from_categories},
     };
 
     #[test]
