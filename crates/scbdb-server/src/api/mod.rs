@@ -1,4 +1,5 @@
 mod bills;
+mod brands;
 mod locations;
 mod pricing;
 mod products;
@@ -146,6 +147,31 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
             "/api/v1/locations/by-state",
             get(locations::list_locations_by_state),
         )
+        .route("/api/v1/brands", get(brands::list_brands))
+        .route("/api/v1/brands/{slug}", get(brands::get_brand))
+        .route(
+            "/api/v1/brands/{slug}/signals",
+            get(brands::list_brand_signals),
+        )
+        .route("/api/v1/brands/{slug}/funding", get(brands::list_funding))
+        .route(
+            "/api/v1/brands/{slug}/lab-tests",
+            get(brands::list_lab_tests),
+        )
+        .route("/api/v1/brands/{slug}/legal", get(brands::list_legal))
+        .route(
+            "/api/v1/brands/{slug}/sponsorships",
+            get(brands::list_sponsorships),
+        )
+        .route(
+            "/api/v1/brands/{slug}/distributors",
+            get(brands::list_distributors),
+        )
+        .route(
+            "/api/v1/brands/{slug}/competitors",
+            get(brands::list_competitors),
+        )
+        .route("/api/v1/brands/{slug}/media", get(brands::list_media))
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn_with_state(
