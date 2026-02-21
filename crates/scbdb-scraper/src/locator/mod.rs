@@ -1,7 +1,8 @@
 //! Store locator crawler.
 //!
 //! Tries extraction strategies in priority order (Locally.com, Storemapper,
-//! JSON-LD, embedded JSON) and returns the first successful result.
+//! Stockist, Storepoint, Roseperl, JSON-LD, embedded JSON) and returns the first
+//! successful result.
 
 pub(crate) mod fetch;
 mod formats;
@@ -11,14 +12,20 @@ pub use types::{LocatorError, RawStoreLocation};
 
 use fetch::fetch_html;
 use formats::{
-    extract_json_embed_locations, extract_jsonld_locations, extract_locally_company_id,
-    extract_storemapper_token, fetch_locally_stores, fetch_storemapper_stores,
+    extract_askhoodie_embed_id, extract_beveragefinder_key, extract_json_embed_locations,
+    extract_jsonld_locations, extract_locally_company_id, extract_roseperl_wtb_url,
+    extract_stockist_widget_tag, extract_storemapper_token, extract_storemapper_user_id,
+    extract_storepoint_widget_id, extract_vtinfo_embed, fetch_askhoodie_stores,
+    fetch_beveragefinder_stores, fetch_locally_stores, fetch_roseperl_stores,
+    fetch_stockist_stores, fetch_storemapper_stores, fetch_storemapper_stores_by_user_id,
+    fetch_storepoint_stores, fetch_vtinfo_stores,
 };
 
 /// Fetch store locations from a brand's store locator page.
 ///
-/// Tries extraction strategies in order (Locally.com, Storemapper, JSON-LD,
-/// embedded JSON) and returns the first successful result. Returns
+/// Tries extraction strategies in order (Locally.com, Storemapper, Stockist,
+/// Storepoint, Roseperl, JSON-LD, embedded JSON) and returns the first successful
+/// result. Returns
 /// `Ok(vec![])` when the page is reachable but no locations can be parsed.
 ///
 /// # Errors
@@ -48,8 +55,75 @@ pub async fn fetch_store_locations(
             return Ok(stores);
         }
     }
+    if let Some(user_id) = extract_storemapper_user_id(&html) {
+        tracing::debug!(locator_url, user_id, "detected Storemapper user-id widget");
+        let stores =
+            fetch_storemapper_stores_by_user_id(&user_id, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
 
-    // Strategy 3: schema.org JSON-LD
+    // Strategy 3: Stockist widget
+    if let Some(tag) = extract_stockist_widget_tag(&html) {
+        tracing::debug!(locator_url, tag, "detected Stockist widget");
+        let stores = fetch_stockist_stores(&tag, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 4: Storepoint widget
+    if let Some(widget_id) = extract_storepoint_widget_id(&html) {
+        tracing::debug!(locator_url, widget_id, "detected Storepoint widget");
+        let stores = fetch_storepoint_stores(&widget_id, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 5: Roseperl/Secomapp WTB JS
+    if let Some(wtb_url) = extract_roseperl_wtb_url(&html) {
+        tracing::debug!(locator_url, wtb_url, "detected Roseperl store locator");
+        let stores = fetch_roseperl_stores(&wtb_url, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 6: VTInfo iframe widget
+    if let Some(embed) = extract_vtinfo_embed(&html) {
+        tracing::debug!(
+            locator_url,
+            cust_id = embed.cust_id,
+            uuid = embed.uuid,
+            "detected VTInfo finder widget"
+        );
+        let stores = fetch_vtinfo_stores(&embed, locator_url, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 7: AskHoodie widget
+    if let Some(embed_id) = extract_askhoodie_embed_id(&html) {
+        tracing::debug!(locator_url, embed_id, "detected AskHoodie widget");
+        let stores = fetch_askhoodie_stores(&embed_id, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 8: BeverageFinder widget
+    if let Some(key) = extract_beveragefinder_key(&html) {
+        tracing::debug!(locator_url, key, "detected BeverageFinder widget");
+        let stores = fetch_beveragefinder_stores(&key, timeout_secs, user_agent).await?;
+        if !stores.is_empty() {
+            return Ok(stores);
+        }
+    }
+
+    // Strategy 9: schema.org JSON-LD
     let jsonld_stores = extract_jsonld_locations(&html);
     if !jsonld_stores.is_empty() {
         tracing::debug!(
@@ -60,7 +134,7 @@ pub async fn fetch_store_locations(
         return Ok(jsonld_stores);
     }
 
-    // Strategy 4: Embedded JSON arrays in script tags
+    // Strategy 10: Embedded JSON arrays in script tags
     let embed_stores = extract_json_embed_locations(&html);
     if !embed_stores.is_empty() {
         tracing::debug!(
@@ -71,9 +145,77 @@ pub async fn fetch_store_locations(
         return Ok(embed_stores);
     }
 
-    // Strategy 5: give up gracefully
+    // Strategy 11: give up gracefully
     tracing::warn!(locator_url, "no parseable locator found");
     Ok(vec![])
+}
+
+/// Validate whether a scrape result is trusted enough to mutate stored data.
+///
+/// Trusted sources: `locally`, `storemapper`, `stockist`, `storepoint`,
+/// `roseperl`,
+/// `jsonld`.
+///
+/// `json_embed` is a fallback parser and is accepted only when quality is
+/// high enough to reduce false positives.
+///
+/// # Errors
+///
+/// Returns `Err` with a human-readable reason when the scrape result is not
+/// trusted (empty result, low-quality embed parse, or unknown source).
+pub fn validate_store_locations_trust(locations: &[RawStoreLocation]) -> Result<(), String> {
+    if locations.is_empty() {
+        return Err("scrape returned zero locations".to_string());
+    }
+
+    let source = locations
+        .first()
+        .map_or("unknown", |loc| loc.locator_source.as_str());
+
+    match source {
+        "locally" | "storemapper" | "stockist" | "storepoint" | "roseperl" | "vtinfo"
+        | "askhoodie" | "beveragefinder" | "jsonld" => Ok(()),
+        "json_embed" => {
+            let quality_count = locations
+                .iter()
+                .filter(|loc| location_record_has_minimum_shape(loc))
+                .count();
+            // Both counts are bounded by the slice length which is at most
+            // usize::MAX; for any realistic data set they fit well within
+            // f64's 52-bit mantissa without precision loss.
+            #[allow(clippy::cast_precision_loss)]
+            let quality_ratio = quality_count as f64 / locations.len() as f64;
+
+            if locations.len() >= 5 && quality_ratio >= 0.80 {
+                Ok(())
+            } else {
+                Err(format!(
+                    "json_embed scrape below trust threshold (count={}, quality_ratio={quality_ratio:.2})",
+                    locations.len()
+                ))
+            }
+        }
+        other => Err(format!("unknown locator source '{other}'")),
+    }
+}
+
+fn location_record_has_minimum_shape(location: &RawStoreLocation) -> bool {
+    let has_name = !location.name.trim().is_empty();
+    let has_address = location
+        .address_line1
+        .as_deref()
+        .is_some_and(|s| !s.trim().is_empty());
+    let has_city_state = location
+        .city
+        .as_deref()
+        .is_some_and(|s| !s.trim().is_empty())
+        && location
+            .state
+            .as_deref()
+            .is_some_and(|s| !s.trim().is_empty());
+    let has_coordinates = location.latitude.is_some() && location.longitude.is_some();
+
+    has_name && (has_address || has_city_state || has_coordinates)
 }
 
 /// Compute a stable dedup key for a location.
@@ -103,7 +245,7 @@ mod tests {
     use super::*;
     use formats::{
         extract_balanced_array, extract_json_embed_locations, extract_jsonld_locations,
-        extract_locally_company_id, extract_storemapper_token,
+        extract_locally_company_id, extract_storemapper_token, extract_storemapper_user_id,
     };
 
     // -----------------------------------------------------------------------
@@ -390,6 +532,12 @@ mod tests {
         assert_eq!(extract_storemapper_token(html), None);
     }
 
+    #[test]
+    fn extracts_storemapper_user_id_from_data_attribute() {
+        let html = r#"<script data-storemapper-id="8676"></script>"#;
+        assert_eq!(extract_storemapper_user_id(html).as_deref(), Some("8676"));
+    }
+
     // -----------------------------------------------------------------------
     // Embedded JSON array extraction
     // -----------------------------------------------------------------------
@@ -431,5 +579,57 @@ mod tests {
         let s = r#"[{"a": 1}, {"b": 2}] trailing"#;
         let result = extract_balanced_array(s);
         assert_eq!(result, Some(r#"[{"a": 1}, {"b": 2}]"#));
+    }
+
+    #[test]
+    fn trust_guard_rejects_empty_scrape() {
+        let result = validate_store_locations_trust(&[]);
+        assert!(result.is_err(), "empty scrape must be untrusted");
+    }
+
+    #[test]
+    fn trust_guard_accepts_high_confidence_provider() {
+        let locations = vec![RawStoreLocation {
+            external_id: Some("1".to_string()),
+            name: "Test Store".to_string(),
+            address_line1: Some("123 Main St".to_string()),
+            city: Some("Austin".to_string()),
+            state: Some("TX".to_string()),
+            zip: Some("78701".to_string()),
+            country: Some("US".to_string()),
+            latitude: Some(30.0),
+            longitude: Some(-97.0),
+            phone: None,
+            locator_source: "stockist".to_string(),
+            raw_data: serde_json::Value::Null,
+        }];
+
+        assert!(
+            validate_store_locations_trust(&locations).is_ok(),
+            "stockist should be trusted"
+        );
+    }
+
+    #[test]
+    fn trust_guard_rejects_low_quality_json_embed() {
+        let locations = vec![RawStoreLocation {
+            external_id: None,
+            name: "Looks Like A Store".to_string(),
+            address_line1: None,
+            city: None,
+            state: None,
+            zip: None,
+            country: None,
+            latitude: None,
+            longitude: None,
+            phone: None,
+            locator_source: "json_embed".to_string(),
+            raw_data: serde_json::Value::Null,
+        }];
+
+        assert!(
+            validate_store_locations_trust(&locations).is_err(),
+            "low-quality json_embed must be untrusted"
+        );
     }
 }

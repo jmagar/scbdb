@@ -1,10 +1,12 @@
 //! Sentiment pipeline orchestration.
 
+use std::collections::BTreeMap;
+
 use crate::embeddings::TeiClient;
 use crate::error::SentimentError;
 use crate::scorer::lexicon_score;
 use crate::sources::collect_signals;
-use crate::types::{BrandSentimentResult, SentimentConfig, SentimentSignal};
+use crate::types::{BrandSentimentResult, SentimentConfig, SentimentSignal, SignalEvidence};
 use crate::vector_store::QdrantClient;
 
 /// Run the full sentiment pipeline for one brand.
@@ -34,7 +36,7 @@ pub async fn run_brand_sentiment(
     qdrant.ensure_collection().await?;
 
     // Step 1: Collect signals from all sources.
-    let mut signals = collect_signals(config, brand_slug, brand_name).await;
+    let mut signals = collect_signals(config, brand_slug, brand_name, None).await;
 
     if signals.is_empty() {
         tracing::info!(
@@ -45,6 +47,8 @@ pub async fn run_brand_sentiment(
             brand_slug: brand_slug.to_string(),
             score: 0.0,
             signal_count: 0,
+            source_counts: BTreeMap::new(),
+            top_signals: Vec::new(),
         });
     }
 
@@ -98,9 +102,29 @@ pub async fn run_brand_sentiment(
         sum / denom
     };
 
+    let mut source_counts: BTreeMap<String, usize> = BTreeMap::new();
+    for signal in &scored_signals {
+        *source_counts.entry(signal.source.clone()).or_default() += 1;
+    }
+
+    let mut ranked = scored_signals.clone();
+    ranked.sort_by(|a, b| b.score.abs().total_cmp(&a.score.abs()));
+    let top_signals: Vec<SignalEvidence> = ranked
+        .into_iter()
+        .take(5)
+        .map(|signal| SignalEvidence {
+            source: signal.source,
+            url: signal.url,
+            score: signal.score,
+            text_preview: signal.text.chars().take(220).collect(),
+        })
+        .collect();
+
     Ok(BrandSentimentResult {
         brand_slug: brand_slug.to_string(),
         score,
         signal_count: scored_signals.len(),
+        source_counts,
+        top_signals,
     })
 }

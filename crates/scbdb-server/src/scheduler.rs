@@ -107,6 +107,20 @@ async fn collect_brand_locations(
         }
     };
 
+    let source = raw
+        .first()
+        .map_or("none", |loc| loc.locator_source.as_str());
+
+    if let Err(reason) = scbdb_scraper::validate_store_locations_trust(&raw) {
+        tracing::warn!(
+            brand = %brand.slug,
+            locator_url,
+            source,
+            "scheduler: rejected location scrape result ({reason})"
+        );
+        return;
+    }
+
     let new_locations: Vec<scbdb_db::NewStoreLocation> = raw
         .iter()
         .map(|loc| scbdb_db::NewStoreLocation {
