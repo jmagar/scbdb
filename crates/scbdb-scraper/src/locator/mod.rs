@@ -48,31 +48,46 @@ pub async fn fetch_store_locations(
     timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
-    let html = fetch_html(locator_url, timeout_secs, user_agent).await?;
+    let html = match fetch_html(locator_url, timeout_secs, user_agent).await {
+        Ok(body) => body,
+        Err(LocatorError::AllAttemptsFailed { .. }) => {
+            tracing::warn!(locator_url, "all fetch attempts failed; no locator found");
+            return Ok(vec![]);
+        }
+        Err(e) => return Err(e),
+    };
 
     // Strategy 1: Locally.com widget
     if let Some(company_id) = extract_locally_company_id(&html) {
         tracing::debug!(locator_url, company_id, "detected Locally.com widget");
-        let stores = fetch_locally_stores(&company_id, timeout_secs, user_agent).await?;
-        if !stores.is_empty() {
-            return Ok(stores);
+        match fetch_locally_stores(&company_id, timeout_secs, user_agent).await {
+            Ok(stores) if !stores.is_empty() => return Ok(stores),
+            Ok(_) => {}
+            Err(e) => {
+                tracing::debug!(locator_url, error = %e, "Locally.com fetch failed; trying next strategy")
+            }
         }
     }
 
     // Strategy 2: Storemapper widget
     if let Some(token) = extract_storemapper_token(&html) {
         tracing::debug!(locator_url, token, "detected Storemapper widget");
-        let stores = fetch_storemapper_stores(&token, timeout_secs, user_agent).await?;
-        if !stores.is_empty() {
-            return Ok(stores);
+        match fetch_storemapper_stores(&token, timeout_secs, user_agent).await {
+            Ok(stores) if !stores.is_empty() => return Ok(stores),
+            Ok(_) => {}
+            Err(e) => {
+                tracing::debug!(locator_url, error = %e, "Storemapper token fetch failed; trying next strategy")
+            }
         }
     }
     if let Some(user_id) = extract_storemapper_user_id(&html) {
         tracing::debug!(locator_url, user_id, "detected Storemapper user-id widget");
-        let stores =
-            fetch_storemapper_stores_by_user_id(&user_id, timeout_secs, user_agent).await?;
-        if !stores.is_empty() {
-            return Ok(stores);
+        match fetch_storemapper_stores_by_user_id(&user_id, timeout_secs, user_agent).await {
+            Ok(stores) if !stores.is_empty() => return Ok(stores),
+            Ok(_) => {}
+            Err(e) => {
+                tracing::debug!(locator_url, error = %e, "Storemapper user-id fetch failed; trying next strategy")
+            }
         }
     }
 

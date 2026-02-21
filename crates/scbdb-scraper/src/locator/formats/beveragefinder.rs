@@ -115,6 +115,9 @@ fn map_store_entry(store: &serde_json::Value) -> Option<RawStoreLocation> {
 
     Some(RawStoreLocation {
         external_id: store.get("id").and_then(|v| {
+            if v.is_null() {
+                return None;
+            }
             v.as_str()
                 .map(str::to_string)
                 .or_else(|| Some(v.to_string()))

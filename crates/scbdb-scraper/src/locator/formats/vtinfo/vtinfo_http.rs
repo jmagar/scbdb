@@ -237,7 +237,7 @@ pub(super) fn retry_after_delay(
 
 fn stable_hash(seed: &str, request_index: usize) -> u64 {
     // FNV-1a 64-bit constants: offset basis and prime.
-    const FNV_OFFSET: u64 = 1_469_598_103_934_665_603;
+    const FNV_OFFSET: u64 = 14_695_981_039_346_656_037;
     const FNV_PRIME: u64 = 1_099_511_628_211;
     let mut hash = FNV_OFFSET;
     for byte in seed.bytes() {
@@ -248,10 +248,12 @@ fn stable_hash(seed: &str, request_index: usize) -> u64 {
 }
 
 fn is_retryable_status(status: reqwest::StatusCode) -> bool {
+    if status.is_server_error() {
+        return false;
+    }
     status.is_success()
         || status == reqwest::StatusCode::TOO_MANY_REQUESTS
         || status == reqwest::StatusCode::REQUEST_TIMEOUT
-        || status.is_server_error()
 }
 
 fn is_vtinfo_rate_limited_body(body: &str) -> bool {

@@ -184,7 +184,8 @@ fn value_as_string(value: &serde_json::Value) -> Option<String> {
 }
 
 fn extract_script_urls_for_account_probe(html: &str) -> Vec<String> {
-    let script_url_re = Regex::new(r#"https?://[^\s"'<>]+\.js"#).expect("valid regex");
+    let script_url_re =
+        Regex::new(r#"https?://[^\s"'<>]+\.js(?:\?[^\s"'<>]*)?"#).expect("valid regex");
     let mut urls = std::collections::BTreeSet::new();
 
     for capture in script_url_re.find_iter(html) {

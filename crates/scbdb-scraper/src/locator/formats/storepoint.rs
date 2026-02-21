@@ -65,9 +65,26 @@ pub(in crate::locator) async fn fetch_storepoint_stores(
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string);
 
-            let (city, state, zip, country) = address_line1
-                .as_deref()
-                .map_or((None, None, None, None), parse_storepoint_address_tail);
+            // Use explicit API fields when available; fall back to address parsing.
+            let explicit_country = store
+                .get("country")
+                .and_then(serde_json::Value::as_str)
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string);
+
+            let (city, state, zip, country) = if explicit_country.is_some() {
+                let parsed = address_line1
+                    .as_deref()
+                    .map_or((None, None, None, None), |addr| {
+                        parse_storepoint_address_tail_with_country(addr)
+                    });
+                (parsed.0, parsed.1, parsed.2, explicit_country)
+            } else {
+                address_line1
+                    .as_deref()
+                    .map_or((None, None, None, None), parse_storepoint_address_tail)
+            };
 
             Some(RawStoreLocation {
                 external_id: store.get("id").and_then(|v| {
@@ -170,6 +187,63 @@ fn parse_storepoint_address_tail(
         Some(state_candidate.to_string()),
         Some(zip_candidate.to_string()),
         country,
+    )
+}
+
+/// Parse city/state/zip from an address string when country is already known.
+///
+/// When the API provides an explicit `country` field, the last comma-separated
+/// segment of the address is city+state+zip (not country), so we parse it
+/// directly instead of assuming the last segment is a country code.
+fn parse_storepoint_address_tail_with_country(
+    address: &str,
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    let parts: Vec<&str> = address
+        .split(',')
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+
+    // Try the last segment as "City ST 12345".
+    let city_state_zip_segment = parts.last().copied().unwrap_or("");
+
+    let tokens: Vec<&str> = city_state_zip_segment
+        .split_whitespace()
+        .filter(|t| !t.is_empty())
+        .collect();
+
+    if tokens.len() < 3 {
+        return (None, None, None, None);
+    }
+
+    let zip_candidate = tokens[tokens.len() - 1];
+    let state_candidate = tokens[tokens.len() - 2];
+
+    let zip_ok = zip_candidate
+        .chars()
+        .all(|c| c.is_ascii_digit() || c == '-')
+        && zip_candidate.chars().any(|c| c.is_ascii_digit());
+
+    let state_ok =
+        state_candidate.len() == 2 && state_candidate.chars().all(|c| c.is_ascii_alphabetic());
+
+    if !zip_ok || !state_ok {
+        return (None, None, None, None);
+    }
+
+    let city = tokens[..tokens.len() - 2].join(" ");
+    let city = if city.is_empty() { None } else { Some(city) };
+
+    (
+        city,
+        Some(state_candidate.to_string()),
+        Some(zip_candidate.to_string()),
+        None, // country handled by caller
     )
 }
 

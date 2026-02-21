@@ -24,8 +24,8 @@ pub(in crate::locator) fn extract_jsonld_locations(html: &str) -> Vec<RawStoreLo
             Err(_) => continue,
         };
 
-        // Accept top-level object or array.
-        let candidates: Vec<serde_json::Value> = if value.is_array() {
+        // Accept top-level object, array, or @graph container.
+        let mut candidates: Vec<serde_json::Value> = if value.is_array() {
             value
                 .as_array()
                 .cloned()
@@ -35,6 +35,16 @@ pub(in crate::locator) fn extract_jsonld_locations(html: &str) -> Vec<RawStoreLo
         } else {
             vec![value]
         };
+
+        // Expand @graph containers: many sites wrap structured data inside
+        // {"@graph": [...]} at the top level.
+        let mut expanded = Vec::new();
+        for item in &candidates {
+            if let Some(graph) = item.get("@graph").and_then(serde_json::Value::as_array) {
+                expanded.extend(graph.iter().cloned());
+            }
+        }
+        candidates.extend(expanded);
 
         for item in candidates {
             if let Some(loc) = jsonld_item_to_location(&item) {
@@ -50,7 +60,16 @@ pub(in crate::locator) fn extract_jsonld_locations(html: &str) -> Vec<RawStoreLo
 /// a physical location (`LocalBusiness`, `Store`, or `FoodEstablishment`).
 fn jsonld_item_to_location(item: &serde_json::Value) -> Option<RawStoreLocation> {
     let type_node = item.get("@type")?;
-    let accepted_types = ["LocalBusiness", "Store", "FoodEstablishment"];
+    let accepted_types = [
+        "LocalBusiness",
+        "Store",
+        "FoodEstablishment",
+        "GroceryStore",
+        "ConvenienceStore",
+        "DrinkingEstablishment",
+        "BarOrPub",
+        "Brewery",
+    ];
 
     // `@type` may be a plain string OR an array of strings (e.g.
     // `["LocalBusiness", "GroceryStore"]`). Accept the item if any element

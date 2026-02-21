@@ -81,8 +81,20 @@ pub(in crate::locator) async fn fetch_locally_stores(
                     .get("country")
                     .and_then(|v| v.as_str())
                     .map(str::to_string),
-                latitude: store.get("lat").and_then(serde_json::Value::as_f64),
-                longitude: store.get("lng").and_then(serde_json::Value::as_f64),
+                latitude: store
+                    .get("lat")
+                    .or_else(|| store.get("latitude"))
+                    .and_then(|v| {
+                        v.as_f64()
+                            .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+                    }),
+                longitude: store
+                    .get("lng")
+                    .or_else(|| store.get("longitude"))
+                    .and_then(|v| {
+                        v.as_f64()
+                            .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+                    }),
                 phone: store
                     .get("phone")
                     .and_then(|v| v.as_str())

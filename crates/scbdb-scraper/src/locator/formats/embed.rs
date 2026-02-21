@@ -10,9 +10,9 @@ pub(in crate::locator) fn extract_json_embed_locations(html: &str) -> Vec<RawSto
     let script_re = Regex::new(r"(?is)<script\b[^>]*>(.*?)</script>").expect("valid regex");
 
     // Quick pre-filter: the array must contain objects with both a name-like
-    // field and an address/location field.
+    // field and an address/location field, in any order.
     let candidate_re = Regex::new(
-        r#"(?is)\[\s*\{[^}]*"(?:name|store_name|Name)"[^}]*"(?:city|lat|address|latitude)"[^}]*\}"#,
+        r#"(?is)\[\s*\{(?:[^}]*"(?:name|store_name|Name)"[^}]*"(?:city|lat|address|latitude)"|[^}]*"(?:city|lat|address|latitude)"[^}]*"(?:name|store_name|Name)")[^}]*\}"#,
     )
     .expect("valid regex");
 
@@ -166,6 +166,9 @@ fn embed_object_to_location(obj: &serde_json::Value) -> Option<RawStoreLocation>
         .map(str::to_string);
 
     let external_id = obj.get("id").and_then(|v| {
+        if v.is_null() {
+            return None;
+        }
         v.as_str()
             .map(str::to_string)
             .or_else(|| Some(v.to_string()))

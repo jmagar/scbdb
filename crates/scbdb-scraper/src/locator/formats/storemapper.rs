@@ -1,9 +1,26 @@
 //! Strategy 2: Storemapper widget extraction.
 
+use std::sync::LazyLock;
+
 use regex::Regex;
 
 use crate::locator::fetch::{fetch_json, fetch_text};
 use crate::locator::types::{LocatorError, RawStoreLocation};
+
+static TOKEN_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r#"storemapper\.co/api/stores\?token=([^"'&\s]+)"#).expect("valid regex"),
+        Regex::new(r#"data-storemapper-token\s*=\s*["']([^"']+)["']"#).expect("valid regex"),
+        Regex::new(r#"token["'\s:=]+([A-Za-z0-9_-]{8,})"#).expect("valid regex"),
+    ]
+});
+
+static USER_ID_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    vec![
+        Regex::new(r#"data-storemapper-id\s*=\s*["']([0-9]+)["']"#).expect("valid regex"),
+        Regex::new(r"api/users/([0-9]+)\.js").expect("valid regex"),
+    ]
+});
 
 /// Extract the Storemapper API token from HTML.
 ///
@@ -16,14 +33,7 @@ pub(in crate::locator) fn extract_storemapper_token(html: &str) -> Option<String
         return None;
     }
 
-    let patterns = [
-        r#"storemapper\.co/api/stores\?token=([^"'&\s]+)"#,
-        r#"data-storemapper-token\s*=\s*["']([^"']+)["']"#,
-        r#"token["'\s:=]+([A-Za-z0-9_-]{8,})"#,
-    ];
-
-    for pattern in &patterns {
-        let re = Regex::new(pattern).expect("valid regex");
+    for re in TOKEN_PATTERNS.iter() {
         if let Some(cap) = re.captures(html) {
             if let Some(m) = cap.get(1) {
                 return Some(m.as_str().to_string());
@@ -43,13 +53,7 @@ pub(in crate::locator) fn extract_storemapper_user_id(html: &str) -> Option<Stri
         return None;
     }
 
-    let patterns = [
-        r#"data-storemapper-id\s*=\s*["']([0-9]+)["']"#,
-        r"api/users/([0-9]+)\.js",
-    ];
-
-    for pattern in &patterns {
-        let re = Regex::new(pattern).expect("valid regex");
+    for re in USER_ID_PATTERNS.iter() {
         if let Some(cap) = re.captures(html) {
             if let Some(m) = cap.get(1) {
                 return Some(m.as_str().to_string());

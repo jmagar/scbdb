@@ -1,7 +1,18 @@
+use std::sync::LazyLock;
+
 use regex::Regex;
 
 use crate::client::extract_store_origin;
 use crate::ScraperError;
+
+static IMG_TAG_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<img\b[^>]*>").expect("valid regex"));
+static LINK_TAG_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<link\b[^>]*>").expect("valid regex"));
+static META_TAG_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?is)<meta\b[^>]*>").expect("valid regex"));
+static SIZES_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(\d+)\s*x\s*(\d+)").expect("valid sizes regex"));
 
 const BROWSER_FALLBACK_UA: &str =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -46,16 +57,23 @@ pub async fn fetch_brand_logo_url(
     }
 
     for ua in user_agents {
-        let response = client
+        let response = match client
             .get(&origin)
             .header(reqwest::header::USER_AGENT, ua)
             .header(reqwest::header::ACCEPT, "text/html,application/xhtml+xml")
             .send()
-            .await?;
+            .await
+        {
+            Ok(resp) => resp,
+            Err(_) => continue,
+        };
         if !response.status().is_success() {
             continue;
         }
-        let body = response.text().await?;
+        let body = match response.text().await {
+            Ok(text) => text,
+            Err(_) => continue,
+        };
         if let Some(url) = extract_logo_candidate(&origin, &body) {
             return Ok(Some(url));
         }
@@ -84,8 +102,7 @@ fn collect_candidates(base_url: &str, html: &str) -> Vec<LogoCandidate> {
         });
     }
 
-    let img_tag_re = Regex::new(r"(?is)<img\b[^>]*>").expect("valid regex");
-    for m in img_tag_re.find_iter(html) {
+    for m in IMG_TAG_RE.find_iter(html) {
         let tag = m.as_str();
         let marker = [
             extract_attr(tag, "class"),
@@ -116,8 +133,7 @@ fn collect_candidates(base_url: &str, html: &str) -> Vec<LogoCandidate> {
         });
     }
 
-    let link_tag_re = Regex::new(r"(?is)<link\b[^>]*>").expect("valid regex");
-    for m in link_tag_re.find_iter(html) {
+    for m in LINK_TAG_RE.find_iter(html) {
         let tag = m.as_str();
         let Some(rel_raw) = extract_attr(tag, "rel") else {
             continue;
@@ -220,16 +236,14 @@ fn score_candidate(candidate: &LogoCandidate) -> i32 {
 }
 
 fn parse_sizes_attr(value: &str) -> Option<(Option<i32>, Option<i32>)> {
-    let sizes_re = Regex::new(r"(?i)(\d+)\s*x\s*(\d+)").expect("valid sizes regex");
-    let caps = sizes_re.captures(value)?;
+    let caps = SIZES_RE.captures(value)?;
     let width = caps.get(1).and_then(|m| m.as_str().parse::<i32>().ok());
     let height = caps.get(2).and_then(|m| m.as_str().parse::<i32>().ok());
     Some((width, height))
 }
 
 fn find_meta_content(html: &str, key_attr: &str, key_value: &str) -> Option<String> {
-    let tag_re = Regex::new(r"(?is)<meta\b[^>]*>").expect("valid regex");
-    let result = tag_re.find_iter(html).find_map(|m| {
+    let result = META_TAG_RE.find_iter(html).find_map(|m| {
         let tag = m.as_str();
         let key = extract_attr(tag, key_attr)?;
         if key.eq_ignore_ascii_case(key_value) {
