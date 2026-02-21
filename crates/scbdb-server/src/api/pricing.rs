@@ -59,7 +59,7 @@ pub(super) async fn list_pricing_snapshots(
         },
     )
     .await
-    .map_err(|e| map_db_error(req_id.0.clone(), e))?;
+    .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
 
     let data = rows
         .into_iter()
@@ -89,7 +89,7 @@ pub(super) async fn list_pricing_summary(
 ) -> Result<Json<ApiResponse<Vec<PricingSummaryItem>>>, ApiError> {
     let rows = scbdb_db::list_pricing_summary(&state.pool)
         .await
-        .map_err(|e| map_db_error(req_id.0.clone(), e))?;
+        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
 
     let data = rows
         .into_iter()

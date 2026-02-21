@@ -1,7 +1,7 @@
 mod bills;
 mod pricing;
 mod products;
-pub mod sentiment;
+mod sentiment;
 
 use axum::{
     extract::State,
@@ -97,12 +97,11 @@ pub(super) fn normalize_limit(limit: Option<i64>) -> i64 {
     limit.unwrap_or(50).clamp(1, 200)
 }
 
-pub(super) fn map_db_error(request_id: String, error: scbdb_db::DbError) -> ApiError {
+pub(super) fn map_db_error(request_id: String, error: &scbdb_db::DbError) -> ApiError {
     tracing::error!(error = %error, "database query failed");
     ApiError::new(request_id, "internal_error", "database query failed")
 }
 
-#[must_use]
 pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(tower_http::cors::Any)
@@ -194,8 +193,11 @@ pub fn default_rate_limit_state() -> RateLimitState {
 mod tests {
     use super::sentiment::SentimentSummaryItem;
     use super::*;
+    use axum::body::{to_bytes, Body};
+    use axum::http::Request;
     use chrono::Utc;
     use rust_decimal::Decimal;
+    use tower::ServiceExt;
 
     #[test]
     fn sentiment_summary_item_is_serializable() {
@@ -223,5 +225,124 @@ mod tests {
     fn api_error_validation_error_maps_to_bad_request() {
         let response = ApiError::new("req-1", "validation_error", "invalid input").into_response();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    async fn seed_pricing_brand_with_logo(pool: &sqlx::PgPool, slug: &str, logo_url: &str) {
+        let brand_id: i64 = sqlx::query_scalar(
+            "INSERT INTO brands (name, slug, relationship, tier, shop_url, logo_url, is_active) \
+             VALUES ($1, $2, 'competitor', 1, $3, $4, true) RETURNING id",
+        )
+        .bind(format!("Brand {slug}"))
+        .bind(slug)
+        .bind(format!("https://{slug}.example.com"))
+        .bind(logo_url)
+        .fetch_one(pool)
+        .await
+        .expect("insert brand");
+
+        let product_id: i64 = sqlx::query_scalar(
+            "INSERT INTO products (brand_id, source_platform, source_product_id, name, status, metadata) \
+             VALUES ($1, 'shopify', $2, $3, 'active', '{}'::jsonb) RETURNING id",
+        )
+        .bind(brand_id)
+        .bind(format!("{slug}-product-1"))
+        .bind(format!("Product {slug}"))
+        .fetch_one(pool)
+        .await
+        .expect("insert product");
+
+        let variant_id: i64 = sqlx::query_scalar(
+            "INSERT INTO product_variants (product_id, source_variant_id, title, is_default, is_available) \
+             VALUES ($1, $2, 'Default', true, true) RETURNING id",
+        )
+        .bind(product_id)
+        .bind(format!("{slug}-variant-1"))
+        .fetch_one(pool)
+        .await
+        .expect("insert variant");
+
+        sqlx::query(
+            "INSERT INTO price_snapshots (variant_id, captured_at, currency_code, price) \
+             VALUES ($1, NOW(), 'USD', 24.99)",
+        )
+        .bind(variant_id)
+        .execute(pool)
+        .await
+        .expect("insert snapshot");
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn pricing_summary_includes_brand_logo_url(pool: sqlx::PgPool) {
+        seed_pricing_brand_with_logo(
+            &pool,
+            "logo-summary-test",
+            "https://cdn.example.com/summary-logo.svg",
+        )
+        .await;
+
+        let auth = crate::middleware::AuthState::from_env(true).expect("auth");
+        let app = build_app(AppState { pool }, auth, default_rate_limit_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/pricing/summary")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json parse");
+        let row = json["data"]
+            .as_array()
+            .expect("data array")
+            .iter()
+            .find(|r| r["brand_slug"] == "logo-summary-test")
+            .expect("summary row exists");
+        assert_eq!(
+            row["brand_logo_url"].as_str(),
+            Some("https://cdn.example.com/summary-logo.svg")
+        );
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn pricing_snapshots_include_brand_logo_url(pool: sqlx::PgPool) {
+        seed_pricing_brand_with_logo(
+            &pool,
+            "logo-snapshots-test",
+            "https://cdn.example.com/snapshots-logo.png",
+        )
+        .await;
+
+        let auth = crate::middleware::AuthState::from_env(true).expect("auth");
+        let app = build_app(AppState { pool }, auth, default_rate_limit_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/pricing/snapshots?brand_slug=logo-snapshots-test&limit=5")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json parse");
+        let row = json["data"]
+            .as_array()
+            .expect("data array")
+            .first()
+            .expect("snapshot row");
+        assert_eq!(
+            row["brand_logo_url"].as_str(),
+            Some("https://cdn.example.com/snapshots-logo.png")
+        );
     }
 }

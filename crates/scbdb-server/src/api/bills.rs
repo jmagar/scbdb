@@ -49,12 +49,12 @@ pub(super) async fn list_bills(
         normalize_limit(query.limit),
     )
     .await
-    .map_err(|e| map_db_error(req_id.0.clone(), e))?;
+    .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
 
     let bill_ids: Vec<i64> = bills.iter().map(|bill| bill.id).collect();
     let events_by_bill = scbdb_db::list_bill_events_batch(&state.pool, &bill_ids)
         .await
-        .map_err(|e| map_db_error(req_id.0.clone(), e))?;
+        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
 
     let data = bills
         .into_iter()
@@ -85,7 +85,7 @@ pub(super) async fn list_bill_events(
 ) -> Result<Json<ApiResponse<Vec<BillEventItem>>>, ApiError> {
     let bill = scbdb_db::get_bill_by_public_id(&state.pool, bill_id)
         .await
-        .map_err(|e| map_db_error(req_id.0.clone(), e))?;
+        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
 
     if bill.is_none() {
         return Err(ApiError::new(req_id.0, "not_found", "bill not found"));
@@ -93,7 +93,7 @@ pub(super) async fn list_bill_events(
 
     let rows = scbdb_db::list_bill_events_by_public_id(&state.pool, bill_id)
         .await
-        .map_err(|e| map_db_error(req_id.0.clone(), e))?;
+        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
 
     let data = rows
         .into_iter()

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::middleware::RequestId;
 
-use super::{map_db_error, normalize_limit, ApiError, ApiResponse, AppState};
+use super::{map_db_error, normalize_limit, ApiError, ApiResponse, AppState, ResponseMeta};
 
 #[derive(Debug, Serialize)]
 pub(super) struct ProductItem {
@@ -51,7 +51,7 @@ pub(super) async fn list_products(
         },
     )
     .await
-    .map_err(|e| map_db_error(req_id.0.clone(), e))?;
+    .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
 
     let data = rows
         .into_iter()
@@ -75,6 +75,6 @@ pub(super) async fn list_products(
 
     Ok(Json(ApiResponse {
         data,
-        meta: super::ResponseMeta::new(req_id.0),
+        meta: ResponseMeta::new(req_id.0),
     }))
 }
