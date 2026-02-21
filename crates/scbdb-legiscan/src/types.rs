@@ -80,6 +80,25 @@ pub struct BillDetail {
     pub history: Vec<BillHistory>,
     #[serde(default)]
     pub progress: Vec<BillProgress>,
+    /// Versioned text links (Introduced, Engrossed, etc.) returned by `getBill`.
+    #[serde(default)]
+    pub texts: Vec<BillTextEntry>,
+}
+
+/// A versioned text entry for a bill, returned inside `getBill`.
+///
+/// `doc_id` is stable and immutable; used as the idempotency key in `bill_texts`.
+#[derive(Debug, Deserialize)]
+pub struct BillTextEntry {
+    pub doc_id: i64,
+    #[serde(default)]
+    pub date: Option<String>,
+    #[serde(rename = "type")]
+    pub text_type: String,
+    pub mime: String,
+    /// `LegiScan` URL; may be an empty string for bills without hosted text.
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 /// Session metadata embedded inside a [`BillDetail`].
