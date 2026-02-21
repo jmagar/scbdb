@@ -9,6 +9,7 @@ pub mod types;
 pub mod youtube;
 
 pub use error::ProfilerError;
+pub use intake::IntakeConfig;
 pub use types::{BrandProfileRunResult, CollectedSignal};
 
 #[cfg(test)]

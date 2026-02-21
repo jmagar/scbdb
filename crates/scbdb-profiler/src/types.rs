@@ -24,6 +24,8 @@ pub struct CollectedSignal {
 pub struct BrandProfileRunResult {
     pub brand_id: i64,
     pub signals_collected: usize,
-    pub signals_embedded: usize,
+    /// Number of signals successfully upserted into the database.
+    /// Note: counts DB upsert success, not TEI embedding (Qdrant sync is a future step).
+    pub signals_upserted: usize,
     pub errors: Vec<String>,
 }
