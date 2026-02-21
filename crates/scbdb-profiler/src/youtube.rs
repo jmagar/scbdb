@@ -71,8 +71,8 @@ struct ThumbnailUrl {
 ///
 /// # Errors
 ///
-/// Returns [`ProfilerError::Http`] on network or HTTP-status errors, or
-/// [`ProfilerError::Json`] when the response body cannot be deserialized.
+/// Returns [`ProfilerError::Http`] on network errors, HTTP-status errors,
+/// or when the response body cannot be deserialized.
 pub async fn collect_channel_signals(
     client: &Client,
     brand_id: i64,
