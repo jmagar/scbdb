@@ -6,16 +6,20 @@
 //! migration directory.
 
 use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use scbdb_core::{NormalizedProduct, NormalizedVariant};
 use scbdb_db::{
     complete_collection_run, create_collection_run, deactivate_missing_locations,
     fail_collection_run, get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
-    get_last_price_snapshot, insert_price_snapshot_if_changed, list_active_brands,
-    list_bill_events, list_bills, list_brands_without_profiles, list_collection_run_brands,
-    list_locations_by_state, list_locations_dashboard_summary, start_collection_run,
-    update_brand_logo, upsert_bill, upsert_bill_event, upsert_brand_profile,
-    upsert_collection_run_brand, upsert_product, upsert_store_locations, upsert_variant,
-    NewStoreLocation,
+    get_last_price_snapshot, insert_brand_funding_event, insert_brand_lab_test,
+    insert_brand_legal_proceeding, insert_brand_sponsorship, insert_price_snapshot_if_changed,
+    list_active_brands, list_bill_events, list_bills, list_brand_funding_events,
+    list_brand_lab_tests, list_brand_legal_proceedings, list_brand_sponsorships,
+    list_brands_without_profiles, list_collection_run_brands, list_locations_by_state,
+    list_locations_dashboard_summary, start_collection_run, update_brand_logo, upsert_bill,
+    upsert_bill_event, upsert_brand_profile, upsert_collection_run_brand, upsert_product,
+    upsert_store_locations, upsert_variant, NewBrandFundingEvent, NewBrandLabTest,
+    NewBrandLegalProceeding, NewBrandSponsorship, NewStoreLocation,
 };
 
 // ---------------------------------------------------------------------------
@@ -1606,4 +1610,198 @@ async fn brand_signal_upsert_and_list(pool: sqlx::PgPool) {
         .unwrap();
     assert_eq!(signals.len(), 1);
     assert_eq!(signals[0].title.as_deref(), Some("Big News"));
+}
+
+// ---------------------------------------------------------------------------
+// Section 11: Brand Funding Events
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_funding_event_round_trip(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "funding-brand", true).await;
+
+    let investors = vec!["Sequoia".to_string(), "a16z".to_string()];
+    let event = NewBrandFundingEvent {
+        brand_id,
+        event_type: "series_a",
+        amount_usd: Some(500_000_000), // $5,000,000 in cents
+        announced_at: NaiveDate::from_ymd_opt(2025, 6, 15),
+        investors: Some(&investors),
+        acquirer: None,
+        source_url: Some("https://example.com/funding"),
+        notes: Some("Series A round"),
+    };
+
+    let id = insert_brand_funding_event(&pool, &event)
+        .await
+        .expect("insert_brand_funding_event failed");
+    assert!(id > 0, "returned id should be positive");
+
+    let rows = list_brand_funding_events(&pool, brand_id)
+        .await
+        .expect("list_brand_funding_events failed");
+
+    assert_eq!(rows.len(), 1, "should return exactly one funding event");
+    let row = &rows[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.brand_id, brand_id);
+    assert_eq!(row.event_type, "series_a");
+    assert_eq!(row.amount_usd, Some(500_000_000));
+    assert_eq!(row.announced_at, NaiveDate::from_ymd_opt(2025, 6, 15));
+    assert_eq!(
+        row.investors.as_deref(),
+        Some(&["Sequoia".to_string(), "a16z".to_string()][..])
+    );
+    assert!(row.acquirer.is_none());
+    assert_eq!(
+        row.source_url.as_deref(),
+        Some("https://example.com/funding")
+    );
+    assert_eq!(row.notes.as_deref(), Some("Series A round"));
+}
+
+// ---------------------------------------------------------------------------
+// Section 12: Brand Lab Tests
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_lab_test_round_trip(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "lab-brand", true).await;
+
+    let raw = serde_json::json!({"source": "third_party_lab"});
+    let test_input = NewBrandLabTest {
+        brand_id,
+        product_id: None,
+        variant_id: None,
+        lab_name: Some("SC Labs"),
+        test_date: NaiveDate::from_ymd_opt(2025, 4, 10),
+        report_url: Some("https://example.com/coa.pdf"),
+        thc_mg_actual: Some(Decimal::new(5_250, 3)),
+        cbd_mg_actual: Some(Decimal::new(125, 3)),
+        total_cannabinoids_mg: Some(Decimal::new(5_375, 3)),
+        passed: Some(true),
+        raw_data: Some(&raw),
+    };
+
+    let id = insert_brand_lab_test(&pool, &test_input)
+        .await
+        .expect("insert_brand_lab_test failed");
+    assert!(id > 0);
+
+    let rows = list_brand_lab_tests(&pool, brand_id)
+        .await
+        .expect("list_brand_lab_tests failed");
+
+    assert_eq!(rows.len(), 1, "should return exactly one lab test");
+    let row = &rows[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.brand_id, brand_id);
+    assert_eq!(row.lab_name.as_deref(), Some("SC Labs"));
+    assert_eq!(row.test_date, NaiveDate::from_ymd_opt(2025, 4, 10));
+    assert_eq!(
+        row.report_url.as_deref(),
+        Some("https://example.com/coa.pdf")
+    );
+    assert_eq!(row.thc_mg_actual, Some(Decimal::new(5_250, 3)));
+    assert_eq!(row.cbd_mg_actual, Some(Decimal::new(125, 3)));
+    assert_eq!(row.total_cannabinoids_mg, Some(Decimal::new(5_375, 3)));
+    assert_eq!(row.passed, Some(true));
+    assert!(row.raw_data.is_some());
+}
+
+// ---------------------------------------------------------------------------
+// Section 13: Brand Legal Proceedings
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_legal_proceeding_round_trip(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "legal-brand", true).await;
+
+    let proceeding = NewBrandLegalProceeding {
+        brand_id,
+        proceeding_type: "lawsuit",
+        jurisdiction: Some("SC"),
+        case_number: Some("2025-CV-001"),
+        title: "State v. HempCo",
+        summary: Some("Challenge to hemp beverage ban"),
+        status: "active",
+        filed_at: NaiveDate::from_ymd_opt(2025, 3, 1),
+        resolved_at: None,
+        source_url: Some("https://example.com/case"),
+    };
+
+    let id = insert_brand_legal_proceeding(&pool, &proceeding)
+        .await
+        .expect("insert_brand_legal_proceeding failed");
+    assert!(id > 0);
+
+    let rows = list_brand_legal_proceedings(&pool, brand_id)
+        .await
+        .expect("list_brand_legal_proceedings failed");
+
+    assert_eq!(rows.len(), 1, "should return exactly one legal proceeding");
+    let row = &rows[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.brand_id, brand_id);
+    assert_eq!(row.proceeding_type, "lawsuit");
+    assert_eq!(row.jurisdiction.as_deref(), Some("SC"));
+    assert_eq!(row.case_number.as_deref(), Some("2025-CV-001"));
+    assert_eq!(row.title, "State v. HempCo");
+    assert_eq!(
+        row.summary.as_deref(),
+        Some("Challenge to hemp beverage ban")
+    );
+    assert_eq!(row.status, "active");
+    assert_eq!(row.filed_at, NaiveDate::from_ymd_opt(2025, 3, 1));
+    assert!(row.resolved_at.is_none());
+    assert_eq!(row.source_url.as_deref(), Some("https://example.com/case"));
+}
+
+// ---------------------------------------------------------------------------
+// Section 14: Brand Sponsorships
+// ---------------------------------------------------------------------------
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn brand_sponsorship_round_trip(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "sponsor-brand", true).await;
+
+    let sponsorship = NewBrandSponsorship {
+        brand_id,
+        entity_name: "Coastal Music Festival",
+        entity_type: "event",
+        deal_type: "title_sponsor",
+        announced_at: NaiveDate::from_ymd_opt(2025, 5, 1),
+        ends_at: NaiveDate::from_ymd_opt(2025, 9, 30),
+        source_url: Some("https://example.com/sponsor"),
+        notes: Some("Title sponsorship for summer series"),
+        is_active: true,
+    };
+
+    let id = insert_brand_sponsorship(&pool, &sponsorship)
+        .await
+        .expect("insert_brand_sponsorship failed");
+    assert!(id > 0);
+
+    let rows = list_brand_sponsorships(&pool, brand_id)
+        .await
+        .expect("list_brand_sponsorships failed");
+
+    assert_eq!(rows.len(), 1, "should return exactly one sponsorship");
+    let row = &rows[0];
+    assert_eq!(row.id, id);
+    assert_eq!(row.brand_id, brand_id);
+    assert_eq!(row.entity_name, "Coastal Music Festival");
+    assert_eq!(row.entity_type, "event");
+    assert_eq!(row.deal_type, "title_sponsor");
+    assert_eq!(row.announced_at, NaiveDate::from_ymd_opt(2025, 5, 1));
+    assert_eq!(row.ends_at, NaiveDate::from_ymd_opt(2025, 9, 30));
+    assert_eq!(
+        row.source_url.as_deref(),
+        Some("https://example.com/sponsor")
+    );
+    assert_eq!(
+        row.notes.as_deref(),
+        Some("Title sponsorship for summer series")
+    );
+    assert!(row.is_active);
 }
