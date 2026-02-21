@@ -1,10 +1,5 @@
 import { type ProductItem } from "../types/api";
-import {
-  ErrorState,
-  LoadingState,
-  formatDate,
-  formatMoney,
-} from "./dashboard-utils";
+import { ErrorState, LoadingState, formatMoney } from "./dashboard-utils";
 
 type Props = {
   isLoading: boolean;
