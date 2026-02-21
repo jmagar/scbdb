@@ -62,7 +62,37 @@ vi.mock("../hooks/use-dashboard-data", () => {
         },
       ],
     }),
-    useBills: () => ({ isLoading: false, isError: false, data: [] }),
+    useBills: () => ({
+      isLoading: false,
+      isError: false,
+      data: [
+        {
+          bill_id: "00000000-0000-0000-0000-000000000001",
+          jurisdiction: "SC",
+          session: "2025-2026",
+          bill_number: "HB1234",
+          title: "Hemp Beverage Regulation Act",
+          status: "introduced",
+          status_date: "2026-01-10",
+          last_action_date: "2026-01-15",
+          source_url: "https://legiscan.com/SC/bill/HB1234/2025",
+          event_count: 3,
+        },
+        {
+          bill_id: "00000000-0000-0000-0000-000000000002",
+          jurisdiction: "TX",
+          session: "2025",
+          bill_number: "SB555",
+          title: "THC Beverage Prohibition Act",
+          status: "failed",
+          status_date: "2026-02-01",
+          last_action_date: "2026-02-01",
+          source_url: null,
+          event_count: 1,
+        },
+      ],
+    }),
+    useBillEvents: () => ({ isLoading: false, isError: false, data: [] }),
     useSentimentSummary: () => ({
       isLoading: false,
       isError: false,
@@ -79,6 +109,8 @@ vi.mock("../hooks/use-dashboard-data", () => {
               reddit_post: 6,
               reddit_comment: 3,
               brand_newsroom: 2,
+              twitter_brand: 1,
+              twitter_replies: 1,
             },
             top_signals: [
               {
@@ -108,6 +140,8 @@ vi.mock("../hooks/use-dashboard-data", () => {
               reddit_post: 6,
               reddit_comment: 3,
               brand_newsroom: 2,
+              twitter_brand: 1,
+              twitter_replies: 1,
             },
           },
         },
@@ -123,6 +157,7 @@ vi.mock("../hooks/use-dashboard-data", () => {
               reddit_post: 5,
               reddit_comment: 2,
               brand_newsroom: 1,
+              twitter_brand: 1,
             },
           },
         },
@@ -136,7 +171,7 @@ vi.mock("../hooks/use-dashboard-data", () => {
 describe("DashboardPage", () => {
   it("renders core dashboard headings", () => {
     const html = renderToStaticMarkup(<DashboardPage />);
-    expect(html).toContain("API Dashboard");
+    expect(html).toContain("Southern Crown CBD DB");
     expect(html).toContain("Product Catalog");
   });
 
@@ -155,6 +190,25 @@ describe("DashboardPage", () => {
     expect(buttonCount).toBe(5);
   });
 
+  it("renders regulatory tab with bill cards and status badges", () => {
+    const html = renderToStaticMarkup(
+      <DashboardPage initialTab="regulatory" />,
+    );
+    expect(html).toContain("Regulatory Timeline");
+    // Both bills are rendered as buttons
+    expect(html).toContain("SC HB1234");
+    expect(html).toContain("TX SB555");
+    expect(html).toContain("Hemp Beverage Regulation Act");
+    expect(html).toContain("THC Beverage Prohibition Act");
+    // Status badges with correct colour modifiers
+    expect(html).toContain("bill-status-badge"); // base class present
+    expect(html).toContain('"bill-status-badge"'); // introduced → no modifier (default grey)
+    expect(html).toContain("bill-status-badge--failed"); // TX SB555 failed
+    // Chevron affordance present on every card
+    const chevronCount = (html.match(/bill-card-chevron/g) ?? []).length;
+    expect(chevronCount).toBe(2);
+  });
+
   it("renders sentiment panel with context and transparency", () => {
     const html = renderToStaticMarkup(<DashboardPage initialTab="sentiment" />);
     expect(html).toContain("Market Sentiment");
@@ -164,11 +218,15 @@ describe("DashboardPage", () => {
     expect(html).toContain("Data Transparency");
     expect(html).toContain("Google News RSS");
     expect(html).toContain("Reddit");
+    expect(html).toContain("brand newsroom posts");
+    expect(html).toContain("Twitter/X");
     expect(html).toContain("Momentum");
     expect(html).toContain("+0.12");
     expect(html).toContain("Source mix:");
-    expect(html).toContain("google_news (25)");
-    expect(html).toContain("brand_newsroom (5)");
+    expect(html).toContain("Google News (25)");
+    expect(html).toContain("Brand Newsroom (5)");
+    expect(html).toContain("Twitter Brand Posts (3)");
+    expect(html).toContain("Twitter Replies (2)");
     expect(html).toContain("Sample evidence:");
     expect(html).toContain("https://example.com/news/cann-positive");
   });

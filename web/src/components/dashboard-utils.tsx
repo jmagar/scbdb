@@ -1,21 +1,24 @@
+const USD = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+
 export function formatMoney(value: string): string {
   const parsed = Number(value);
-  if (Number.isNaN(parsed)) {
-    return value;
-  }
-
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(parsed);
+  if (Number.isNaN(parsed)) return value;
+  return USD.format(parsed);
 }
 
 export function formatDate(value: string | null): string {
   if (!value) {
     return "-";
   }
-  return new Date(value).toLocaleDateString();
+  // ISO date-only strings (YYYY-MM-DD) are parsed as UTC midnight by spec.
+  // Appending T00:00:00 forces local-time parsing so the displayed calendar
+  // day matches the written date regardless of the viewer's timezone.
+  const normalized = value.length === 10 ? `${value}T00:00:00` : value;
+  return new Date(normalized).toLocaleDateString();
 }
 
 export function formatScore(value: string): string {
@@ -34,11 +37,43 @@ export function scoreClass(value: string): "positive" | "negative" | "neutral" {
 export function scorePct(value: string): number {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return 50;
-  return ((parsed + 1) / 2) * 100;
+  return ((Math.max(-1, Math.min(1, parsed)) + 1) / 2) * 100;
+}
+
+/** Trims and normalises whitespace; truncates at 120 chars with an ellipsis. */
+export function trimText(value: string): string {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length <= 120) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 117)}...`;
 }
 
 export function LoadingState({ label }: { label: string }) {
-  return <p className="panel-status">Loading {label}...</p>;
+  return (
+    <div
+      className="skeleton-grid"
+      role="status"
+      aria-label={`Loading ${label}`}
+      aria-busy="true"
+    >
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="skeleton-card"
+          style={{ animationDelay: `${i * 75}ms` }}
+        >
+          <div className="skeleton-line skeleton-line--title" />
+          <div className="skeleton-line skeleton-line--sub" />
+          <div className="skeleton-dl">
+            <div className="skeleton-line skeleton-line--stat" />
+            <div className="skeleton-line skeleton-line--stat" />
+            <div className="skeleton-line skeleton-line--stat" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function ErrorState({ label }: { label: string }) {

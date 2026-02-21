@@ -13,9 +13,15 @@ export function ProductsPanel({ isLoading, isError, data }: Props) {
       <h2>Product Catalog</h2>
       {isLoading && <LoadingState label="products" />}
       {isError && <ErrorState label="products" />}
-      {!isLoading && !isError && (
+      {!isLoading && !isError && data?.length === 0 && (
+        <p className="panel-status">
+          No products collected yet. Run <code>collect products</code> to
+          populate.
+        </p>
+      )}
+      {!isLoading && !isError && data && data.length > 0 && (
         <div className="card-stack">
-          {data?.map((item) => (
+          {data.map((item) => (
             <article className="data-card" key={item.product_id}>
               {item.primary_image_url || item.brand_logo_url ? (
                 <img
@@ -34,7 +40,9 @@ export function ProductsPanel({ isLoading, isError, data }: Props) {
               )}
               <header>
                 <h3>{item.product_name}</h3>
-                <span>{item.brand_name}</span>
+                <span className={`rel-badge rel-badge--${item.relationship}`}>
+                  {item.brand_name}
+                </span>
               </header>
               <dl>
                 <div>
@@ -49,7 +57,11 @@ export function ProductsPanel({ isLoading, isError, data }: Props) {
                 </div>
                 <div>
                   <dt>Tier</dt>
-                  <dd>{item.tier}</dd>
+                  <dd>
+                    <span className={`tier-badge tier-badge--${item.tier}`}>
+                      T{item.tier}
+                    </span>
+                  </dd>
                 </div>
               </dl>
             </article>

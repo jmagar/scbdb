@@ -401,7 +401,7 @@ body {
 .data-card header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -412,7 +412,8 @@ body {
   color: var(--ink);
 }
 
-.data-card header span {
+/* Only target bare spans — exclude badge classes so their colors aren't suppressed */
+.data-card header span:not([class]) {
   color: var(--muted);
   font-size: 0.8rem;
 }
@@ -1306,7 +1307,8 @@ button.tile:hover {
   font-family: var(--font-mono);
 }
 
-.tier-badge {
+/* Scoped to brand cards — avoids cascade conflict with the product panel definition below */
+.brand-badges .tier-badge {
   background: var(--accent-soft);
   color: var(--accent);
   border: 1px solid rgba(22, 203, 166, 0.2);
@@ -1438,32 +1440,36 @@ code {
    Tier Badges (product tier 1 / 2 / 3)
 ───────────────────────────────────────────────────────── */
 .tier-badge {
-  display: inline-block;
-  padding: 0.1rem 0.45rem;
-  border-radius: 99px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.16em 0.52em;
+  border-radius: 4px;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
   border: 1px solid transparent;
+  line-height: 1.4;
 }
 
 .tier-badge--1 {
-  background: rgba(232, 150, 60, 0.14);
+  background: rgba(232, 150, 60, 0.18);
   color: var(--amber);
-  border-color: rgba(232, 150, 60, 0.25);
+  border-color: rgba(232, 150, 60, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 200, 100, 0.14);
 }
 
 .tier-badge--2 {
-  background: var(--accent-soft);
+  background: rgba(22, 203, 166, 0.1);
   color: var(--accent);
-  border-color: rgba(22, 203, 166, 0.2);
+  border-color: rgba(22, 203, 166, 0.3);
 }
 
 .tier-badge--3 {
   background: rgba(255, 255, 255, 0.04);
-  color: var(--muted);
-  border-color: var(--border-neutral);
+  color: var(--subtle);
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -1471,26 +1477,30 @@ code {
    Replaces the plain brand-name span in product cards
 ───────────────────────────────────────────────────────── */
 .rel-badge {
-  display: inline-block;
-  padding: 0.12rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.65rem;
   border-radius: 99px;
-  font-size: 0.74rem;
+  font-family: var(--font-body);
+  font-size: 0.76rem;
   font-weight: 500;
+  letter-spacing: 0.01em;
   border: 1px solid transparent;
   white-space: nowrap;
   flex-shrink: 0;
+  line-height: 1.35;
 }
 
 .rel-badge--portfolio {
-  background: var(--accent-soft);
+  background: rgba(22, 203, 166, 0.11);
   color: var(--accent);
-  border-color: rgba(22, 203, 166, 0.2);
+  border-color: rgba(22, 203, 166, 0.28);
 }
 
 .rel-badge--competitor {
-  background: var(--amber-soft);
+  background: rgba(232, 150, 60, 0.11);
   color: var(--amber);
-  border-color: rgba(232, 150, 60, 0.22);
+  border-color: rgba(232, 150, 60, 0.3);
 }
 
 /* ─────────────────────────────────────────────────────────

@@ -53,6 +53,7 @@ export type BillItem = {
   session: string | null;
   bill_number: string;
   title: string;
+  summary: string | null;
   status: string;
   status_date: string | null;
   last_action_date: string | null;
@@ -119,10 +120,11 @@ export type LocationsByState = {
 
 // ── Brand Intelligence Layer — re-exported from ./brands ──────────────────────
 export type {
-  BrandCompleteness,
-  BrandProfile,
+  BrandCompletenessDetail as BrandCompleteness,
+  BrandProfileDetail as BrandProfile,
   BrandProfileResponse,
   BrandSignalType,
+  BrandSocialHandleItem as SocialHandle,
   BrandSummaryItem,
   CompetitorItem,
   DistributorItem,
@@ -132,6 +134,5 @@ export type {
   MediaAppearanceItem,
   PaginatedSignals,
   SignalItem,
-  SocialHandle,
   SponsorshipItem,
 } from "./brands";
