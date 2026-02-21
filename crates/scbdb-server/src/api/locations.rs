@@ -30,10 +30,7 @@ pub(super) async fn list_locations_summary(
 ) -> Result<Json<ApiResponse<Vec<LocationsDashboardItem>>>, ApiError> {
     let rows = scbdb_db::list_locations_dashboard_summary(&state.pool)
         .await
-        .map_err(|e| {
-            let db_err = scbdb_db::DbError::from(e);
-            map_db_error(req_id.0.clone(), &db_err)
-        })?;
+        .map_err(|e| map_db_error(req_id.0.clone(), &scbdb_db::DbError::from(e)))?;
 
     let data = rows
         .into_iter()
@@ -76,10 +73,7 @@ pub(super) async fn list_location_pins(
 ) -> Result<Json<ApiResponse<Vec<LocationPinItem>>>, ApiError> {
     let rows = scbdb_db::list_active_location_pins(&state.pool)
         .await
-        .map_err(|e| {
-            let db_err = scbdb_db::DbError::from(e);
-            map_db_error(req_id.0.clone(), &db_err)
-        })?;
+        .map_err(|e| map_db_error(req_id.0.clone(), &scbdb_db::DbError::from(e)))?;
 
     let data = rows
         .into_iter()
@@ -111,10 +105,7 @@ pub(super) async fn list_locations_by_state(
 ) -> Result<Json<ApiResponse<Vec<LocationsByStateItem>>>, ApiError> {
     let rows = scbdb_db::list_locations_by_state(&state.pool)
         .await
-        .map_err(|e| {
-            let db_err = scbdb_db::DbError::from(e);
-            map_db_error(req_id.0.clone(), &db_err)
-        })?;
+        .map_err(|e| map_db_error(req_id.0.clone(), &scbdb_db::DbError::from(e)))?;
 
     let data = rows
         .into_iter()
