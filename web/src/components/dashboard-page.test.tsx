@@ -3,6 +3,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { DashboardPage } from "./dashboard-page";
 
+vi.mock("maplibre-gl", () => ({
+  default: {
+    Map: vi.fn().mockReturnValue({
+      on: vi.fn(),
+      addControl: vi.fn(),
+      remove: vi.fn(),
+      addSource: vi.fn(),
+      addLayer: vi.fn(),
+      setFilter: vi.fn(),
+      getSource: vi.fn(),
+      isStyleLoaded: vi.fn().mockReturnValue(false),
+    }),
+    NavigationControl: vi.fn(),
+  },
+}));
+
 vi.mock("../hooks/use-dashboard-data", () => {
   return {
     useProducts: () => ({ isLoading: false, isError: false, data: [] }),
@@ -93,6 +109,7 @@ vi.mock("../hooks/use-dashboard-data", () => {
       ],
     }),
     useBillEvents: () => ({ isLoading: false, isError: false, data: [] }),
+    useBillTexts: () => ({ isLoading: false, isError: false, data: [] }),
     useSentimentSummary: () => ({
       isLoading: false,
       isError: false,
@@ -165,6 +182,7 @@ vi.mock("../hooks/use-dashboard-data", () => {
     }),
     useLocationsSummary: () => ({ isLoading: false, isError: false, data: [] }),
     useLocationsByState: () => ({ isLoading: false, isError: false, data: [] }),
+    useLocationPins: () => ({ isLoading: false, isError: false, data: [] }),
   };
 });
 

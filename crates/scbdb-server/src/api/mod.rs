@@ -131,6 +131,7 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
             "/api/v1/bills/{bill_id}/events",
             get(bills::list_bill_events),
         )
+        .route("/api/v1/bills/{bill_id}/texts", get(bills::list_bill_texts))
         .route(
             "/api/v1/sentiment/summary",
             get(sentiment::list_sentiment_summary),
@@ -147,6 +148,7 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
             "/api/v1/locations/by-state",
             get(locations::list_locations_by_state),
         )
+        .route("/api/v1/locations/pins", get(locations::list_location_pins))
         .route("/api/v1/brands", get(brands::list_brands))
         .route("/api/v1/brands/{slug}", get(brands::get_brand))
         .route(
@@ -234,7 +236,7 @@ pub fn default_rate_limit_state() -> RateLimitState {
 
 #[cfg(test)]
 mod tests {
-    use super::locations::{LocationsByStateItem, LocationsDashboardItem};
+    use super::locations::{LocationPinItem, LocationsByStateItem, LocationsDashboardItem};
     use super::sentiment::SentimentSummaryItem;
     use super::*;
     use axum::body::{to_bytes, Body};
@@ -414,6 +416,41 @@ mod tests {
         assert!(
             json.contains("\"active_count\":42"),
             "serialized JSON should contain active_count"
+        );
+    }
+
+    #[test]
+    fn location_pin_item_is_serializable() {
+        let item = LocationPinItem {
+            latitude: 30.2672,
+            longitude: -97.7431,
+            store_name: "Pin Store".to_string(),
+            address_line1: Some("123 Main St".to_string()),
+            city: Some("Austin".to_string()),
+            state: Some("TX".to_string()),
+            zip: Some("78701".to_string()),
+            locator_source: Some("locally".to_string()),
+            brand_name: "Test Brand".to_string(),
+            brand_slug: "test-brand".to_string(),
+            brand_relationship: "portfolio".to_string(),
+            brand_tier: 1,
+        };
+        let json = serde_json::to_string(&item).expect("serialize LocationPinItem");
+        let round_tripped: serde_json::Value =
+            serde_json::from_str(&json).expect("deserialize LocationPinItem");
+        assert_eq!(
+            round_tripped["brand_slug"].as_str(),
+            Some("test-brand"),
+            "brand_slug round-trip"
+        );
+        assert_eq!(
+            round_tripped["brand_tier"].as_i64(),
+            Some(1),
+            "brand_tier round-trip"
+        );
+        assert!(
+            (round_tripped["latitude"].as_f64().unwrap() - 30.2672).abs() < 0.001,
+            "latitude round-trip"
         );
     }
 

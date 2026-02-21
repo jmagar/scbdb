@@ -1,6 +1,12 @@
-import type { LocationBrandSummary, LocationsByState } from "../types/api";
+import { useMemo, useState } from "react";
+
+import { getBrandColors } from "../lib/brand-colors";
+import type { LocationBrandSummary } from "../types/api";
+import { useLocationPins } from "../hooks/use-dashboard-data";
 import { ErrorState, LoadingState, formatDate } from "./dashboard-utils";
-import { StateTileMap } from "./state-tile-map";
+import { LocationMapView } from "./location-map-view";
+import { computeVisibleSlugs, MapFilterSidebar } from "./map-filter-sidebar";
+import type { BrandForFilter, Relationship } from "./map-filter-sidebar";
 
 function sourceLabel(source: string | null): string {
   switch (source) {
@@ -26,11 +32,71 @@ type Props = {
   byState: {
     isLoading: boolean;
     isError: boolean;
-    data: LocationsByState[] | undefined;
+    data:
+      | { state: string; brand_count: number; location_count: number }[]
+      | undefined;
   };
 };
 
 export function LocationsPanel({ summary, byState }: Props) {
+  const pins = useLocationPins();
+
+  // Filter state
+  const [relationship, setRelationship] = useState<Relationship>("all");
+  const [tiers, setTiers] = useState<Set<1 | 2 | 3>>(new Set([1, 2, 3]));
+  // null = "all brands enabled" (initial state before user makes any selection)
+  const [enabledSlugs, setEnabledSlugs] = useState<Set<string> | null>(null);
+
+  // Derived: brands with relationship/tier, sourced from pins data
+  const brandsForFilter = useMemo((): BrandForFilter[] => {
+    if (!pins.data || !summary.data) return [];
+    // Build a slug → meta map from pin data (pins have relationship + tier)
+    const pinMeta = new Map<
+      string,
+      { relationship: "portfolio" | "competitor"; tier: 1 | 2 | 3 }
+    >();
+    for (const pin of pins.data) {
+      if (!pinMeta.has(pin.brand_slug)) {
+        pinMeta.set(pin.brand_slug, {
+          relationship: pin.brand_relationship as "portfolio" | "competitor",
+          tier: pin.brand_tier as 1 | 2 | 3,
+        });
+      }
+    }
+    return summary.data
+      .map((b) => {
+        const meta = pinMeta.get(b.brand_slug);
+        if (!meta) return null;
+        return { ...b, ...meta };
+      })
+      .filter((b): b is BrandForFilter => b !== null);
+  }, [pins.data, summary.data]);
+
+  // null means "all brands enabled"; resolve to a concrete Set for downstream use
+  const effectiveEnabledSlugs = useMemo(
+    () => enabledSlugs ?? new Set(brandsForFilter.map((b) => b.brand_slug)),
+    [enabledSlugs, brandsForFilter],
+  );
+
+  // Brand colors
+  const brandColors = useMemo(
+    () => getBrandColors(brandsForFilter.map((b) => b.brand_slug)),
+    [brandsForFilter],
+  );
+
+  // Compute visible slugs from filter state
+  const selectedSlugs = useMemo(
+    () =>
+      computeVisibleSlugs(
+        brandsForFilter,
+        relationship,
+        tiers,
+        effectiveEnabledSlugs,
+      ),
+    [brandsForFilter, relationship, tiers, effectiveEnabledSlugs],
+  );
+
+  // Top stats
   const totalActive = (summary.data ?? []).reduce(
     (acc, b) => acc + b.active_count,
     0,
@@ -74,9 +140,38 @@ export function LocationsPanel({ summary, byState }: Props) {
             </div>
           </div>
 
-          {/* Interactive US coverage tile map */}
+          {/* Interactive map + filter sidebar */}
           <h3>US Coverage Map</h3>
-          <StateTileMap byState={byState.data} />
+          <div
+            style={{
+              display: "flex",
+              gap: 0,
+              height: "500px",
+              border: "1px solid var(--border, #e5e7eb)",
+              borderRadius: "8px",
+              overflow: "hidden",
+            }}
+          >
+            <MapFilterSidebar
+              brands={brandsForFilter}
+              brandColors={brandColors}
+              relationship={relationship}
+              setRelationship={setRelationship}
+              tiers={tiers}
+              setTiers={setTiers}
+              enabledSlugs={effectiveEnabledSlugs}
+              setEnabledSlugs={setEnabledSlugs}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <LocationMapView
+                pins={pins.data ?? []}
+                selectedSlugs={selectedSlugs}
+                brandColors={brandColors}
+                isLoading={pins.isLoading}
+                isError={pins.isError}
+              />
+            </div>
+          </div>
 
           {/* Per-brand cards */}
           <h3>By Brand</h3>
