@@ -1898,6 +1898,10 @@ async fn brand_competitor_relationship_round_trip(pool: sqlx::PgPool) {
     assert_eq!(rows_a[0].id, rows_b[0].id, "same row from both sides");
 
     let row = &rows_a[0];
+    assert!(
+        row.brand_id < row.competitor_brand_id,
+        "stored row must have brand_id < competitor_brand_id (canonical order)"
+    );
     assert_eq!(row.relationship_type, "direct_competitor");
     assert_eq!(row.distributor_name.as_deref(), Some("Southern Dist"));
     assert_eq!(

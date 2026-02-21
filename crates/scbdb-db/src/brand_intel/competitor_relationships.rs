@@ -82,6 +82,11 @@ pub async fn insert_brand_competitor_relationship(
     pool: &PgPool,
     rel: &NewBrandCompetitorRelationship<'_>,
 ) -> Result<i64, DbError> {
+    debug_assert_ne!(
+        rel.brand_id, rel.competitor_brand_id,
+        "brand_id and competitor_brand_id must differ"
+    );
+
     // Canonicalize: ensure brand_id < competitor_brand_id to satisfy the CHECK constraint.
     let (lo, hi) = if rel.brand_id < rel.competitor_brand_id {
         (rel.brand_id, rel.competitor_brand_id)
