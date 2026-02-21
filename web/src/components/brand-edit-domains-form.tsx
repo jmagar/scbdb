@@ -22,8 +22,13 @@ export function BrandEditDomainsForm({ slug, domains }: Props) {
   function removeEntry(index: number) {
     setEntries((prev) => prev.filter((_, i) => i !== index));
     setErrors((prev) => {
-      const next = { ...prev };
-      delete next[index];
+      const next: Record<number, string> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        const k = Number(key);
+        if (k < index) next[k] = value;
+        else if (k > index) next[k - 1] = value;
+        // k === index is dropped (removed row)
+      }
       return next;
     });
   }

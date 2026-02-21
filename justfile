@@ -37,7 +37,7 @@ collect-products:
 
 # Collect product catalog for a single brand (usage: just collect-brand <slug>)
 collect-brand brand:
-    cargo run --bin scbdb-cli -- collect products --brand {{brand}}
+    cargo run --bin scbdb-cli -- collect products --brand '{{brand}}'
 
 # Capture price snapshots for all brands
 collect-pricing:

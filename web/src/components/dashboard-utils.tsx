@@ -18,7 +18,9 @@ export function formatDate(value: string | null): string {
   // Appending T00:00:00 forces local-time parsing so the displayed calendar
   // day matches the written date regardless of the viewer's timezone.
   const normalized = value.length === 10 ? `${value}T00:00:00` : value;
-  return new Date(normalized).toLocaleDateString();
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString();
 }
 
 export function formatScore(value: string): string {

@@ -4,13 +4,13 @@
 
 The store locator crawler builds a live registry of where each brand's products are sold at retail. It fetches each brand's "where to buy" page, detects which locator service is in use, and pulls structured location data — recording `first_seen_at` per location across continuous scheduled runs. The strategic goal is **territory monitoring**: detect when competitors gain new retail distribution.
 
-It runs via `scbdb-cli collect locations` and is scheduled weekly by `scbdb-server`. The implementation lives in `crates/scbdb-scraper/src/locator.rs` and `crates/scbdb-db/src/locations.rs`.
+It runs via `scbdb-cli collect locations` and is scheduled weekly by `scbdb-server`. The implementation lives in `crates/scbdb-scraper/src/locator/` (module directory with `mod.rs`, `fetch.rs`, `types.rs`, `grid.rs`, `trust.rs`, and `formats/` submodule for per-service extractors) and `crates/scbdb-db/src/locations.rs`.
 
 ---
 
 ## Extraction Pipeline
 
-```
+```text
 fetch_store_locations(locator_url)
     │
     ├─ 1. Fetch page HTML with reqwest (user-agent rotation, timeout)
@@ -53,7 +53,7 @@ Strategies are tried in order; the first that returns results wins. API calls (L
 
 Each location is identified by a **stable dedup key**:
 
-```
+```text
 location_key = SHA-256(brand_id ‖ name.lower().trim() ‖ city.lower().trim() ‖ state.upper().trim() ‖ zip.trim())
 ```
 
@@ -76,7 +76,7 @@ This gives you a queryable record of:
 
 When a brand has no `store_locator_url` configured in `brands.yaml`, the crawler probes common Shopify URL patterns via HEAD request:
 
-```
+```text
 /pages/where-to-buy
 /pages/store-locator
 /pages/find-us
@@ -96,7 +96,7 @@ The first path that returns a 2xx response is used. Discovered URLs are stored i
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | `BIGINT IDENTITY` | PK |
+| `id` | `BIGINT GENERATED ALWAYS AS IDENTITY` | PK |
 | `public_id` | `UUID` | External-facing ID |
 | `brand_id` | `BIGINT` | FK → `brands.id` |
 | `location_key` | `TEXT` | SHA-256 dedup key; unique per brand |
@@ -173,7 +173,7 @@ scbdb-cli collect locations --brand cann
 
 **Output format:**
 
-```
+```text
 Collecting store locations for 18 brands...
   ✓ cann          312 active (+12 new, 0 lost)  [locally]
   ✓ brez           89 active (+1 new, 0 lost)   [storemapper]
@@ -245,11 +245,20 @@ ORDER BY brands DESC;
 
 ## Crate Layout
 
-```
+```text
 crates/scbdb-scraper/src/
-└── locator.rs               — fetch_store_locations(), make_location_key(),
-                               RawStoreLocation, LocatorError
-                               (4 extraction strategies + auto-discovery helpers)
+└── locator/                 — module directory
+    ├── mod.rs               — public API, strategy orchestration
+    ├── fetch.rs             — HTTP fetching with user-agent rotation
+    ├── types.rs             — RawStoreLocation, LocatorError
+    ├── grid.rs              — location grid/key utilities
+    ├── trust.rs             — trust scoring for extracted locations
+    └── formats/             — per-service extraction strategies
+        ├── locally.rs       — Locally.com API extraction
+        ├── storemapper.rs   — Storemapper API extraction
+        ├── jsonld.rs        — Schema.org JSON-LD extraction
+        ├── embed.rs         — Embedded JSON fallback
+        └── ...              — additional format extractors
 
 crates/scbdb-db/src/
 └── locations.rs             — upsert_store_locations(), deactivate_missing_locations(),
@@ -261,6 +270,7 @@ crates/scbdb-cli/src/collect/
                                discover_locator_url(), summary output
 
 crates/scbdb-server/src/
+├── api/locations.rs         — list_locations_summary, list_locations_by_state handlers
 └── scheduler.rs             — build_scheduler(), weekly locations job
 
 migrations/

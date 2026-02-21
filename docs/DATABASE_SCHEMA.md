@@ -324,7 +324,10 @@ CREATE INDEX idx_brand_domains_domain ON brand_domains (domain);
 
 Unified signal stream for all brand intelligence content types. The `qdrant_point_id` column
 stores the deterministic Qdrant point ID computed during embedding. Signals are deduplicated
-on `(brand_id, signal_type, external_id)`.
+on `(brand_id, signal_type, external_id)`. Note: `external_id` is nullable, and PostgreSQL
+UNIQUE constraints allow multiple NULLs -- signals lacking an `external_id` bypass
+deduplication (multiple rows with the same `brand_id` and `signal_type` can coexist when
+`external_id IS NULL`).
 
 Signal types (`brand_signal_type` enum): `article`, `blog_post`, `tweet`, `youtube_video`,
 `reddit_post`, `newsletter`, `press_release`, `podcast_episode`, `event`, `award`,

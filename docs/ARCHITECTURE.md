@@ -200,10 +200,10 @@ The following components are part of the roadmap but out of MVP scope:
 
 ## Frontend (`web/`)
 
-**Vite**-powered **React 19** SPA styled with **Tailwind CSS 4+** and **shadcn/ui** components.
-Communicates with the Axum backend over REST. Provides dashboards for browsing competitor
-products, tracking legislation, comparing pricing, viewing market sentiment, and monitoring
-scrape runs.
+**Vite**-powered **React 19** SPA styled with **CSS variables** and custom component styles
+(no Tailwind or shadcn/ui runtime dependencies). Communicates with the Axum backend over
+REST. Provides dashboards for browsing competitor products, tracking legislation, comparing
+pricing, viewing market sentiment, monitoring scrape runs, and store location coverage.
 
 ### Phase 6 Frontend Additions
 

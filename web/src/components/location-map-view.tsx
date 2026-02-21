@@ -134,14 +134,25 @@ function MapCanvas({ pins, selectedSlugs, brandColors }: MapCanvasProps) {
 
   // Update GeoJSON source data when pins or colors change after initial mount.
   // Without this, the map stays permanently stale after TanStack Query refetches.
+  // Also attaches a one-time `load` listener so updates that arrive before
+  // the map finishes loading are not silently dropped.
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    const source = map.getSource("store-pins") as
-      | maplibregl.GeoJSONSource
-      | undefined;
-    if (!source) return;
-    source.setData(buildGeojson(pins, brandColors));
+    if (!map) return;
+
+    const applyData = () => {
+      const source = map.getSource("store-pins") as
+        | maplibregl.GeoJSONSource
+        | undefined;
+      if (!source) return;
+      source.setData(buildGeojson(pins, brandColors));
+    };
+
+    if (map.isStyleLoaded()) {
+      applyData();
+    } else {
+      map.once("load", applyData);
+    }
   }, [pins, brandColors]);
 
   // Update layer filter when selectedSlugs changes.

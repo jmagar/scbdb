@@ -190,22 +190,25 @@ export function SentimentPanel({ summary, snapshots }: Props) {
           role="table"
           aria-label="recent-sentiment-snapshots"
         >
-          {snapshotItems.slice(0, 8).map((item) => (
-            <div
-              className="mini-row"
-              role="row"
-              key={`${item.brand_slug}-${item.captured_at}`}
-            >
-              <span>{item.brand_name}</span>
-              <strong
-                className={`sentiment-badge sentiment-badge--${scoreClass(item.score)}`}
+          <div role="rowgroup">
+            {snapshotItems.slice(0, 8).map((item) => (
+              <div
+                className="mini-row"
+                role="row"
+                key={`${item.brand_slug}-${item.captured_at}`}
               >
-                {formatScore(item.score)}
-              </strong>
-              <span>{item.signal_count} sig</span>
-              <span>{formatDate(item.captured_at)}</span>
-            </div>
-          ))}
+                <span role="cell">{item.brand_name}</span>
+                <strong
+                  role="cell"
+                  className={`sentiment-badge sentiment-badge--${scoreClass(item.score)}`}
+                >
+                  {formatScore(item.score)}
+                </strong>
+                <span role="cell">{item.signal_count} sig</span>
+                <span role="cell">{formatDate(item.captured_at)}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </>

@@ -1,15 +1,16 @@
 import { useMemo, useState } from "react";
 
+import { useQuery } from "@tanstack/react-query";
 import {
-  useBills,
-  useLocationsByState,
-  useLocationsSummary,
-  usePricingSnapshots,
-  usePricingSummary,
-  useProducts,
-  useSentimentSnapshots,
-  useSentimentSummary,
-} from "../hooks/use-dashboard-data";
+  fetchBills,
+  fetchLocationsByState,
+  fetchLocationsSummary,
+  fetchPricingSnapshots,
+  fetchPricingSummary,
+  fetchProducts,
+  fetchSentimentSnapshots,
+  fetchSentimentSummary,
+} from "../lib/api/dashboard";
 import { LocationsPanel } from "./locations-panel";
 import { PricingPanel } from "./pricing-panel";
 import { ProductsPanel } from "./products-panel";
@@ -26,114 +27,102 @@ type DashboardPageProps = {
   initialTab?: DashboardTab;
 };
 
-function IconBox() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M13.5 4.5L8 2 2.5 4.5v7L8 14l5.5-2.5v-7z" />
-      <path d="M8 2v12" />
-      <path d="M13.5 4.5L8 7 2.5 4.5" />
-    </svg>
-  );
-}
+const svgProps = {
+  width: 13,
+  height: 13,
+  viewBox: "0 0 16 16",
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  "aria-hidden": true as const,
+};
 
-function IconTrending() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="1 11 5 7 9 9.5 15 3" />
-      <polyline points="11 3 15 3 15 7" />
-    </svg>
-  );
-}
-
-function IconScale() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <line x1="8" y1="1.5" x2="8" y2="14.5" />
-      <path d="M2.5 5.5L8 8l5.5-2.5" />
-      <path d="M2.5 5.5 1 10.5h3l1.5-5" />
-      <path d="M13.5 5.5 15 10.5h-3l-1.5-5" />
-    </svg>
-  );
-}
-
-function IconActivity() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points="1 8.5 4 8.5 6.5 2.5 9.5 14 12 8.5 15 8.5" />
-    </svg>
-  );
-}
-
-function IconMapPin() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M8 1.5C5.51 1.5 3.5 3.51 3.5 6c0 3.75 4.5 8.5 4.5 8.5s4.5-4.75 4.5-8.5c0-2.49-2.01-4.5-4.5-4.5z" />
-      <circle cx="8" cy="6" r="1.5" />
-    </svg>
-  );
-}
+const IconBox = () => (
+  <svg {...svgProps}>
+    <path d="M13.5 4.5L8 2 2.5 4.5v7L8 14l5.5-2.5v-7z" />
+    <path d="M8 2v12" />
+    <path d="M13.5 4.5L8 7 2.5 4.5" />
+  </svg>
+);
+const IconTrending = () => (
+  <svg {...svgProps}>
+    <polyline points="1 11 5 7 9 9.5 15 3" />
+    <polyline points="11 3 15 3 15 7" />
+  </svg>
+);
+const IconScale = () => (
+  <svg {...svgProps}>
+    <line x1="8" y1="1.5" x2="8" y2="14.5" />
+    <path d="M2.5 5.5L8 8l5.5-2.5" />
+    <path d="M2.5 5.5 1 10.5h3l1.5-5" />
+    <path d="M13.5 5.5 15 10.5h-3l-1.5-5" />
+  </svg>
+);
+const IconActivity = () => (
+  <svg {...svgProps}>
+    <polyline points="1 8.5 4 8.5 6.5 2.5 9.5 14 12 8.5 15 8.5" />
+  </svg>
+);
+const IconMapPin = () => (
+  <svg {...svgProps}>
+    <path d="M8 1.5C5.51 1.5 3.5 3.51 3.5 6c0 3.75 4.5 8.5 4.5 8.5s4.5-4.75 4.5-8.5c0-2.49-2.01-4.5-4.5-4.5z" />
+    <circle cx="8" cy="6" r="1.5" />
+  </svg>
+);
 
 export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
 
-  const products = useProducts();
-  const pricingSummary = usePricingSummary();
-  const pricingSnapshots = usePricingSnapshots();
-  const bills = useBills();
-  const sentimentSummary = useSentimentSummary();
-  const sentimentSnapshots = useSentimentSnapshots();
-  const locationsSummary = useLocationsSummary();
-  const locationsByState = useLocationsByState();
+  const STALE_TIME_MS = 60_000;
+
+  // Summary queries always enabled — their counts drive the stat cards
+  const products = useQuery({
+    queryKey: ["products"],
+    queryFn: fetchProducts,
+    staleTime: STALE_TIME_MS,
+  });
+  const pricingSummary = useQuery({
+    queryKey: ["pricing-summary"],
+    queryFn: fetchPricingSummary,
+    staleTime: STALE_TIME_MS,
+  });
+  const bills = useQuery({
+    queryKey: ["bills"],
+    queryFn: fetchBills,
+    staleTime: STALE_TIME_MS,
+  });
+  const sentimentSummary = useQuery({
+    queryKey: ["sentiment-summary"],
+    queryFn: fetchSentimentSummary,
+    staleTime: STALE_TIME_MS,
+  });
+  const locationsSummary = useQuery({
+    queryKey: ["locations-summary"],
+    queryFn: fetchLocationsSummary,
+    staleTime: STALE_TIME_MS,
+  });
+
+  // Detail queries only enabled when their tab is active
+  const pricingSnapshots = useQuery({
+    queryKey: ["pricing-snapshots"],
+    queryFn: fetchPricingSnapshots,
+    staleTime: STALE_TIME_MS,
+    enabled: activeTab === "pricing",
+  });
+  const sentimentSnapshots = useQuery({
+    queryKey: ["sentiment-snapshots"],
+    queryFn: fetchSentimentSnapshots,
+    staleTime: STALE_TIME_MS,
+    enabled: activeTab === "sentiment",
+  });
+  const locationsByState = useQuery({
+    queryKey: ["locations-by-state"],
+    queryFn: fetchLocationsByState,
+    staleTime: STALE_TIME_MS,
+    enabled: activeTab === "locations",
+  });
 
   const tabStats = useMemo(
     () =>

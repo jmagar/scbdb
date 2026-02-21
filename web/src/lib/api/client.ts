@@ -58,7 +58,8 @@ export async function apiGet<T>(
   path: string,
   query?: Record<string, string | number | undefined>,
 ): Promise<T> {
-  const url = `${apiBaseUrl}${withQuery(path, query)}`;
+  const fullPath = withQuery(path, query);
+  const url = `${apiBaseUrl}/${fullPath.replace(/^\//, "")}`;
 
   const headers = new Headers({
     Accept: "application/json",
@@ -89,6 +90,9 @@ export async function apiGet<T>(
         const { code, message } = errorBody.error;
         if (typeof code === "string") errorCode = code;
         if (typeof message === "string") errorMessage = message;
+      } else {
+        // Include raw response body for debugging when it doesn't match the expected error format
+        errorMessage = `Request failed (${response.status}) for ${path}: ${JSON.stringify(errorBody)}`;
       }
     } catch {
       // Response was not JSON or did not match expected error format
@@ -106,7 +110,7 @@ export async function apiMutate<TBody, TResponse>(
   path: string,
   body?: TBody,
 ): Promise<TResponse> {
-  const url = `${apiBaseUrl}${path}`;
+  const url = `${apiBaseUrl}/${path.replace(/^\//, "")}`;
 
   const headers = new Headers({
     Accept: "application/json",

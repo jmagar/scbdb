@@ -105,7 +105,7 @@ Mini-table of all states with active locations, sorted by `location_count DESC`.
 
 When no location data has been collected yet (e.g., immediately after first deploy), all tile map cells render gray and the brand cards section is replaced by:
 
-```
+```text
 No location data yet. Run collect locations to populate.
 ```
 
@@ -115,7 +115,7 @@ Run `scbdb-cli collect locations` to populate. See [STORE_LOCATOR.md](./STORE_LO
 
 ## Crate + File Layout
 
-```
+```text
 crates/scbdb-db/src/
 └── locations.rs             — list_locations_dashboard_summary(),
                                list_locations_by_state(),
@@ -130,7 +130,7 @@ web/src/
 ├── lib/api/dashboard.ts     — fetchLocationsSummary(), fetchLocationsByState()
 ├── hooks/use-dashboard-data.ts — useLocationsSummary(), useLocationsByState()
 ├── components/
-│   ├── locations-panel.tsx  — LocationsPanel, StateTileMap
+│   ├── locations-panel.tsx  — LocationsPanel, StateTileMap (inline)
 │   └── dashboard-page.tsx   — "locations" tab wiring
 └── styles.css               — .tile-*, .locations-*, .source-badge
 ```

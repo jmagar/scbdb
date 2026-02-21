@@ -28,7 +28,7 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
   - `bill_events`
   - `sentiment_snapshots`
   - `store_locations`
-- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with five data tabs: Products, Pricing, Regulatory, Sentiment, and Locations. Styling uses raw CSS variables (no Tailwind/shadcn).
+- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with five data tabs: Products, Pricing, Regulatory, Sentiment, and Locations. Styling uses CSS variables and custom component styles.
 
 ## Implemented Capabilities
 
@@ -57,7 +57,7 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 - `just`:
   - `cargo install just`
 - `lefthook`:
-  - `cargo install lefthook`
+  - `brew install lefthook` (macOS) or `go install github.com/evilmartians/lefthook@latest` (Go) or download from [releases](https://github.com/evilmartians/lefthook/releases)
 - Node.js (web project requires `>=20.19.0`)
 - `pnpm`:
   - `npm install -g pnpm` (or `corepack enable pnpm`)

@@ -8,13 +8,14 @@
 
 ## Objective
 
-Deliver production-ready API surfaces and a web dashboard that exposes all four data domains (products, pricing, regulatory, sentiment) through a unified React interface.
+Deliver production-ready API surfaces and a web dashboard that exposes all five data domains (products, pricing, regulatory, sentiment, locations) through a unified React interface.
 
 ## Outcomes Delivered
 
-- Axum REST API with four data domains under `/api/v1`
+- Axum REST API with five data domains under `/api/v1`
 - Bearer-token auth, request-ID tracing, and rate-limiting middleware
-- React dashboard with Products, Pricing, Regulatory, and Sentiment tabs
+- React dashboard with Products, Pricing, Regulatory, Sentiment, and Locations tabs
+- Locations dashboard with store coverage by state
 - TanStack Query data layer (hooks, fetch functions, TypeScript types)
 - 7 passing web tests (smoke, client, dashboard-page with 4 scenarios)
 - 300 passing Rust tests across all workspace crates
@@ -38,7 +39,7 @@ All authenticated endpoints require `Authorization: Bearer <api_key>`. Auth is d
 
 The server crate (`crates/scbdb-server/`) uses a modular layout:
 
-```
+```text
 src/
   main.rs          — entrypoint, AppState, shutdown
   middleware.rs     — RequestId, BearerAuth, RateLimit
@@ -48,6 +49,7 @@ src/
     pricing.rs     — list_pricing_snapshots, list_pricing_summary handlers
     bills.rs       — list_bills, list_bill_events handlers
     sentiment.rs   — list_sentiment_summary, list_sentiment_snapshots handlers
+    locations.rs   — list_locations_summary, list_locations_by_state handlers
 ```
 
 Each handler follows the same pattern: extract `State<AppState>` + `Extension<RequestId>`, call a DB query function from `scbdb-db`, map rows to API types, return `Json<ApiResponse<T>>`.
@@ -56,7 +58,7 @@ Each handler follows the same pattern: extract `State<AppState>` + `Extension<Re
 
 The web project (`web/`) uses a component-per-panel layout:
 
-```
+```text
 src/
   components/
     dashboard-page.tsx        — orchestrator: hooks, tabStats, panel routing

@@ -90,7 +90,12 @@ body {
   max-width: 1080px;
   margin: 0 auto;
   padding: 0.75rem;
-  animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell {
+    animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────
@@ -741,7 +746,7 @@ body {
   align-items: center;
   gap: 0.4rem;
   padding: 0.5rem 1rem;
-  background: var(--surface, #fff);
+  background: var(--card);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 9999px;
   font-size: 0.875rem;
@@ -770,7 +775,7 @@ body {
   left: 0;
   right: 0;
   z-index: 30;
-  background: var(--surface, #fff);
+  background: var(--card);
   border-top: 1px solid var(--border, #e5e7eb);
   border-radius: 12px 12px 0 0;
   max-height: 70%;
@@ -1365,7 +1370,12 @@ button.tile:hover {
   padding: 1.5rem;
   max-width: 1200px;
   margin: 0 auto;
-  animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .brands-page {
+    animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 .page-header {
@@ -1676,7 +1686,12 @@ code {
   padding: 1.5rem;
   max-width: 1080px;
   margin: 0 auto;
-  animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .brand-profile {
+    animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
 }
 
 .brand-profile-header {

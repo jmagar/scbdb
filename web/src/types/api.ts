@@ -85,6 +85,7 @@ export type SentimentSummaryItem = {
   metadata?: SentimentMetadata;
 };
 
+// TODO: consider merging with SentimentSummaryItem if these types remain structurally identical
 export type SentimentSnapshotItem = {
   brand_name: string;
   brand_slug: string;

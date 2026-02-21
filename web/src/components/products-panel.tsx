@@ -27,7 +27,7 @@ export function ProductsPanel({ isLoading, isError, data }: Props) {
                 <img
                   className="product-image"
                   src={
-                    item.primary_image_url ?? item.brand_logo_url ?? undefined
+                    item.primary_image_url || item.brand_logo_url || undefined
                   }
                   alt={`${item.product_name} product`}
                   loading="lazy"

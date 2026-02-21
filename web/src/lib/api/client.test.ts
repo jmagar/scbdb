@@ -12,4 +12,8 @@ describe("withQuery", () => {
   it("returns path when query is empty", () => {
     expect(withQuery("/api/v1/health", {})).toBe("/api/v1/health");
   });
+
+  it("returns path when query is undefined", () => {
+    expect(withQuery("/path", undefined)).toBe("/path");
+  });
 });

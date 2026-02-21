@@ -1,16 +1,23 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
+const DEFAULT_ALLOWED_HOSTS = ["dookie", "scbdb.tootie.tv"];
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const apiProxyTarget = env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:3000";
+  const allowedHosts = env.VITE_ALLOWED_HOSTS
+    ? env.VITE_ALLOWED_HOSTS.split(",")
+        .map((h) => h.trim())
+        .filter(Boolean)
+    : DEFAULT_ALLOWED_HOSTS;
 
   return {
     plugins: [react()],
     server: {
       port: 5173,
       host: true,
-      allowedHosts: ["dookie", "scbdb.tootie.tv"],
+      allowedHosts,
       proxy: {
         "/api": {
           target: apiProxyTarget,
@@ -19,7 +26,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     preview: {
-      allowedHosts: ["dookie", "scbdb.tootie.tv"],
+      allowedHosts,
       proxy: {
         "/api": {
           target: apiProxyTarget,

@@ -125,6 +125,15 @@ All `{*_id}` path parameters accept the **public UUID** (`public_id` column), no
 
 ## Scope Status
 
+### Locations
+
+- `GET /locations/summary`
+  - Per-brand location stats for all brands with at least one active location.
+  - Fields: `brand_name`, `brand_slug`, `active_count`, `new_this_week`, `states_covered`, `locator_source`, `last_seen_at`.
+- `GET /locations/by-state`
+  - State-level location counts across all active locations.
+  - Fields: `state`, `brand_count`, `location_count`.
+
 ### Implemented
 
 - API versioning convention (`/api/v1`)
@@ -135,6 +144,7 @@ All `{*_id}` path parameters accept the **public UUID** (`public_id` column), no
 - `GET /pricing/snapshots`, `GET /pricing/summary`
 - `GET /bills`, `GET /bills/{bill_id}/events`
 - `GET /sentiment/summary`, `GET /sentiment/snapshots`
+- `GET /locations/summary`, `GET /locations/by-state`
 
 ### Planned Post-MVP / Future Work
 
