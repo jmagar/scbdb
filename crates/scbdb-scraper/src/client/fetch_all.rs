@@ -34,38 +34,8 @@ impl ShopifyClient {
         limit: u32,
         inter_request_delay_ms: u64,
     ) -> Result<Vec<ShopifyProduct>, ScraperError> {
-        let mut all_products: Vec<ShopifyProduct> = Vec::new();
-        let mut cursor: Option<String> = None;
-        let mut is_first_page = true;
-        let mut page_count = 0usize;
-
-        loop {
-            page_count += 1;
-            if page_count > MAX_PAGES {
-                return Err(ScraperError::PaginationLimit {
-                    shop_url: shop_url.to_owned(),
-                    max_pages: MAX_PAGES,
-                });
-            }
-
-            if !is_first_page && inter_request_delay_ms > 0 {
-                tokio::time::sleep(Duration::from_millis(inter_request_delay_ms)).await;
-            }
-            is_first_page = false;
-
-            let (response, link_header) = self
-                .fetch_products_page_with_user_agent(shop_url, limit, cursor.as_deref(), None)
-                .await?;
-
-            all_products.extend(response.products);
-
-            cursor = extract_next_cursor(link_header.as_deref());
-            if cursor.is_none() {
-                break;
-            }
-        }
-
-        Ok(all_products)
+        self.fetch_all_products_inner(shop_url, limit, inter_request_delay_ms, None)
+            .await
     }
 
     /// Fetches all products using a browser-like request profile to bypass
@@ -82,6 +52,24 @@ impl ShopifyClient {
         shop_url: &str,
         limit: u32,
         inter_request_delay_ms: u64,
+    ) -> Result<Vec<ShopifyProduct>, ScraperError> {
+        self.fetch_all_products_inner(
+            shop_url,
+            limit,
+            inter_request_delay_ms,
+            Some(super::BROWSER_FALLBACK_UA),
+        )
+        .await
+    }
+
+    /// Shared pagination loop for [`fetch_all_products`] and
+    /// [`fetch_all_products_browser_profile`].
+    async fn fetch_all_products_inner(
+        &self,
+        shop_url: &str,
+        limit: u32,
+        inter_request_delay_ms: u64,
+        user_agent_override: Option<&str>,
     ) -> Result<Vec<ShopifyProduct>, ScraperError> {
         let mut all_products: Vec<ShopifyProduct> = Vec::new();
         let mut cursor: Option<String> = None;
@@ -107,7 +95,7 @@ impl ShopifyClient {
                     shop_url,
                     limit,
                     cursor.as_deref(),
-                    Some(super::BROWSER_FALLBACK_UA),
+                    user_agent_override,
                 )
                 .await?;
 

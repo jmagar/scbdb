@@ -33,4 +33,8 @@ pub enum LocatorError {
     Http(#[from] reqwest::Error),
     #[error("JSON parse error: {0}")]
     Json(#[from] serde_json::Error),
+    #[error("all fetch attempts returned non-2xx for {url}")]
+    AllAttemptsFailed { url: String },
+    #[error("non-success HTTP status {status} fetching {url}")]
+    HttpStatus { status: u16, url: String },
 }

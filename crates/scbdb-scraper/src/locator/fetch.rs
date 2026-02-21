@@ -23,7 +23,7 @@ pub(crate) async fn fetch_html(
         // Prefer curl for storefront HTML: some anti-bot stacks block reqwest
         // while allowing curl/browser fingerprints.
         let curl_output = tokio::process::Command::new("curl")
-            .arg("-Ls")
+            .arg("-Lsf")
             .arg("--max-time")
             .arg(timeout_secs.to_string())
             .arg("--user-agent")
@@ -90,9 +90,11 @@ pub(crate) async fn fetch_html(
         }
     }
 
-    // If every attempt returned a non-2xx, return empty string so callers
-    // fall through to the "no parseable locator" path rather than erroring.
-    Ok(String::new())
+    // Every attempt returned non-2xx or unusable HTML — surface the failure
+    // so callers can distinguish "page unreachable" from "no locator found".
+    Err(LocatorError::AllAttemptsFailed {
+        url: url.to_owned(),
+    })
 }
 
 fn is_usable_html(body: &str) -> bool {
@@ -164,12 +166,17 @@ pub(crate) async fn fetch_json(
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(timeout_secs))
         .build()?;
-    let value = client
+    let response = client
         .get(url)
         .header(reqwest::header::USER_AGENT, user_agent)
         .send()
-        .await?
-        .json::<serde_json::Value>()
         .await?;
+    if !response.status().is_success() {
+        return Err(LocatorError::HttpStatus {
+            status: response.status().as_u16(),
+            url: url.to_owned(),
+        });
+    }
+    let value = response.json::<serde_json::Value>().await?;
     Ok(value)
 }

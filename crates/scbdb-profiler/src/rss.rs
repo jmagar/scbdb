@@ -85,6 +85,10 @@ pub async fn crawl_feed(
 fn extract_domain(url: &str) -> Option<String> {
     let after_scheme = url.split("://").nth(1)?;
     let domain = after_scheme.split('/').next()?;
+    // Strip query string or fragment that may be present when the URL has no path
+    // (e.g., "https://example.com?format=rss" → "example.com", not "example.com?format=rss").
+    let domain = domain.split('?').next().unwrap_or(domain);
+    let domain = domain.split('#').next().unwrap_or(domain);
     Some(domain.to_string())
 }
 

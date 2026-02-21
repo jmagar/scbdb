@@ -77,8 +77,7 @@ pub(crate) fn parse_mg_with_label(
             .unwrap_or(abs_pos);
 
         let candidate_end = (abs_pos + label.len() + MG_LABEL_WINDOW).min(lower.len());
-        let after_end = (0..=candidate_end)
-            .rev()
+        let after_end = (candidate_end..=lower.len())
             .find(|&i| lower.is_char_boundary(i))
             .unwrap_or(lower.len());
 
@@ -133,51 +132,10 @@ pub(crate) fn parse_bare_mg(lower: &str) -> Option<f64> {
     extract_mg_value(lower)
 }
 
-/// Returns all `Nmg` values found in `s` in left-to-right order.
-/// Input must be pre-lowercased.
-fn all_mg_values(s: &str) -> Vec<f64> {
-    let bytes = s.as_bytes();
-    let len = bytes.len();
-    let mut values = Vec::new();
-    let mut i = 0;
-
-    while i < len {
-        if bytes[i].is_ascii_digit()
-            || (bytes[i] == b'.' && i + 1 < len && bytes[i + 1].is_ascii_digit())
-        {
-            let num_start = i;
-            let mut has_dot = false;
-            while i < len && (bytes[i].is_ascii_digit() || (bytes[i] == b'.' && !has_dot)) {
-                if bytes[i] == b'.' {
-                    has_dot = true;
-                }
-                i += 1;
-            }
-            let num_str = &s[num_start..i];
-            let after_num = i;
-            let mut scan = i;
-            while scan < len && bytes[scan] == b' ' {
-                scan += 1;
-            }
-            if s[scan..].starts_with("mg") {
-                if let Ok(v) = num_str.parse::<f64>() {
-                    values.push(v);
-                }
-                i = scan.saturating_add(2);
-                continue;
-            }
-            i = after_num;
-        } else {
-            i += 1;
-        }
-    }
-    values
-}
-
-/// Scans `s` for the first occurrence of a number (integer or decimal)
-/// optionally followed by whitespace and then `"mg"`. Returns the parsed
-/// `f64` value or `None`.
-fn extract_mg_value(s: &str) -> Option<f64> {
+/// Scans `s` for `Nmg` patterns and calls `on_match` for each one found.
+/// If `on_match` returns `Some(v)`, scanning stops and the value is returned.
+/// If `on_match` always returns `None`, returns `None` after the full scan.
+fn scan_mg_values(s: &str, mut on_match: impl FnMut(f64) -> Option<f64>) -> Option<f64> {
     let bytes = s.as_bytes();
     let len = bytes.len();
     let mut i = 0usize;
@@ -187,7 +145,6 @@ fn extract_mg_value(s: &str) -> Option<f64> {
             || (bytes[i] == b'.' && i + 1 < len && bytes[i + 1].is_ascii_digit())
         {
             let num_start = i;
-
             let mut has_dot = false;
             while i < len && (bytes[i].is_ascii_digit() || (bytes[i] == b'.' && !has_dot)) {
                 if bytes[i] == b'.' {
@@ -196,24 +153,43 @@ fn extract_mg_value(s: &str) -> Option<f64> {
                 i += 1;
             }
             let num_str = &s[num_start..i];
-
             let after_num = i;
             while i < len && bytes[i] == b' ' {
                 i += 1;
             }
-
             if s[i..].starts_with("mg") {
                 if let Ok(v) = num_str.parse::<f64>() {
-                    return Some(v);
+                    if let Some(result) = on_match(v) {
+                        return Some(result);
+                    }
                 }
+                i = i.saturating_add(2);
+                continue;
             }
-
             i = after_num;
         } else {
             i += 1;
         }
     }
     None
+}
+
+/// Returns all `Nmg` values found in `s` in left-to-right order.
+/// Input must be pre-lowercased.
+fn all_mg_values(s: &str) -> Vec<f64> {
+    let mut values = Vec::new();
+    scan_mg_values(s, |v| {
+        values.push(v);
+        None // keep scanning
+    });
+    values
+}
+
+/// Scans `s` for the first occurrence of a number (integer or decimal)
+/// optionally followed by whitespace and then `"mg"`. Returns the parsed
+/// `f64` value or `None`.
+fn extract_mg_value(s: &str) -> Option<f64> {
+    scan_mg_values(s, Some)
 }
 
 /// Parses a size value followed by `unit` (e.g., `"oz"` or `"ml"`).

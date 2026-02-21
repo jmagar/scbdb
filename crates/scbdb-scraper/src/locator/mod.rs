@@ -64,7 +64,7 @@ pub async fn fetch_store_locations(
             Ok(stores) if !stores.is_empty() => return Ok(stores),
             Ok(_) => {}
             Err(e) => {
-                tracing::debug!(locator_url, error = %e, "Locally.com fetch failed; trying next strategy")
+                tracing::debug!(locator_url, error = %e, "Locally.com fetch failed; trying next strategy");
             }
         }
     }
@@ -76,7 +76,7 @@ pub async fn fetch_store_locations(
             Ok(stores) if !stores.is_empty() => return Ok(stores),
             Ok(_) => {}
             Err(e) => {
-                tracing::debug!(locator_url, error = %e, "Storemapper token fetch failed; trying next strategy")
+                tracing::debug!(locator_url, error = %e, "Storemapper token fetch failed; trying next strategy");
             }
         }
     }
@@ -86,7 +86,7 @@ pub async fn fetch_store_locations(
             Ok(stores) if !stores.is_empty() => return Ok(stores),
             Ok(_) => {}
             Err(e) => {
-                tracing::debug!(locator_url, error = %e, "Storemapper user-id fetch failed; trying next strategy")
+                tracing::debug!(locator_url, error = %e, "Storemapper user-id fetch failed; trying next strategy");
             }
         }
     }

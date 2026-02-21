@@ -7,7 +7,7 @@ use scbdb_core::{NormalizedImage, NormalizedProduct, NormalizedVariant};
 
 use crate::client::extract_store_origin;
 use crate::error::ScraperError;
-use crate::parse::{parse_cbd_mg, parse_dosage_from_html, parse_size, parse_thc_mg};
+use crate::parse::{parse_cbd_mg, parse_size, parse_thc_mg};
 use crate::types::{ShopifyImage, ShopifyProduct, ShopifyVariant};
 
 /// Normalizes a raw [`ShopifyProduct`] into a [`NormalizedProduct`].
@@ -49,10 +49,13 @@ pub fn normalize_product(
     // The same single-dose limitation as html_dosage_fallback applies: if a
     // product has multiple dosage strengths across variants with bare titles,
     // the first parseable THC value from the fallback is attributed to all.
+    // Only use the THC-specific parser for the dosage fallback. Using
+    // `parse_dosage_from_html` would fall back to CBD values, which would
+    // incorrectly populate `dosage_mg` (a THC field) with a CBD reading.
     let html_dosage_fallback: Option<f64> = product
         .body_html
         .as_deref()
-        .and_then(parse_dosage_from_html)
+        .and_then(parse_thc_from_html)
         .or_else(|| parse_thc_mg(&product.title));
 
     // The position-1 variant is the storefront default. If no position data
@@ -218,6 +221,33 @@ fn normalize_variant(
         size_value,
         size_unit,
     })
+}
+
+/// Strips HTML tags and entities from `html`, then extracts a THC-only dosage.
+///
+/// Unlike [`crate::parse::parse_dosage_from_html`], this does **not** fall back
+/// to CBD values — preventing CBD readings from being misattributed to the THC
+/// `dosage_mg` field.
+fn parse_thc_from_html(html: &str) -> Option<f64> {
+    let mut stripped = String::with_capacity(html.len());
+    let mut inside_tag = false;
+    for ch in html.chars() {
+        match ch {
+            '<' => inside_tag = true,
+            '>' => {
+                inside_tag = false;
+                stripped.push(' ');
+            }
+            _ if !inside_tag => stripped.push(ch),
+            _ => {}
+        }
+    }
+    let decoded = stripped
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ");
+    parse_thc_mg(&decoded)
 }
 
 fn normalize_image(image: ShopifyImage) -> NormalizedImage {

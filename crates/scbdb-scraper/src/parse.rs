@@ -46,14 +46,20 @@ pub(crate) fn parse_thc_mg(title: &str) -> Option<f64> {
 ///
 /// Returns `None` if neither compound yields a parseable dosage.
 #[must_use]
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn parse_dosage_from_html(html: &str) -> Option<f64> {
     // Strip HTML tags via simple byte scan.
+    // Insert a space where each tag was to prevent token concatenation across
+    // tag boundaries (e.g., "<b>5mg</b>THC" → "5mg THC" not "5mgTHC").
     let mut stripped = String::with_capacity(html.len());
     let mut inside_tag = false;
     for ch in html.chars() {
         match ch {
             '<' => inside_tag = true,
-            '>' => inside_tag = false,
+            '>' => {
+                inside_tag = false;
+                stripped.push(' ');
+            }
             _ if !inside_tag => stripped.push(ch),
             _ => {}
         }
