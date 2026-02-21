@@ -3,6 +3,8 @@
 //! Initialises a [`JobScheduler`] at server startup and registers
 //! recurring collection jobs.
 
+mod brand_intel;
+
 use std::sync::Arc;
 
 use sqlx::PgPool;
@@ -24,7 +26,10 @@ pub async fn build_scheduler(
 ) -> Result<JobScheduler, JobSchedulerError> {
     let scheduler = JobScheduler::new().await?;
 
-    register_locations_job(&scheduler, pool, config).await?;
+    register_locations_job(&scheduler, pool.clone(), Arc::clone(&config)).await?;
+    brand_intel::register_signal_refresh_job(&scheduler, pool.clone()).await?;
+    brand_intel::register_brand_intake_job(&scheduler, pool.clone()).await?;
+    brand_intel::register_handle_refresh_job(&scheduler, pool).await?;
 
     scheduler.start().await?;
     Ok(scheduler)

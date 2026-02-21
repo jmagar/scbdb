@@ -6,11 +6,12 @@
 
 pub(super) const BROWSER_FALLBACK_UA: &str =
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
-pub(super) const VTINFO_MAX_FETCH_ATTEMPTS: usize = 3;
-const VTINFO_BACKOFF_BASE_MS: u64 = 250;
-const VTINFO_BACKOFF_MAX_MS: u64 = 2_000;
-const VTINFO_BRAND_PACING_BASE_MS: u64 = 120;
-const VTINFO_BRAND_PACING_SPREAD_MS: u64 = 100;
+pub(super) const VTINFO_MAX_FETCH_ATTEMPTS: usize = 5;
+const VTINFO_BACKOFF_BASE_MS: u64 = 500;
+const VTINFO_BACKOFF_MAX_MS: u64 = 6_000;
+const VTINFO_BRAND_PACING_BASE_MS: u64 = 350;
+const VTINFO_BRAND_PACING_SPREAD_MS: u64 = 400;
+const VTINFO_GLOBAL_MIN_REQUEST_GAP_MS: u64 = 900;
 
 pub(super) async fn fetch_vtinfo_iframe(
     client: &reqwest::Client,
@@ -25,6 +26,7 @@ pub(super) async fn fetch_vtinfo_iframe(
         }
 
         for ua in user_agents {
+            wait_for_vtinfo_request_slot().await;
             let Ok(response) = client
                 .get(iframe_url)
                 .header(reqwest::header::USER_AGENT, ua)
@@ -44,13 +46,17 @@ pub(super) async fn fetch_vtinfo_iframe(
                 continue;
             }
             if let Ok(text) = response.text().await {
-                if !text.trim().is_empty() {
+                if !text.trim().is_empty() && !is_vtinfo_rate_limited_body(&text) {
                     return Some(text);
+                }
+                if is_vtinfo_rate_limited_body(&text) {
+                    tokio::time::sleep(vtinfo_retry_backoff_delay(attempt)).await;
                 }
             }
         }
 
         // Curl fallback.
+        wait_for_vtinfo_request_slot().await;
         let curl_output = tokio::process::Command::new("curl")
             .arg("-Ls")
             .arg("--max-time")
@@ -65,8 +71,11 @@ pub(super) async fn fetch_vtinfo_iframe(
         if let Ok(output) = curl_output {
             if output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout).to_string();
-                if !text.trim().is_empty() {
+                if !text.trim().is_empty() && !is_vtinfo_rate_limited_body(&text) {
                     return Some(text);
+                }
+                if is_vtinfo_rate_limited_body(&text) {
+                    tokio::time::sleep(vtinfo_retry_backoff_delay(attempt)).await;
                 }
             }
         }
@@ -127,6 +136,7 @@ pub(super) async fn fetch_vtinfo_search(
         }
 
         for ua in user_agents {
+            wait_for_vtinfo_request_slot().await;
             let Ok(response) = client
                 .post("https://finder.vtinfo.com/finder/web/v2/iframe/search")
                 .header(reqwest::header::USER_AGENT, ua)
@@ -147,14 +157,18 @@ pub(super) async fn fetch_vtinfo_search(
                 continue;
             }
             if let Ok(text) = response.text().await {
-                if !text.trim().is_empty() {
+                if !text.trim().is_empty() && !is_vtinfo_rate_limited_body(&text) {
                     return Some(text);
+                }
+                if is_vtinfo_rate_limited_body(&text) {
+                    tokio::time::sleep(vtinfo_retry_backoff_delay(attempt)).await;
                 }
             }
         }
 
         // Curl fallback.
         let mut command = tokio::process::Command::new("curl");
+        wait_for_vtinfo_request_slot().await;
         command
             .arg("-Ls")
             .arg("--max-time")
@@ -175,8 +189,11 @@ pub(super) async fn fetch_vtinfo_search(
         if let Ok(output) = curl_output {
             if output.status.success() {
                 let text = String::from_utf8_lossy(&output.stdout).to_string();
-                if !text.trim().is_empty() {
+                if !text.trim().is_empty() && !is_vtinfo_rate_limited_body(&text) {
                     return Some(text);
+                }
+                if is_vtinfo_rate_limited_body(&text) {
+                    tokio::time::sleep(vtinfo_retry_backoff_delay(attempt)).await;
                 }
             }
         }
@@ -235,4 +252,27 @@ fn is_retryable_status(status: reqwest::StatusCode) -> bool {
         || status == reqwest::StatusCode::TOO_MANY_REQUESTS
         || status == reqwest::StatusCode::REQUEST_TIMEOUT
         || status.is_server_error()
+}
+
+fn is_vtinfo_rate_limited_body(body: &str) -> bool {
+    let lowered = body.to_ascii_lowercase();
+    lowered.contains("429 too many requests")
+        || lowered.contains("you have sent too many requests")
+        || lowered.contains("rate limit")
+}
+
+async fn wait_for_vtinfo_request_slot() {
+    static LAST_REQUEST: std::sync::OnceLock<tokio::sync::Mutex<Option<std::time::Instant>>> =
+        std::sync::OnceLock::new();
+
+    let gate = LAST_REQUEST.get_or_init(|| tokio::sync::Mutex::new(None));
+    let mut last = gate.lock().await;
+    let min_gap = std::time::Duration::from_millis(VTINFO_GLOBAL_MIN_REQUEST_GAP_MS);
+    if let Some(previous) = *last {
+        let elapsed = previous.elapsed();
+        if elapsed < min_gap {
+            tokio::time::sleep(min_gap.saturating_sub(elapsed)).await;
+        }
+    }
+    *last = Some(std::time::Instant::now());
 }

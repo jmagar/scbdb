@@ -147,6 +147,7 @@ mod tests {
 
 pub mod api_queries;
 pub mod bills;
+pub mod brand_completeness;
 pub mod brand_intel;
 pub mod brand_profiles;
 pub mod brand_signals;
@@ -157,6 +158,7 @@ pub mod products;
 pub mod seed;
 pub mod sentiment;
 
+pub use brand_completeness::{get_brand_completeness, BrandCompletenessScore};
 pub use brand_intel::{
     insert_brand_competitor_relationship, insert_brand_distributor, insert_brand_funding_event,
     insert_brand_lab_test, insert_brand_legal_proceeding, insert_brand_media_appearance,
@@ -169,7 +171,10 @@ pub use brand_intel::{
     NewBrandFundingEvent, NewBrandLabTest, NewBrandLegalProceeding, NewBrandMediaAppearance,
     NewBrandNewsletter, NewBrandSponsorship,
 };
-pub use brand_signals::{list_brand_signals, upsert_brand_signal, BrandSignalRow, NewBrandSignal};
+pub use brand_signals::{
+    list_brand_feed_urls, list_brand_signals, list_brands_needing_signal_refresh,
+    list_brands_with_stale_handles, upsert_brand_signal, BrandSignalRow, NewBrandSignal,
+};
 
 pub use api_queries::{
     list_price_snapshots_dashboard, list_pricing_summary, list_products_dashboard,
