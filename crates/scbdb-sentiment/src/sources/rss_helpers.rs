@@ -25,6 +25,7 @@ pub(crate) fn parse_rss_feed(
 
     let mut signals = Vec::new();
     let mut in_item = false;
+    let mut in_description = false;
     let mut current_tag = String::new();
     let mut title = String::new();
     let mut link = String::new();
@@ -37,15 +38,21 @@ pub(crate) fn parse_rss_feed(
                 let name = std::str::from_utf8(&name_buf).unwrap_or("").to_string();
                 if name == "item" {
                     in_item = true;
+                    in_description = false;
                     title.clear();
                     link.clear();
                     description.clear();
+                } else if name == "description" && in_item {
+                    in_description = true;
                 }
                 current_tag = name;
             }
             Ok(Event::End(e)) => {
                 let name_buf = e.name().as_ref().to_vec();
                 let name = std::str::from_utf8(&name_buf).unwrap_or("");
+                if name == "description" {
+                    in_description = false;
+                }
                 if name == "item" && in_item {
                     in_item = false;
                     if !title.is_empty() && !link.is_empty() {
@@ -70,20 +77,26 @@ pub(crate) fn parse_rss_feed(
             Ok(Event::Text(e)) => {
                 if in_item {
                     let text = e.unescape().unwrap_or_default().into_owned();
-                    match current_tag.as_str() {
-                        "title" => title = text,
-                        "link" => link = text,
-                        "description" => description = strip_html(&text),
-                        _ => {}
+                    if in_description {
+                        // Accumulate all text nodes inside <description>,
+                        // including those emitted after nested tags like <b>.
+                        if !description.is_empty() {
+                            description.push(' ');
+                        }
+                        description.push_str(&text);
+                    } else {
+                        match current_tag.as_str() {
+                            "title" => title = text,
+                            "link" => link = text,
+                            _ => {}
+                        }
                     }
                 }
             }
             Ok(Event::CData(e)) => {
-                if in_item {
+                if in_item && in_description {
                     let text = String::from_utf8_lossy(e.as_ref()).into_owned();
-                    if current_tag == "description" {
-                        description = strip_html(&text);
-                    }
+                    description = strip_html(&text);
                 }
             }
             Ok(Event::Eof) => break,

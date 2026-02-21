@@ -84,7 +84,10 @@ pub(super) async fn run_collect_verify_images(
     let checks = stream::iter(targets.into_iter().map(|(kind, label, url)| {
         let client = client.clone();
         async move {
-            let result = client.head(&url).send().await;
+            let result = match client.head(&url).send().await {
+                Ok(resp) if resp.status() != StatusCode::METHOD_NOT_ALLOWED => Ok(resp),
+                Ok(_) | Err(_) => client.get(&url).send().await,
+            };
             (kind, label, url, result)
         }
     }))

@@ -210,12 +210,23 @@ fn parse_storepoint_address_tail_with_country(
         .collect();
 
     // Try the last segment as "City ST 12345".
-    let city_state_zip_segment = parts.last().copied().unwrap_or("");
+    // When an explicit country is provided the last segment may itself be a
+    // country name, so fall back to the second-to-last when the last segment
+    // doesn't look like a city/state/zip triple.
+    let mut city_state_zip_segment = parts.last().copied().unwrap_or("");
 
-    let tokens: Vec<&str> = city_state_zip_segment
+    let mut tokens: Vec<&str> = city_state_zip_segment
         .split_whitespace()
         .filter(|t| !t.is_empty())
         .collect();
+
+    if tokens.len() < 3 && parts.len() >= 2 {
+        city_state_zip_segment = parts.get(parts.len() - 2).copied().unwrap_or("");
+        tokens = city_state_zip_segment
+            .split_whitespace()
+            .filter(|t| !t.is_empty())
+            .collect();
+    }
 
     if tokens.len() < 3 {
         return (None, None, None, None);

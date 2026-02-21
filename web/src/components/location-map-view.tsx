@@ -152,6 +152,9 @@ function MapCanvas({ pins, selectedSlugs, brandColors }: MapCanvasProps) {
       applyData();
     } else {
       map.once("load", applyData);
+      return () => {
+        map.off("load", applyData);
+      };
     }
   }, [pins, brandColors]);
 

@@ -50,9 +50,9 @@ pub async fn fetch_store_locations(
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let html = match fetch_html(locator_url, timeout_secs, user_agent).await {
         Ok(body) => body,
-        Err(LocatorError::AllAttemptsFailed { .. }) => {
+        Err(e @ LocatorError::AllAttemptsFailed { .. }) => {
             tracing::warn!(locator_url, "all fetch attempts failed; no locator found");
-            return Ok(vec![]);
+            return Err(e);
         }
         Err(e) => return Err(e),
     };
