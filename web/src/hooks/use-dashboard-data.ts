@@ -3,10 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import {
   fetchBillEvents,
   fetchBills,
+  fetchBrandCompetitors,
   fetchBrandDistributors,
   fetchBrandFunding,
+  fetchBrandLabTests,
+  fetchBrandLegal,
+  fetchBrandMedia,
   fetchBrandProfile,
   fetchBrandSignals,
+  fetchBrandSponsorships,
   fetchBrands,
   fetchLocationsByState,
   fetchLocationsSummary,
@@ -135,6 +140,51 @@ export function useBrandDistributors(slug: string) {
   return useQuery({
     queryKey: ["brand-distributors", slug],
     queryFn: () => fetchBrandDistributors(slug),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandLabTests(slug: string) {
+  return useQuery({
+    queryKey: ["brand-lab-tests", slug],
+    queryFn: () => fetchBrandLabTests(slug),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandLegal(slug: string) {
+  return useQuery({
+    queryKey: ["brand-legal", slug],
+    queryFn: () => fetchBrandLegal(slug),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandSponsorships(slug: string) {
+  return useQuery({
+    queryKey: ["brand-sponsorships", slug],
+    queryFn: () => fetchBrandSponsorships(slug),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandCompetitors(slug: string) {
+  return useQuery({
+    queryKey: ["brand-competitors", slug],
+    queryFn: () => fetchBrandCompetitors(slug),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandMedia(slug: string) {
+  return useQuery({
+    queryKey: ["brand-media", slug],
+    queryFn: () => fetchBrandMedia(slug),
     enabled: !!slug,
     staleTime: STALE_TIME_MS,
   });
