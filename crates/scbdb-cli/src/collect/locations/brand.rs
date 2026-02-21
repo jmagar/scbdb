@@ -128,15 +128,16 @@ pub(super) async fn collect_brand_locations(
         }
     };
 
-    // Post-upsert diff: compare current scrape key set against pre-upsert snapshot.
-    let curr_keys: std::collections::HashSet<String> = active_keys.iter().cloned().collect();
-    let added_count = curr_keys.difference(&prev_keys).count();
-    let removed_count = prev_keys.difference(&curr_keys).count();
-    if added_count > 0 {
-        tracing::info!(brand = %brand.slug, count = added_count, "new store locations detected");
-    }
-    if removed_count > 0 {
-        tracing::info!(brand = %brand.slug, count = removed_count, "store locations deactivated");
+    {
+        let curr: std::collections::HashSet<_> = active_keys.iter().cloned().collect();
+        let added = curr.difference(&prev_keys).count();
+        let removed = prev_keys.difference(&curr).count();
+        if added > 0 {
+            tracing::info!(brand = %brand.slug, count = added, "new store locations detected");
+        }
+        if removed > 0 {
+            tracing::info!(brand = %brand.slug, count = removed, "store locations deactivated");
+        }
     }
 
     let total_active = new_count.saturating_add(kept_count);
