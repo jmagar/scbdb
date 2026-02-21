@@ -38,6 +38,9 @@ pub struct BrandConfig {
     /// All known domains for this brand (primary, redirects, defunct, etc.)
     #[serde(default)]
     pub domains: Vec<String>,
+    /// Twitter/X handle for the brand account (without @), e.g. `"drinkcann"`.
+    #[serde(default)]
+    pub twitter_handle: Option<String>,
 }
 
 impl BrandConfig {
