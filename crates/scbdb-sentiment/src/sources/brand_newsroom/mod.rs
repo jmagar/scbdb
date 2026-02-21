@@ -1,11 +1,15 @@
 //! Brand-owned newsroom / press crawl source.
 
 mod html;
+mod html_jsonld;
 mod urls;
 
 use crate::types::SentimentSignal;
 
-use html::{extract_article_text, extract_article_text_with_llm, extract_links};
+use html::{
+    extract_article_text, extract_article_text_with_llm, extract_links,
+    infer_newsroom_urls_with_llm,
+};
 use urls::{
     canonicalize_url, looks_like_article_url, looks_like_sitemap_url, newsroom_seed_urls,
     parse_robots_sitemaps, parse_sitemap_locs, resolve_and_canonicalize,
@@ -19,6 +23,8 @@ const MAX_INDEX_PAGES_PER_BRAND: usize = 10;
 const MAX_ARTICLES_PER_BRAND: usize = 10;
 /// Upper bound for LLM enrich calls per brand.
 const MAX_LLM_ENRICH_CALLS_PER_BRAND: usize = 4;
+/// Upper bound for LLM-inferred newsroom seed URLs per brand.
+const MAX_LLM_DISCOVERY_URLS_PER_BRAND: usize = 8;
 
 /// Crawl likely newsroom paths for a brand and return article-derived signals.
 ///
@@ -149,8 +155,35 @@ pub(crate) async fn fetch_brand_newsroom_signals(
         }
     }
 
-    // 3) newsroom path seeds
-    for index_url in newsroom_seed_urls(&base)
+    let mut llm_discovered_urls: Vec<String> = Vec::new();
+    if let Ok(resp) = client.get(&base).send().await {
+        if resp.status().is_success() {
+            if let Ok(homepage_html) = resp.text().await {
+                let inferred = infer_newsroom_urls_with_llm(&client, &base, &homepage_html).await;
+                llm_discovered_urls = inferred
+                    .into_iter()
+                    .filter_map(|url| resolve_and_canonicalize(&url, &base))
+                    .take(MAX_LLM_DISCOVERY_URLS_PER_BRAND)
+                    .collect();
+                if !llm_discovered_urls.is_empty() {
+                    tracing::debug!(
+                        brand = brand_slug,
+                        source = "brand_newsroom",
+                        count = llm_discovered_urls.len(),
+                        "llm inferred newsroom seed urls"
+                    );
+                }
+            }
+        }
+    }
+
+    // 3) newsroom path seeds + LLM-discovered URLs
+    let combined_seed_urls = newsroom_seed_urls(&base)
+        .into_iter()
+        .chain(llm_discovered_urls)
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for index_url in combined_seed_urls
         .into_iter()
         .filter(|url| !looks_like_sitemap_url(url))
         .take(MAX_INDEX_PAGES_PER_BRAND)

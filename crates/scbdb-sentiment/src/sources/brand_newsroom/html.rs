@@ -4,6 +4,8 @@ use regex::Regex;
 use serde_json::json;
 use serde_json::Value;
 
+use super::html_jsonld::extract_json_ld_article_text;
+
 const MIN_TEXT_LEN: usize = 40;
 
 pub(super) fn extract_links(html: &str, base: &str) -> Vec<String> {
@@ -106,6 +108,92 @@ pub(super) async fn extract_article_text_with_llm(
     parse_llm_json_response(content)
 }
 
+pub(super) async fn infer_newsroom_urls_with_llm(
+    client: &reqwest::Client,
+    base_url: &str,
+    homepage_html: &str,
+) -> Vec<String> {
+    if !llm_enabled() {
+        return Vec::new();
+    }
+
+    let Ok(api_key) = std::env::var("OPENAI_API_KEY") else {
+        return Vec::new();
+    };
+    let model =
+        std::env::var("SENTIMENT_NEWSROOM_LLM_MODEL").unwrap_or_else(|_| "gpt-4o-mini".to_string());
+
+    let html_excerpt: String = homepage_html.chars().take(12_000).collect();
+    let href_candidates = extract_href_candidates(homepage_html);
+    let href_block = href_candidates
+        .iter()
+        .take(200)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let req_body = json!({
+        "model": model,
+        "response_format": { "type": "json_object" },
+        "messages": [
+            {
+                "role": "system",
+                "content": "Extract probable newsroom/press/blog URLs from brand homepage HTML. Return strict JSON with key: newsroom_urls (array of URL strings). Prefer same-domain links."
+            },
+            {
+                "role": "user",
+                "content": format!(
+                    "Base URL: {base_url}\nReturn up to 8 best newsroom URLs.\nPrefer links containing: newsroom, press, media, investor/news, blog, journal, stories, announcements.\nIf none found, return an empty array.\n\nCandidate href values:\n{href_block}\n\nHTML excerpt:\n{html_excerpt}"
+                )
+            }
+        ],
+        "temperature": 0.0
+    });
+
+    let Ok(response) = client
+        .post("https://api.openai.com/v1/chat/completions")
+        .bearer_auth(api_key)
+        .json(&req_body)
+        .send()
+        .await
+    else {
+        return Vec::new();
+    };
+
+    if !response.status().is_success() {
+        return Vec::new();
+    }
+
+    let Ok(body): Result<Value, _> = response.json().await else {
+        return Vec::new();
+    };
+
+    let Some(content) = body
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(|choice| choice.get("message"))
+        .and_then(|msg| msg.get("content"))
+        .and_then(Value::as_str)
+    else {
+        return Vec::new();
+    };
+
+    parse_llm_newsroom_urls_response(content)
+}
+
+fn extract_href_candidates(html: &str) -> Vec<String> {
+    let re = Regex::new(r#"(?is)href\s*=\s*[\"']([^\"']+)[\"']"#).expect("valid href regex");
+    re.captures_iter(html)
+        .filter_map(|cap| cap.get(1).map(|m| m.as_str().trim().to_string()))
+        .filter(|href| {
+            !href.is_empty()
+                && !href.starts_with('#')
+                && !href.starts_with("mailto:")
+                && !href.starts_with("javascript:")
+        })
+        .collect()
+}
+
 fn llm_enabled() -> bool {
     std::env::var("SENTIMENT_NEWSROOM_LLM_ENABLED")
         .ok()
@@ -139,107 +227,25 @@ fn parse_llm_json_response(content: &str) -> Option<String> {
     Some(combined)
 }
 
-fn extract_json_ld_article_text(html: &str) -> Option<String> {
-    let script_re = Regex::new(
-        r#"(?is)<script[^>]*type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script>"#,
-    )
-    .expect("valid json-ld script regex");
-
-    let mut best = String::new();
-
-    for cap in script_re.captures_iter(html) {
-        let raw = cap.get(1).map_or("", |m| m.as_str()).trim();
-        if raw.is_empty() {
-            continue;
-        }
-        let Ok(value) = serde_json::from_str::<Value>(raw) else {
-            continue;
-        };
-
-        if let Some(candidate) = extract_from_json_ld_value(&value) {
-            if candidate.len() > best.len() {
-                best = candidate;
-            }
-        }
-    }
-
-    if best.len() < MIN_TEXT_LEN {
-        return None;
-    }
-    Some(best)
-}
-
-fn extract_from_json_ld_value(value: &Value) -> Option<String> {
-    let mut candidates = Vec::new();
-    collect_json_ld_candidates(value, &mut candidates);
-    candidates.into_iter().max_by_key(String::len)
-}
-
-fn collect_json_ld_candidates(value: &Value, out: &mut Vec<String>) {
-    match value {
-        Value::Object(map) => {
-            if looks_like_article_node(map.get("@type")) {
-                let title = map
-                    .get("headline")
-                    .or_else(|| map.get("name"))
-                    .and_then(Value::as_str)
-                    .map(clean_text)
-                    .unwrap_or_default();
-
-                let detail = map
-                    .get("description")
-                    .or_else(|| map.get("articleBody"))
-                    .and_then(Value::as_str)
-                    .map(clean_text)
-                    .unwrap_or_default();
-
-                let combined = if !title.is_empty() && !detail.is_empty() {
-                    format!("{title} {detail}")
-                } else if !title.is_empty() {
-                    title
-                } else {
-                    detail
-                };
-
-                if !combined.is_empty() {
-                    out.push(combined);
-                }
-            }
-
-            for child in map.values() {
-                collect_json_ld_candidates(child, out);
-            }
-        }
-        Value::Array(items) => {
-            for child in items {
-                collect_json_ld_candidates(child, out);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn contains_article_token(value: &str) -> bool {
-    let lower = value.to_lowercase();
-    lower.contains("article")
-        || lower.contains("newsarticle")
-        || lower.contains("blogposting")
-        || lower.contains("pressrelease")
-}
-
-fn looks_like_article_node(node_type: Option<&Value>) -> bool {
-    let Some(node_type) = node_type else {
-        return false;
+pub(super) fn parse_llm_newsroom_urls_response(content: &str) -> Vec<String> {
+    let parsed: Value = match serde_json::from_str(content) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
     };
 
-    match node_type {
-        Value::String(s) => contains_article_token(s),
-        Value::Array(values) => values
-            .iter()
-            .filter_map(Value::as_str)
-            .any(contains_article_token),
-        _ => false,
-    }
+    parsed
+        .get("newsroom_urls")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|u| !u.is_empty())
+                .map(ToString::to_string)
+                .take(8)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -258,6 +264,31 @@ mod tests {
     fn parse_llm_json_response_rejects_short_payload() {
         let raw = r#"{"title":"Hi","summary":"Short"}"#;
         assert!(parse_llm_json_response(raw).is_none());
+    }
+
+    #[test]
+    fn parse_llm_newsroom_urls_response_extracts_urls() {
+        let raw =
+            r#"{"newsroom_urls":["https://brand.com/news","/press","  https://brand.com/blog  "]}"#;
+        let urls = super::parse_llm_newsroom_urls_response(raw);
+        assert_eq!(urls.len(), 3);
+        assert_eq!(urls[0], "https://brand.com/news");
+        assert_eq!(urls[1], "/press");
+        assert_eq!(urls[2], "https://brand.com/blog");
+    }
+
+    #[test]
+    fn extract_href_candidates_filters_non_links() {
+        let html = r##"
+            <a href="/news">News</a>
+            <a href="mailto:hello@brand.com">Mail</a>
+            <a href="#top">Top</a>
+            <a href="https://brand.com/press">Press</a>
+        "##;
+        let links = super::extract_href_candidates(html);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0], "/news");
+        assert_eq!(links[1], "https://brand.com/press");
     }
 }
 
