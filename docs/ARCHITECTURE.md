@@ -41,7 +41,11 @@ scbdb/
 │   │   ├── Cargo.toml
 │   │   └── src/
 │   │       └── lib.rs
-│   └── scbdb-sentiment/    # lib — market sentiment pipeline
+│   ├── scbdb-sentiment/    # lib — market sentiment pipeline
+│   │   ├── Cargo.toml
+│   │   └── src/
+│   │       └── lib.rs
+│   └── scbdb-profiler/     # lib — brand signal ingestion (YouTube, RSS, newsroom, social)
 │       ├── Cargo.toml
 │       └── src/
 │           └── lib.rs
@@ -84,6 +88,7 @@ scbdb/
 | `scbdb-scraper` | lib | Shopify `products.json` collector — pagination, normalization, rate limiting |
 | `scbdb-legiscan` | lib | LegiScan API client — bill/amendment/vote ingestion |
 | `scbdb-sentiment` | lib | Market sentiment aggregation and scoring |
+| `scbdb-profiler` | lib | Brand signal ingestion — per-source collectors writing to `brand_signals` and Qdrant |
 
 ### Dependency Graph
 
@@ -96,7 +101,9 @@ scbdb-cli ──────┬──▶ scbdb-scraper ──▶ scbdb-core
 scbdb-server ───┬──▶ scbdb-db ────────▶ scbdb-core
                 ├──▶ scbdb-scraper ──▶ scbdb-core
                 ├──▶ scbdb-legiscan ──▶ scbdb-core
-                └──▶ scbdb-sentiment ─▶ scbdb-core
+                ├──▶ scbdb-sentiment ─▶ scbdb-core
+                └──▶ scbdb-profiler ──▶ scbdb-core
+                                    └──▶ scbdb-db
 ```
 
 Both binaries depend on the same set of library crates. No library crate depends on a binary crate. `scbdb-core` is the leaf dependency with zero internal deps.
@@ -149,6 +156,19 @@ Pipeline for aggregating and scoring market sentiment signals alongside product 
 > and storage schema for the sentiment pipeline are not yet defined. See
 > [MVP.md](MVP.md) and [phase-4-sentiment-pipeline.md](mvp_phases/phase-4-sentiment-pipeline.md) for open design items.
 
+### Brand Profiler (`scbdb-profiler`)
+
+Library crate that owns brand signal ingestion from multiple external sources. Added in Phase 6 as part of the Brand Intelligence Layer.
+
+Responsibilities:
+
+- Per-source collectors for YouTube (Data API v3), Twitter/X, RSS feeds, and brand newsroom HTML pages.
+- Each collector fetches new content, deduplicates against existing `brand_signals` rows, and writes upserted signals to the database.
+- Signals that pass dedup are queued for Qdrant embedding via TEI; the `brand_signal_embeds` table tracks the PostgreSQL → Qdrant relationship.
+- Exposes a top-level `run_profiler(brand, sources, pool, qdrant_client)` entry point consumed by scheduler jobs registered in `scbdb-server`.
+
+Dependencies: `scbdb-core`, `scbdb-db`, `reqwest`, `tokio`, `serde_json`.
+
 ### Phase 4 Infrastructure
 
 The following components are integrated in the Phase 4 sentiment pipeline:
@@ -165,3 +185,13 @@ The following components are part of the roadmap but out of MVP scope:
 ## Frontend (`web/`)
 
 **Vite**-powered **React 19** SPA styled with **Tailwind CSS 4+** and **shadcn/ui** components. Communicates with the Axum backend over REST. Provides dashboards for browsing competitor products, tracking legislation, comparing pricing, viewing market sentiment, and monitoring scrape runs.
+
+### Phase 6 Frontend Additions
+
+Phase 6 adds a brand intelligence UI layer:
+
+- **`/brands`** — Brand list page. Displays all tracked brands as cards with tier badge, relationship tag (portfolio vs. competitor), and a completeness progress bar sourced from the `brand_completeness` read model.
+- **`/brands/:slug`** — Brand profile page. Full-detail view with three tabs:
+  - **Feed** — Chronological signal stream from `brand_signals` (tweets, YouTube videos, press releases, RSS items).
+  - **Content** — Structured content: funding events, media appearances, sponsorships, lab tests.
+  - **Recon** — Competitive intelligence: distributor map, legal proceedings, competitor relationships, domain roster.
