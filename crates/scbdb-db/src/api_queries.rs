@@ -229,3 +229,66 @@ pub struct SentimentSnapshotDashboardRow {
     pub signal_count: i32,
     pub captured_at: DateTime<Utc>,
 }
+
+/// Returns the most recent sentiment snapshot per brand.
+///
+/// Results are ordered by brand name ascending.
+///
+/// # Errors
+///
+/// Returns [`DbError::Sqlx`] if the query fails.
+pub async fn list_sentiment_summary(pool: &PgPool) -> Result<Vec<SentimentSummaryRow>, DbError> {
+    let rows = sqlx::query_as::<_, SentimentSummaryRow>(
+        "SELECT \
+             b.name  AS brand_name, \
+             b.slug  AS brand_slug, \
+             ss.score, \
+             ss.signal_count, \
+             ss.captured_at \
+         FROM ( \
+             SELECT DISTINCT ON (brand_id) \
+                 brand_id, score, signal_count, captured_at \
+             FROM sentiment_snapshots \
+             ORDER BY brand_id, captured_at DESC, id DESC \
+         ) ss \
+         JOIN brands b ON b.id = ss.brand_id \
+         WHERE b.deleted_at IS NULL \
+           AND b.is_active = TRUE \
+         ORDER BY b.name",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
+
+/// Returns recent sentiment snapshots with brand context.
+///
+/// Results are ordered by `captured_at DESC`.
+///
+/// # Errors
+///
+/// Returns [`DbError::Sqlx`] if the query fails.
+pub async fn list_sentiment_snapshots_dashboard(
+    pool: &PgPool,
+    limit: i64,
+) -> Result<Vec<SentimentSnapshotDashboardRow>, DbError> {
+    let rows = sqlx::query_as::<_, SentimentSnapshotDashboardRow>(
+        "SELECT \
+             b.name  AS brand_name, \
+             b.slug  AS brand_slug, \
+             ss.score, \
+             ss.signal_count, \
+             ss.captured_at \
+         FROM sentiment_snapshots ss \
+         JOIN brands b ON b.id = ss.brand_id \
+         WHERE b.deleted_at IS NULL \
+         ORDER BY ss.captured_at DESC, ss.id DESC \
+         LIMIT $1",
+    )
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
