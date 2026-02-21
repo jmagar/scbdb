@@ -25,13 +25,15 @@ pub(super) async fn register_brand_intake_job(
 ) -> Result<(), JobSchedulerError> {
     let cron = std::env::var("BRAND_INTAKE_CRON").unwrap_or_else(|_| "0 0 6 * * *".to_string());
     let pool = Arc::new(pool);
+    let client = reqwest::Client::new();
 
     let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
         let pool = Arc::clone(&pool);
+        let client = client.clone();
 
         Box::pin(async move {
             tracing::info!("scheduler: starting daily brand_intake run");
-            run_brand_intake_job(&pool).await;
+            run_brand_intake_job(&pool, &client).await;
             tracing::info!("scheduler: daily brand_intake run complete");
         })
     })?;
@@ -46,7 +48,7 @@ pub(super) async fn register_brand_intake_job(
 /// For each brand without a profile, loads social handles and domain feed URLs,
 /// then runs the profiler intake pipeline. Individual brand failures are logged
 /// but do not abort the run.
-async fn run_brand_intake_job(pool: &PgPool) {
+async fn run_brand_intake_job(pool: &PgPool, client: &reqwest::Client) {
     let brand_ids = match scbdb_db::list_brands_without_profiles(pool).await {
         Ok(ids) => ids,
         Err(e) => {
@@ -66,7 +68,7 @@ async fn run_brand_intake_job(pool: &PgPool) {
     );
 
     for brand_id in &brand_ids {
-        run_brand_intake_for(*brand_id, pool).await;
+        run_brand_intake_for(*brand_id, pool, client).await;
     }
 }
 
@@ -75,7 +77,7 @@ async fn run_brand_intake_job(pool: &PgPool) {
 /// Loads the brand's feed URLs and social handles, then invokes the profiler.
 /// All errors are logged rather than propagated so one brand's failure does not
 /// block the rest of the batch.
-async fn run_brand_intake_for(brand_id: i64, pool: &PgPool) {
+async fn run_brand_intake_for(brand_id: i64, pool: &PgPool, client: &reqwest::Client) {
     // Load feed URLs from brand_domains
     let feed_urls = match scbdb_db::list_brand_feed_urls(pool, brand_id).await {
         Ok(urls) => urls,
@@ -109,7 +111,7 @@ async fn run_brand_intake_for(brand_id: i64, pool: &PgPool) {
     let youtube_api_key = std::env::var("YOUTUBE_API_KEY").ok();
 
     let intake_config = scbdb_profiler::IntakeConfig {
-        client: reqwest::Client::new(),
+        client: client.clone(),
         tei_url,
         youtube_api_key,
     };
@@ -152,13 +154,15 @@ pub(super) async fn register_signal_refresh_job(
     pool: PgPool,
 ) -> Result<(), JobSchedulerError> {
     let pool = Arc::new(pool);
+    let client = reqwest::Client::new();
 
     let job = Job::new_async("0 0 4 * * *", move |_uuid, _lock| {
         let pool = Arc::clone(&pool);
+        let client = client.clone();
 
         Box::pin(async move {
             tracing::info!("scheduler: starting daily signal_refresh run");
-            run_signal_refresh_job(&pool).await;
+            run_signal_refresh_job(&pool, &client).await;
             tracing::info!("scheduler: daily signal_refresh run complete");
         })
     })?;
@@ -169,7 +173,7 @@ pub(super) async fn register_signal_refresh_job(
 }
 
 /// Identify brands with stale signals (>24 hours) and re-run intake for each.
-async fn run_signal_refresh_job(pool: &PgPool) {
+async fn run_signal_refresh_job(pool: &PgPool, client: &reqwest::Client) {
     let stale_hours = 24;
 
     let brand_ids = match scbdb_db::list_brands_needing_signal_refresh(pool, stale_hours).await {
@@ -192,7 +196,7 @@ async fn run_signal_refresh_job(pool: &PgPool) {
     );
 
     for brand_id in &brand_ids {
-        run_brand_intake_for(*brand_id, pool).await;
+        run_brand_intake_for(*brand_id, pool, client).await;
     }
 }
 
