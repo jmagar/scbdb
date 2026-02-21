@@ -3,6 +3,8 @@ import type {
   PricingSnapshotItem,
   PricingSummaryItem,
   ProductItem,
+  SentimentSnapshotItem,
+  SentimentSummaryItem,
 } from "../../types/api";
 import { apiGet } from "./client";
 
@@ -22,4 +24,16 @@ export async function fetchPricingSnapshots(): Promise<PricingSnapshotItem[]> {
 
 export async function fetchBills(): Promise<BillItem[]> {
   return apiGet<BillItem[]>("/api/v1/bills", { limit: 30 });
+}
+
+export async function fetchSentimentSummary(): Promise<SentimentSummaryItem[]> {
+  return apiGet<SentimentSummaryItem[]>("/api/v1/sentiment/summary");
+}
+
+export async function fetchSentimentSnapshots(): Promise<
+  SentimentSnapshotItem[]
+> {
+  return apiGet<SentimentSnapshotItem[]>("/api/v1/sentiment/snapshots", {
+    limit: 30,
+  });
 }
