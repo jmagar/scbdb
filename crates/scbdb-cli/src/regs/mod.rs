@@ -4,6 +4,7 @@
 //! established. The `ingest` subcommand fetches bills from the `LegiScan` API
 //! and persists them; the remaining subcommands are read-only queries.
 
+mod discovery;
 mod ingest;
 mod query;
 
@@ -39,6 +40,12 @@ pub enum RegsCommands {
         /// each `getBill` call counts as one request.
         #[arg(long, default_value = "5000")]
         max_requests: u32,
+
+        /// Backfill all historical sessions, not just the current active session.
+        /// Calls `getSessionList` + `getMasterList(session_id)` for every session.
+        /// Each historical session costs 1 additional API request.
+        #[arg(long)]
+        all_sessions: bool,
 
         /// Preview what would be ingested without writing to the database
         #[arg(long)]

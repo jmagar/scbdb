@@ -91,6 +91,7 @@ async fn main() -> anyhow::Result<()> {
                 keyword,
                 max_pages,
                 max_requests,
+                all_sessions,
                 dry_run,
             } => {
                 let config = load_config_or_exit();
@@ -102,6 +103,7 @@ async fn main() -> anyhow::Result<()> {
                     &keyword,
                     max_pages,
                     max_requests,
+                    all_sessions,
                     dry_run,
                 )
                 .await?;

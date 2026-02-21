@@ -199,11 +199,13 @@ pub use bills::{
 };
 pub use brand_profiles::{
     get_brand_profile, list_brand_social_handles, list_brands_without_profiles,
+    overwrite_brand_profile, replace_brand_domains, replace_brand_social_handles,
     upsert_brand_profile, BrandProfileRow, BrandSocialHandleRow,
 };
 pub use brands::{
-    get_brand_by_slug, list_active_brands, list_brands_with_locator, update_brand_logo,
-    update_brand_store_locator_url, BrandRow,
+    create_brand, deactivate_brand, get_brand_by_slug, list_active_brands,
+    list_brands_with_locator, update_brand, update_brand_logo, update_brand_store_locator_url,
+    BrandRow,
 };
 pub use collection_runs::{
     complete_collection_run, create_collection_run, fail_collection_run, get_collection_run,

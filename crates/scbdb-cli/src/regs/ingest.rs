@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use scbdb_legiscan::{
     normalize_bill, normalize_bill_events, normalize_bill_texts, LegiscanClient, LegiscanError,
 };
@@ -34,6 +32,7 @@ pub(crate) async fn run_regs_ingest(
     keywords: &[String],
     _max_pages: u32,
     max_requests: u32,
+    all_sessions: bool,
     dry_run: bool,
 ) -> anyhow::Result<()> {
     let api_key = config
@@ -51,7 +50,7 @@ pub(crate) async fn run_regs_ingest(
 
     if dry_run {
         println!(
-            "dry-run: would ingest bills for states [{}] keywords [{}] (max_requests={max_requests})",
+            "dry-run: would ingest bills for states [{}] keywords [{}] all_sessions={all_sessions} (max_requests={max_requests})",
             states.join(", "),
             keywords.join(", "),
         );
@@ -69,54 +68,9 @@ pub(crate) async fn run_regs_ingest(
 
     let result: anyhow::Result<(i32, i32)> = async {
         // ── Phase 1: Discover bills via getMasterList ─────────────────────────
-        // One request per state; filter locally by keyword — free and fast.
-        // Keyed by legiscan_bill_id → (change_hash, MasterListEntry).
-        let mut candidates: HashMap<i64, (String, scbdb_legiscan::types::MasterListEntry)> =
-            HashMap::new();
-        let mut budget_hit = false;
-
-        'discovery: for state in states {
-            tracing::info!(state, "getMasterList");
-            let entries = match client.get_master_list(state).await {
-                Ok((_session, entries)) => entries,
-                Err(LegiscanError::BudgetExceeded { used, limit }) => {
-                    tracing::warn!(
-                        used,
-                        limit,
-                        state,
-                        "request budget reached — stopping discovery phase early"
-                    );
-                    budget_hit = true;
-                    break 'discovery;
-                }
-                Err(LegiscanError::QuotaExceeded(ref msg)) => {
-                    return Err(anyhow::anyhow!(
-                        "LegiScan quota exhausted during getMasterList(state={state}): {msg}"
-                    ));
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        state,
-                        error = %e,
-                        "getMasterList failed — skipping state"
-                    );
-                    continue;
-                }
-            };
-
-            // Local keyword filter — no API requests consumed.
-            for entry in entries {
-                let title_lower = entry.title.to_lowercase();
-                let matches = keywords
-                    .iter()
-                    .any(|kw| title_lower.contains(kw.to_lowercase().as_str()));
-                if matches {
-                    candidates
-                        .entry(entry.bill_id)
-                        .or_insert_with(|| (entry.change_hash.clone(), entry));
-                }
-            }
-        }
+        // See discovery.rs for the two strategies (current-session / all-sessions).
+        let (candidates, budget_hit) =
+            super::discovery::discover_candidates(&client, states, keywords, all_sessions).await?;
 
         tracing::info!(
             candidates = candidates.len(),
