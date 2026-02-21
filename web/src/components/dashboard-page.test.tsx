@@ -113,4 +113,12 @@ describe("DashboardPage", () => {
     const buttonCount = (html.match(/<button/g) ?? []).length;
     expect(buttonCount).toBe(4);
   });
+
+  it("renders sentiment panel with score badge", () => {
+    const html = renderToStaticMarkup(<DashboardPage initialTab="sentiment" />);
+    expect(html).toContain("Market Sentiment");
+    expect(html).toContain("Cann");
+    expect(html).toContain("+0.42");
+    expect(html).toContain("sentiment-badge--positive");
+  });
 });
