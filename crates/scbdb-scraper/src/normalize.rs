@@ -3,12 +3,12 @@
 //! Dosage and size parsing is delegated to [`crate::parse`]; this module
 //! focuses on structural conversion from Shopify API shapes.
 
-use scbdb_core::{NormalizedProduct, NormalizedVariant};
+use scbdb_core::{NormalizedImage, NormalizedProduct, NormalizedVariant};
 
 use crate::client::extract_store_origin;
 use crate::error::ScraperError;
 use crate::parse::{parse_cbd_mg, parse_dosage_from_html, parse_size, parse_thc_mg};
-use crate::types::{ShopifyProduct, ShopifyVariant};
+use crate::types::{ShopifyImage, ShopifyProduct, ShopifyVariant};
 
 /// Normalizes a raw [`ShopifyProduct`] into a [`NormalizedProduct`].
 ///
@@ -62,6 +62,40 @@ pub fn normalize_product(
     let has_position_one = product.variants.iter().any(|v| v.position == Some(1));
     let use_position = has_position_data && has_position_one;
 
+    let default_variant_source_id = if use_position {
+        product
+            .variants
+            .iter()
+            .find(|v| v.position == Some(1))
+            .map(|v| v.id.to_string())
+    } else {
+        product.variants.first().map(|v| v.id.to_string())
+    };
+
+    let mut image_gallery = product
+        .images
+        .into_iter()
+        .map(normalize_image)
+        .collect::<Vec<_>>();
+    image_gallery.sort_by_key(|img| img.position.unwrap_or(i32::MAX));
+
+    let primary_image_url = default_variant_source_id
+        .as_deref()
+        .and_then(|default_id| {
+            image_gallery
+                .iter()
+                .find(|img| img.variant_source_ids.iter().any(|id| id == default_id))
+                .map(|img| img.src.clone())
+        })
+        .or_else(|| {
+            image_gallery
+                .iter()
+                .find(|img| img.position == Some(1))
+                .map(|img| img.src.clone())
+        })
+        .or_else(|| product.image.as_ref().map(|image| image.src.clone()))
+        .or_else(|| image_gallery.first().map(|img| img.src.clone()));
+
     let variants = product
         .variants
         .into_iter()
@@ -102,6 +136,8 @@ pub fn normalize_product(
         status: product.status.unwrap_or_else(|| "active".to_string()),
         source_url,
         vendor: product.vendor,
+        primary_image_url,
+        image_gallery,
         variants,
     })
 }
@@ -182,6 +218,22 @@ fn normalize_variant(
         size_value,
         size_unit,
     })
+}
+
+fn normalize_image(image: ShopifyImage) -> NormalizedImage {
+    NormalizedImage {
+        source_image_id: image.id.map(|id| id.to_string()),
+        src: image.src,
+        alt: image.alt,
+        position: image.position,
+        width: image.width,
+        height: image.height,
+        variant_source_ids: image
+            .variant_ids
+            .into_iter()
+            .map(|id| id.to_string())
+            .collect(),
+    }
 }
 
 #[cfg(test)]

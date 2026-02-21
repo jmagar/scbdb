@@ -28,6 +28,8 @@ pub struct BrandConfig {
     pub tier: u8,
     pub domain: Option<String>,
     pub shop_url: Option<String>,
+    #[serde(default)]
+    pub store_locator_url: Option<String>,
     pub notes: Option<String>,
 }
 

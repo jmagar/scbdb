@@ -12,7 +12,7 @@ pub struct NormalizedProduct {
     /// Raw HTML from Shopify's `body_html` field.
     pub description: Option<String>,
     pub product_type: Option<String>,
-    /// Individual tags split from Shopify's comma-separated tag string.
+    /// Shopify tags from `products.json`.
     pub tags: Vec<String>,
     /// Shopify URL slug, e.g. `"hi-boy-blood-orange-5mg"`.
     pub handle: Option<String>,
@@ -22,7 +22,30 @@ pub struct NormalizedProduct {
     pub source_url: Option<String>,
     /// Vendor / brand name as configured in Shopify (e.g., `"CANN"`).
     pub vendor: Option<String>,
+    /// Primary storefront image URL for this product, if present.
+    pub primary_image_url: Option<String>,
+    /// Full product image gallery with optional variant associations.
+    pub image_gallery: Vec<NormalizedImage>,
     pub variants: Vec<NormalizedVariant>,
+}
+
+/// A normalized Shopify product image.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NormalizedImage {
+    /// Shopify image ID as a string (if provided).
+    pub source_image_id: Option<String>,
+    /// Canonical CDN URL for the image.
+    pub src: String,
+    /// Optional alt text from Shopify.
+    pub alt: Option<String>,
+    /// 1-based image position in the product gallery.
+    pub position: Option<i32>,
+    /// Pixel width if provided by Shopify.
+    pub width: Option<i32>,
+    /// Pixel height if provided by Shopify.
+    pub height: Option<i32>,
+    /// Variant IDs (as strings) associated with this image.
+    pub variant_source_ids: Vec<String>,
 }
 
 impl NormalizedProduct {
@@ -118,6 +141,8 @@ mod tests {
             status: "active".to_string(),
             source_url: Some("https://drinkhi.com/products/hi-boy-blood-orange-5mg".to_string()),
             vendor: None,
+            primary_image_url: None,
+            image_gallery: vec![],
             variants,
         }
     }

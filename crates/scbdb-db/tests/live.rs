@@ -8,11 +8,13 @@
 use chrono::NaiveDate;
 use scbdb_core::{NormalizedProduct, NormalizedVariant};
 use scbdb_db::{
-    complete_collection_run, create_collection_run, fail_collection_run,
-    get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
+    complete_collection_run, create_collection_run, deactivate_missing_locations,
+    fail_collection_run, get_bill_by_jurisdiction_number, get_brand_by_slug, get_collection_run,
     get_last_price_snapshot, insert_price_snapshot_if_changed, list_active_brands,
-    list_bill_events, list_bills, list_collection_run_brands, start_collection_run, upsert_bill,
-    upsert_bill_event, upsert_collection_run_brand, upsert_product, upsert_variant,
+    list_bill_events, list_bills, list_collection_run_brands, list_locations_by_state,
+    list_locations_dashboard_summary, start_collection_run, update_brand_logo, upsert_bill,
+    upsert_bill_event, upsert_collection_run_brand, upsert_product, upsert_store_locations,
+    upsert_variant, NewStoreLocation,
 };
 
 // ---------------------------------------------------------------------------
@@ -46,6 +48,8 @@ fn make_normalized_product(source_product_id: &str) -> NormalizedProduct {
         status: "active".to_string(),
         source_url: None,
         vendor: None,
+        primary_image_url: None,
+        image_gallery: vec![],
         variants: vec![make_normalized_variant("VAR-001")],
     }
 }
@@ -317,6 +321,27 @@ async fn product_upsert_persists_additional_fields(pool: sqlx::PgPool) {
     product.tags = vec!["sparkling".to_string(), "5mg".to_string()];
     product.handle = Some("prod-extra-001".to_string());
     product.source_url = Some("https://example.com/products/prod-extra-001".to_string());
+    product.primary_image_url = Some("https://cdn.shopify.com/primary.jpg".to_string());
+    product.image_gallery = vec![
+        scbdb_core::NormalizedImage {
+            source_image_id: Some("1001".to_string()),
+            src: "https://cdn.shopify.com/primary.jpg".to_string(),
+            alt: Some("Front can".to_string()),
+            position: Some(1),
+            width: Some(1200),
+            height: Some(1200),
+            variant_source_ids: vec!["VAR-001".to_string()],
+        },
+        scbdb_core::NormalizedImage {
+            source_image_id: Some("1002".to_string()),
+            src: "https://cdn.shopify.com/lifestyle.jpg".to_string(),
+            alt: None,
+            position: Some(2),
+            width: Some(1400),
+            height: Some(1200),
+            variant_source_ids: vec![],
+        },
+    ];
 
     upsert_product(&pool, brand_id, &product)
         .await
@@ -330,9 +355,10 @@ async fn product_upsert_persists_additional_fields(pool: sqlx::PgPool) {
             Option<Vec<String>>,
             Option<String>,
             Option<String>,
+            serde_json::Value,
         ),
     >(
-        "SELECT description, product_type, tags, handle, source_url \
+        "SELECT description, product_type, tags, handle, source_url, metadata \
          FROM products WHERE brand_id = $1 AND source_product_id = $2",
     )
     .bind(brand_id)
@@ -351,6 +377,45 @@ async fn product_upsert_persists_additional_fields(pool: sqlx::PgPool) {
     assert_eq!(
         row.4.as_deref(),
         Some("https://example.com/products/prod-extra-001")
+    );
+    assert_eq!(
+        row.5["primary_image_url"].as_str(),
+        Some("https://cdn.shopify.com/primary.jpg")
+    );
+    assert_eq!(
+        row.5["image_gallery"]
+            .as_array()
+            .map_or(0, std::vec::Vec::len),
+        2
+    );
+
+    product.primary_image_url = Some("https://cdn.shopify.com/updated.jpg".to_string());
+    product.image_gallery = vec![scbdb_core::NormalizedImage {
+        source_image_id: Some("2001".to_string()),
+        src: "https://cdn.shopify.com/updated.jpg".to_string(),
+        alt: Some("Updated hero".to_string()),
+        position: Some(1),
+        width: Some(1000),
+        height: Some(1000),
+        variant_source_ids: vec![],
+    }];
+
+    upsert_product(&pool, brand_id, &product)
+        .await
+        .expect("upsert_product update failed");
+
+    let updated_metadata: serde_json::Value = sqlx::query_scalar(
+        "SELECT metadata FROM products WHERE brand_id = $1 AND source_product_id = $2",
+    )
+    .bind(brand_id)
+    .bind("PROD-EXTRA-001")
+    .fetch_one(&pool)
+    .await
+    .expect("fetch updated metadata failed");
+
+    assert_eq!(
+        updated_metadata["primary_image_url"].as_str(),
+        Some("https://cdn.shopify.com/updated.jpg")
     );
 }
 
@@ -716,6 +781,24 @@ async fn get_brand_by_slug_returns_none_when_inactive(pool: sqlx::PgPool) {
         .await
         .expect("get_brand_by_slug failed");
     assert!(result.is_none(), "expected None for inactive brand");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn update_brand_logo_persists_logo_url(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "logo-brand", true).await;
+    update_brand_logo(&pool, brand_id, "https://cdn.example.com/logo.png")
+        .await
+        .expect("update_brand_logo failed");
+
+    let logo_url: Option<String> = sqlx::query_scalar("SELECT logo_url FROM brands WHERE id = $1")
+        .bind(brand_id)
+        .fetch_one(&pool)
+        .await
+        .expect("fetch logo_url failed");
+    assert_eq!(
+        logo_url.as_deref(),
+        Some("https://cdn.example.com/logo.png")
+    );
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -1239,4 +1322,200 @@ async fn list_collection_run_brands_returns_inserted_entries(pool: sqlx::PgPool)
     assert_eq!(entries[0].status, "succeeded");
     assert_eq!(entries[0].records_processed, 3);
     assert!(entries[0].error_message.is_none());
+}
+
+// ---------------------------------------------------------------------------
+// Section 8: Store Locations — Dashboard Aggregates
+// ---------------------------------------------------------------------------
+
+/// Build a minimal `NewStoreLocation` for tests.
+fn make_test_location(
+    key_suffix: &str,
+    name: &str,
+    state: Option<&str>,
+    locator_source: Option<&str>,
+) -> NewStoreLocation {
+    NewStoreLocation {
+        location_key: format!("test-loc-{key_suffix}"),
+        name: name.to_string(),
+        address_line1: None,
+        city: None,
+        state: state.map(str::to_string),
+        zip: None,
+        country: Some("US".to_string()),
+        latitude: None,
+        longitude: None,
+        phone: None,
+        external_id: None,
+        locator_source: locator_source.map(str::to_string),
+        raw_data: serde_json::json!({}),
+    }
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn locations_dashboard_summary_returns_per_brand_counts(pool: sqlx::PgPool) {
+    let brand_a = insert_test_brand(&pool, "loc-brand-a", true).await;
+    let brand_b = insert_test_brand(&pool, "loc-brand-b", true).await;
+
+    // Brand-a: 3 locations across CA (×2) and TX.
+    let locs_a = vec![
+        make_test_location("a-ca-1", "Store CA 1", Some("CA"), Some("locally")),
+        make_test_location("a-ca-2", "Store CA 2", Some("CA"), Some("locally")),
+        make_test_location("a-tx-1", "Store TX 1", Some("TX"), Some("locally")),
+    ];
+    upsert_store_locations(&pool, brand_a, &locs_a)
+        .await
+        .expect("upsert brand-a locations failed");
+
+    // Brand-b: 1 location in NY.
+    let locs_b = vec![make_test_location(
+        "b-ny-1",
+        "Store NY 1",
+        Some("NY"),
+        Some("storemapper"),
+    )];
+    upsert_store_locations(&pool, brand_b, &locs_b)
+        .await
+        .expect("upsert brand-b locations failed");
+
+    let rows = list_locations_dashboard_summary(&pool)
+        .await
+        .expect("list_locations_dashboard_summary failed");
+
+    assert_eq!(rows.len(), 2, "expected 2 brand rows");
+
+    // Results are ordered by active_count DESC, so brand-a (3) comes first.
+    let row_a = &rows[0];
+    assert_eq!(row_a.brand_slug, "loc-brand-a");
+    assert_eq!(row_a.active_count, 3, "brand-a active_count");
+    assert_eq!(row_a.states_covered, 2, "brand-a covers CA + TX = 2 states");
+    assert_eq!(
+        row_a.locator_source.as_deref(),
+        Some("locally"),
+        "brand-a locator_source"
+    );
+
+    let row_b = &rows[1];
+    assert_eq!(row_b.brand_slug, "loc-brand-b");
+    assert_eq!(row_b.active_count, 1, "brand-b active_count");
+    assert_eq!(row_b.states_covered, 1, "brand-b covers NY = 1 state");
+    assert_eq!(
+        row_b.locator_source.as_deref(),
+        Some("storemapper"),
+        "brand-b locator_source"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn locations_dashboard_summary_excludes_brands_with_no_active_locations(pool: sqlx::PgPool) {
+    // Brand with no locations at all.
+    insert_test_brand(&pool, "loc-empty", true).await;
+
+    // Brand with one location that gets deactivated.
+    let brand_deactivated = insert_test_brand(&pool, "loc-deactivated", true).await;
+    let locs = vec![make_test_location(
+        "d-ca-1",
+        "Deactivated Store",
+        Some("CA"),
+        None,
+    )];
+    upsert_store_locations(&pool, brand_deactivated, &locs)
+        .await
+        .expect("upsert failed");
+
+    // Deactivate all locations for the brand by passing an empty active_keys slice.
+    deactivate_missing_locations(&pool, brand_deactivated, &[])
+        .await
+        .expect("deactivate failed");
+
+    let rows = list_locations_dashboard_summary(&pool)
+        .await
+        .expect("list_locations_dashboard_summary failed");
+
+    assert_eq!(
+        rows.len(),
+        0,
+        "HAVING clause should exclude brands with 0 active locations"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn locations_by_state_groups_correctly(pool: sqlx::PgPool) {
+    let brand_a = insert_test_brand(&pool, "state-brand-a", true).await;
+    let brand_b = insert_test_brand(&pool, "state-brand-b", true).await;
+
+    // brand-a: CA, CA, TX
+    let locs_a = vec![
+        make_test_location("s-a-ca-1", "Store A-CA-1", Some("CA"), None),
+        make_test_location("s-a-ca-2", "Store A-CA-2", Some("CA"), None),
+        make_test_location("s-a-tx-1", "Store A-TX-1", Some("TX"), None),
+    ];
+    upsert_store_locations(&pool, brand_a, &locs_a)
+        .await
+        .expect("upsert brand-a failed");
+
+    // brand-b: CA, NY
+    let locs_b = vec![
+        make_test_location("s-b-ca-1", "Store B-CA-1", Some("CA"), None),
+        make_test_location("s-b-ny-1", "Store B-NY-1", Some("NY"), None),
+    ];
+    upsert_store_locations(&pool, brand_b, &locs_b)
+        .await
+        .expect("upsert brand-b failed");
+
+    let rows = list_locations_by_state(&pool)
+        .await
+        .expect("list_locations_by_state failed");
+
+    // Ordered by location_count DESC: CA(3), TX(1), NY(1) — TX/NY order may vary.
+    let ca_row = rows
+        .iter()
+        .find(|r| r.state == "CA")
+        .expect("CA row missing");
+    assert_eq!(ca_row.location_count, 3, "CA location_count");
+    assert_eq!(ca_row.brand_count, 2, "CA brand_count");
+
+    let tx_row = rows
+        .iter()
+        .find(|r| r.state == "TX")
+        .expect("TX row missing");
+    assert_eq!(tx_row.location_count, 1, "TX location_count");
+    assert_eq!(tx_row.brand_count, 1, "TX brand_count");
+
+    let ny_row = rows
+        .iter()
+        .find(|r| r.state == "NY")
+        .expect("NY row missing");
+    assert_eq!(ny_row.location_count, 1, "NY location_count");
+    assert_eq!(ny_row.brand_count, 1, "NY brand_count");
+
+    // CA must come first (highest count).
+    assert_eq!(
+        rows[0].state, "CA",
+        "CA should be first (location_count DESC)"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn locations_by_state_excludes_null_and_empty_states(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "null-state-brand", true).await;
+
+    // One location with state=None, one with state=Some("").
+    let locs = vec![
+        make_test_location("ns-null", "Null State Store", None, None),
+        make_test_location("ns-empty", "Empty State Store", Some(""), None),
+    ];
+    upsert_store_locations(&pool, brand_id, &locs)
+        .await
+        .expect("upsert failed");
+
+    let rows = list_locations_by_state(&pool)
+        .await
+        .expect("list_locations_by_state failed");
+
+    assert_eq!(
+        rows.len(),
+        0,
+        "rows with NULL or empty state should be excluded by WHERE clause"
+    );
 }

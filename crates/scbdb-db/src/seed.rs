@@ -22,14 +22,15 @@ pub async fn seed_brands(pool: &PgPool, brands: &[BrandConfig]) -> Result<usize,
         let tier = i16::from(brand.tier);
 
         sqlx::query(
-            "INSERT INTO brands (name, slug, relationship, tier, domain, shop_url, notes, is_active) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, true) \
+            "INSERT INTO brands (name, slug, relationship, tier, domain, shop_url, store_locator_url, notes, is_active) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true) \
              ON CONFLICT (slug) DO UPDATE SET \
                  name = EXCLUDED.name, \
                  relationship = EXCLUDED.relationship, \
                  tier = EXCLUDED.tier, \
                  domain = EXCLUDED.domain, \
                  shop_url = EXCLUDED.shop_url, \
+                 store_locator_url = EXCLUDED.store_locator_url, \
                  notes = EXCLUDED.notes, \
                  updated_at = NOW()",
         )
@@ -39,6 +40,7 @@ pub async fn seed_brands(pool: &PgPool, brands: &[BrandConfig]) -> Result<usize,
         .bind(tier)
         .bind(&brand.domain)
         .bind(&brand.shop_url)
+        .bind(&brand.store_locator_url)
         .bind(&brand.notes)
         .execute(&mut *tx)
         .await?;

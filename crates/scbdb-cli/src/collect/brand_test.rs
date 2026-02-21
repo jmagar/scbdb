@@ -26,6 +26,8 @@ fn make_normalized_product(source_product_id: &str) -> scbdb_core::NormalizedPro
         status: "active".to_string(),
         source_url: None,
         vendor: None,
+        primary_image_url: None,
+        image_gallery: vec![],
         variants: vec![make_normalized_variant("VAR-001")],
     }
 }

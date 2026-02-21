@@ -96,7 +96,10 @@ pub async fn upsert_product(
     brand_id: i64,
     product: &scbdb_core::NormalizedProduct,
 ) -> Result<i64, DbError> {
-    let metadata = json!({});
+    let metadata = json!({
+        "primary_image_url": product.primary_image_url,
+        "image_gallery": product.image_gallery,
+    });
 
     let id: i64 = sqlx::query_scalar::<_, i64>(
         "INSERT INTO products \
@@ -112,6 +115,7 @@ pub async fn upsert_product(
              tags         = EXCLUDED.tags, \
              handle       = EXCLUDED.handle, \
              source_url   = EXCLUDED.source_url, \
+             metadata     = EXCLUDED.metadata, \
              vendor       = EXCLUDED.vendor, \
              updated_at   = NOW() \
          RETURNING id",

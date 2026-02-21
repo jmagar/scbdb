@@ -2,18 +2,26 @@ import { useMemo, useState } from "react";
 
 import {
   useBills,
+  useLocationsByState,
+  useLocationsSummary,
   usePricingSnapshots,
   usePricingSummary,
   useProducts,
   useSentimentSnapshots,
   useSentimentSummary,
 } from "../hooks/use-dashboard-data";
+import { LocationsPanel } from "./locations-panel";
 import { PricingPanel } from "./pricing-panel";
 import { ProductsPanel } from "./products-panel";
 import { RegulatoryPanel } from "./regulatory-panel";
 import { SentimentPanel } from "./sentiment-panel";
 
-type DashboardTab = "products" | "pricing" | "regulatory" | "sentiment";
+type DashboardTab =
+  | "products"
+  | "pricing"
+  | "regulatory"
+  | "sentiment"
+  | "locations";
 type DashboardPageProps = {
   initialTab?: DashboardTab;
 };
@@ -27,6 +35,8 @@ export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
   const bills = useBills();
   const sentimentSummary = useSentimentSummary();
   const sentimentSnapshots = useSentimentSnapshots();
+  const locationsSummary = useLocationsSummary();
+  const locationsByState = useLocationsByState();
 
   const tabStats = useMemo(
     () =>
@@ -51,9 +61,20 @@ export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
           label: "Sentiment",
           value: String(sentimentSummary.data?.length ?? 0),
         },
+        {
+          key: "locations",
+          label: "Locations",
+          value: String(
+            (locationsSummary.data ?? []).reduce(
+              (acc, b) => acc + b.active_count,
+              0,
+            ),
+          ),
+        },
       ] as const,
     [
       bills.data?.length,
+      locationsSummary.data,
       pricingSummary.data?.length,
       products.data?.length,
       sentimentSummary.data?.length,
@@ -125,6 +146,13 @@ export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
           <SentimentPanel
             summary={sentimentSummary}
             snapshots={sentimentSnapshots}
+          />
+        )}
+
+        {activeTab === "locations" && (
+          <LocationsPanel
+            summary={locationsSummary}
+            byState={locationsByState}
           />
         )}
       </section>

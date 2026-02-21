@@ -25,6 +25,8 @@
 - [docs/DEPLOYMENT.md](DEPLOYMENT.md) — deployment architecture and operational runbook
 - [docs/SENTIMENT_PIPELINE.md](SENTIMENT_PIPELINE.md) — sentiment pipeline architecture, sources, scoring, and config
 - [docs/SENTIMENT_DASHBOARD.md](SENTIMENT_DASHBOARD.md) — sentiment dashboard tab: API endpoints, DB queries, UI components, CSS reference
+- [docs/STORE_LOCATOR.md](STORE_LOCATOR.md) — store locator crawler: extraction pipeline, territory change detection, scheduler, DB schema
+- [docs/LOCATIONS_DASHBOARD.md](LOCATIONS_DASHBOARD.md) — locations dashboard tab: API endpoints, DB queries, US tile heatmap, UI components
 
 ## Prompt Assets
 

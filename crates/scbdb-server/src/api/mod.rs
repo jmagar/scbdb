@@ -1,4 +1,5 @@
 mod bills;
+mod locations;
 mod pricing;
 mod products;
 mod sentiment;
@@ -137,6 +138,14 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
             "/api/v1/sentiment/snapshots",
             get(sentiment::list_sentiment_snapshots),
         )
+        .route(
+            "/api/v1/locations/summary",
+            get(locations::list_locations_summary),
+        )
+        .route(
+            "/api/v1/locations/by-state",
+            get(locations::list_locations_by_state),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn_with_state(
@@ -199,6 +208,7 @@ pub fn default_rate_limit_state() -> RateLimitState {
 
 #[cfg(test)]
 mod tests {
+    use super::locations::{LocationsByStateItem, LocationsDashboardItem};
     use super::sentiment::SentimentSummaryItem;
     use super::*;
     use axum::body::{to_bytes, Body};
@@ -351,6 +361,158 @@ mod tests {
         assert_eq!(
             row["brand_logo_url"].as_str(),
             Some("https://cdn.example.com/snapshots-logo.png")
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Locations — serialization unit tests (no DB)
+    // -------------------------------------------------------------------------
+
+    #[test]
+    fn locations_dashboard_item_is_serializable() {
+        let item = LocationsDashboardItem {
+            brand_name: "Cann".to_string(),
+            brand_slug: "cann".to_string(),
+            active_count: 42,
+            new_this_week: 5,
+            states_covered: 7,
+            locator_source: Some("locally".to_string()),
+            last_seen_at: Some(Utc::now()),
+        };
+        let json = serde_json::to_string(&item).expect("serialize LocationsDashboardItem");
+        assert!(
+            json.contains("\"brand_slug\":\"cann\""),
+            "serialized JSON should contain brand_slug"
+        );
+        assert!(
+            json.contains("\"active_count\":42"),
+            "serialized JSON should contain active_count"
+        );
+    }
+
+    #[test]
+    fn locations_by_state_item_is_serializable() {
+        let item = LocationsByStateItem {
+            state: "TX".to_string(),
+            brand_count: 3,
+            location_count: 12,
+        };
+        let json = serde_json::to_string(&item).expect("serialize LocationsByStateItem");
+        let round_tripped: serde_json::Value =
+            serde_json::from_str(&json).expect("deserialize LocationsByStateItem");
+        assert_eq!(
+            round_tripped["state"].as_str(),
+            Some("TX"),
+            "state round-trip"
+        );
+        assert_eq!(
+            round_tripped["location_count"].as_i64(),
+            Some(12),
+            "location_count round-trip"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // Locations — route integration tests (with DB)
+    // -------------------------------------------------------------------------
+
+    /// Insert a minimal brand row for locations tests and return its id.
+    async fn seed_location_brand(pool: &sqlx::PgPool, slug: &str) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            "INSERT INTO brands (name, slug, relationship, tier, shop_url, is_active) \
+             VALUES ($1, $2, 'portfolio', 1, $3, true) RETURNING id",
+        )
+        .bind(format!("Brand {slug}"))
+        .bind(slug)
+        .bind(format!("https://{slug}.example.com"))
+        .fetch_one(pool)
+        .await
+        .expect("seed_location_brand failed")
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn locations_summary_returns_ok(pool: sqlx::PgPool) {
+        let brand_id = seed_location_brand(&pool, "loc-summary-brand").await;
+
+        sqlx::query(
+            "INSERT INTO store_locations \
+             (brand_id, location_key, name, state, country, locator_source, raw_data) \
+             VALUES ($1, 'loc-sum-key-1', 'Summary Store CA', 'CA', 'US', 'locally', '{}'::jsonb)",
+        )
+        .bind(brand_id)
+        .execute(&pool)
+        .await
+        .expect("insert location");
+
+        let auth = crate::middleware::AuthState::from_env(true).expect("auth");
+        let app = build_app(AppState { pool }, auth, default_rate_limit_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/locations/summary")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json parse");
+        let data = json["data"].as_array().expect("data array");
+        assert_eq!(data.len(), 1, "expected 1 brand row");
+        assert_eq!(
+            data[0]["brand_slug"].as_str(),
+            Some("loc-summary-brand"),
+            "brand_slug mismatch"
+        );
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn locations_by_state_returns_ok(pool: sqlx::PgPool) {
+        let brand_id = seed_location_brand(&pool, "loc-state-brand").await;
+
+        for key in &["loc-state-key-1", "loc-state-key-2"] {
+            sqlx::query(
+                "INSERT INTO store_locations \
+                 (brand_id, location_key, name, state, country, raw_data) \
+                 VALUES ($1, $2, 'State Store TX', 'TX', 'US', '{}'::jsonb)",
+            )
+            .bind(brand_id)
+            .bind(key)
+            .execute(&pool)
+            .await
+            .expect("insert location");
+        }
+
+        let auth = crate::middleware::AuthState::from_env(true).expect("auth");
+        let app = build_app(AppState { pool }, auth, default_rate_limit_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/locations/by-state")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json parse");
+        let data = json["data"].as_array().expect("data array");
+        let tx_row = data
+            .iter()
+            .find(|r| r["state"].as_str() == Some("TX"))
+            .expect("TX row missing from response");
+        assert_eq!(
+            tx_row["location_count"].as_i64(),
+            Some(2),
+            "TX location_count should be 2"
         );
     }
 }

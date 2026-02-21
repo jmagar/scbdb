@@ -99,3 +99,12 @@ async fn run_collect_products_dry_run_writes_zero_db_rows(pool: sqlx::PgPool) {
 
     assert_eq!(count, 0, "dry-run must not create any collection_runs rows");
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn run_collect_verify_images_on_empty_dataset_is_ok(pool: sqlx::PgPool) {
+    let result = run_collect_verify_images(&pool, None, 4).await;
+    assert!(
+        result.is_ok(),
+        "verify-images should succeed for empty dataset, got: {result:?}"
+    );
+}

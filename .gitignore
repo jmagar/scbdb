@@ -44,3 +44,8 @@ __pycache__/
 docs/plans
 docs/sessions
 docs/reports
+logs
+
+# Proof/screenshot files (generated during dev, not source artifacts)
+phase5-*.png
+*.proof.png

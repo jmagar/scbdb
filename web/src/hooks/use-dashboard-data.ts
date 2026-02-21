@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   fetchBills,
+  fetchLocationsByState,
+  fetchLocationsSummary,
   fetchPricingSnapshots,
   fetchPricingSummary,
   fetchProducts,
@@ -55,6 +57,22 @@ export function useSentimentSnapshots() {
   return useQuery({
     queryKey: ["sentiment-snapshots"],
     queryFn: fetchSentimentSnapshots,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useLocationsSummary() {
+  return useQuery({
+    queryKey: ["locations-summary"],
+    queryFn: fetchLocationsSummary,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useLocationsByState() {
+  return useQuery({
+    queryKey: ["locations-by-state"],
+    queryFn: fetchLocationsByState,
     staleTime: STALE_TIME_MS,
   });
 }

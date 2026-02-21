@@ -26,6 +26,8 @@ fn make_shopify_product(variants: Vec<ShopifyVariant>) -> ShopifyProduct {
         tags: vec!["thc".to_owned(), "beverage".to_owned()],
         status: Some("active".to_owned()),
         vendor: Some("Hi".to_owned()),
+        image: None,
+        images: vec![],
         variants,
     }
 }
@@ -166,6 +168,130 @@ fn normalize_product_preserves_vendor_from_shopify() {
     let product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
     let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
     assert_eq!(normalized.vendor.as_deref(), Some("Hi"));
+}
+
+#[test]
+fn normalize_product_maps_full_image_gallery() {
+    let mut product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
+    product.image = Some(crate::types::ShopifyImage {
+        id: Some(1001),
+        src: "https://cdn.shopify.com/image-primary.jpg".to_owned(),
+        alt: Some("primary".to_owned()),
+        position: Some(1),
+        width: Some(1200),
+        height: Some(1200),
+        variant_ids: vec![1],
+    });
+    product.images = vec![
+        crate::types::ShopifyImage {
+            id: Some(1001),
+            src: "https://cdn.shopify.com/image-primary.jpg".to_owned(),
+            alt: Some("primary".to_owned()),
+            position: Some(1),
+            width: Some(1200),
+            height: Some(1200),
+            variant_ids: vec![1],
+        },
+        crate::types::ShopifyImage {
+            id: Some(1002),
+            src: "https://cdn.shopify.com/image-secondary.jpg".to_owned(),
+            alt: None,
+            position: Some(2),
+            width: Some(1200),
+            height: Some(1200),
+            variant_ids: vec![],
+        },
+    ];
+
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.primary_image_url.as_deref(),
+        Some("https://cdn.shopify.com/image-primary.jpg")
+    );
+    assert_eq!(normalized.image_gallery.len(), 2);
+    assert_eq!(
+        normalized.image_gallery[0].source_image_id.as_deref(),
+        Some("1001")
+    );
+    assert_eq!(
+        normalized.image_gallery[0].variant_source_ids,
+        vec!["1".to_string()]
+    );
+}
+
+#[test]
+fn normalize_product_primary_image_prefers_default_variant_mapping() {
+    let mut product = make_shopify_product(vec![
+        make_shopify_variant(11, "Option A", Some(2)),
+        make_shopify_variant(22, "Option B", Some(1)),
+    ]);
+    product.image = Some(crate::types::ShopifyImage {
+        id: Some(2000),
+        src: "https://cdn.shopify.com/fallback-primary.jpg".to_owned(),
+        alt: None,
+        position: Some(99),
+        width: None,
+        height: None,
+        variant_ids: vec![],
+    });
+    product.images = vec![
+        crate::types::ShopifyImage {
+            id: Some(2001),
+            src: "https://cdn.shopify.com/for-variant-11.jpg".to_owned(),
+            alt: None,
+            position: Some(1),
+            width: None,
+            height: None,
+            variant_ids: vec![11],
+        },
+        crate::types::ShopifyImage {
+            id: Some(2002),
+            src: "https://cdn.shopify.com/for-variant-22.jpg".to_owned(),
+            alt: None,
+            position: Some(2),
+            width: None,
+            height: None,
+            variant_ids: vec![22],
+        },
+    ];
+
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.primary_image_url.as_deref(),
+        Some("https://cdn.shopify.com/for-variant-22.jpg")
+    );
+}
+
+#[test]
+fn normalize_product_primary_image_falls_back_to_position_one() {
+    let mut product = make_shopify_product(vec![make_shopify_variant(1, "Default Title", Some(1))]);
+    product.image = None;
+    product.images = vec![
+        crate::types::ShopifyImage {
+            id: Some(3002),
+            src: "https://cdn.shopify.com/position-2.jpg".to_owned(),
+            alt: None,
+            position: Some(2),
+            width: None,
+            height: None,
+            variant_ids: vec![],
+        },
+        crate::types::ShopifyImage {
+            id: Some(3001),
+            src: "https://cdn.shopify.com/position-1.jpg".to_owned(),
+            alt: None,
+            position: Some(1),
+            width: None,
+            height: None,
+            variant_ids: vec![],
+        },
+    ];
+
+    let normalized = normalize_product(product, "https://drinkhi.com").unwrap();
+    assert_eq!(
+        normalized.primary_image_url.as_deref(),
+        Some("https://cdn.shopify.com/position-1.jpg")
+    );
 }
 
 #[test]

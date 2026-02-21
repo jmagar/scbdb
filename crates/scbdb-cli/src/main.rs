@@ -75,6 +75,15 @@ async fn main() -> anyhow::Result<()> {
                 let pool = connect_or_exit().await;
                 collect::run_collect_pricing(&pool, &config, brand.as_deref()).await?;
             }
+            CollectCommands::VerifyImages { brand, concurrency } => {
+                let pool = connect_or_exit().await;
+                collect::run_collect_verify_images(&pool, brand.as_deref(), concurrency).await?;
+            }
+            CollectCommands::Locations { brand, dry_run } => {
+                let config = load_config_or_exit();
+                let pool = connect_or_exit().await;
+                collect::run_collect_locations(&pool, &config, brand.as_deref(), dry_run).await?;
+            }
         },
         Some(Commands::Regs { command }) => match command {
             RegsCommands::Ingest {

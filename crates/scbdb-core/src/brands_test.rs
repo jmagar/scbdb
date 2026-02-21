@@ -10,6 +10,7 @@ fn slug_simple_name() {
         tier: 2,
         domain: None,
         shop_url: None,
+        store_locator_url: None,
         notes: None,
     };
     assert_eq!(brand.slug(), "high-rise");
@@ -23,6 +24,7 @@ fn slug_special_characters() {
         tier: 1,
         domain: None,
         shop_url: None,
+        store_locator_url: None,
         notes: None,
     };
     assert_eq!(brand.slug(), "uncle-arnies");
@@ -36,6 +38,7 @@ fn slug_accented_characters() {
         tier: 1,
         domain: None,
         shop_url: None,
+        store_locator_url: None,
         notes: None,
     };
     // Non-ASCII chars are stripped; no dash inserted between adjacent ASCII chars
@@ -50,6 +53,7 @@ fn slug_with_tilde() {
         tier: 3,
         domain: None,
         shop_url: None,
+        store_locator_url: None,
         notes: None,
     };
     // ñ is non-ASCII and stripped; no dash between 'e' and 'o'
@@ -65,6 +69,7 @@ fn validate_rejects_invalid_tier() {
             tier: 5,
             domain: None,
             shop_url: None,
+            store_locator_url: None,
             notes: None,
         }],
     };
@@ -81,6 +86,7 @@ fn validate_rejects_empty_name() {
             tier: 1,
             domain: None,
             shop_url: None,
+            store_locator_url: None,
             notes: None,
         }],
     };
@@ -98,6 +104,7 @@ fn validate_rejects_duplicate_name() {
                 tier: 1,
                 domain: None,
                 shop_url: None,
+                store_locator_url: None,
                 notes: None,
             },
             BrandConfig {
@@ -106,6 +113,7 @@ fn validate_rejects_duplicate_name() {
                 tier: 2,
                 domain: None,
                 shop_url: None,
+                store_locator_url: None,
                 notes: None,
             },
         ],
@@ -124,6 +132,7 @@ fn validate_rejects_duplicate_slug() {
                 tier: 2,
                 domain: None,
                 shop_url: None,
+                store_locator_url: None,
                 notes: None,
             },
             BrandConfig {
@@ -132,6 +141,7 @@ fn validate_rejects_duplicate_slug() {
                 tier: 1,
                 domain: None,
                 shop_url: None,
+                store_locator_url: None,
                 notes: None,
             },
         ],
@@ -150,6 +160,7 @@ fn validate_accepts_valid_brands() {
                 tier: 2,
                 domain: Some("highrisebev.com".to_string()),
                 shop_url: None,
+                store_locator_url: None,
                 notes: None,
             },
             BrandConfig {
@@ -158,6 +169,7 @@ fn validate_accepts_valid_brands() {
                 tier: 1,
                 domain: None,
                 shop_url: None,
+                store_locator_url: None,
                 notes: None,
             },
         ],
@@ -174,6 +186,7 @@ fn validate_rejects_empty_slug() {
             tier: 1,
             domain: None,
             shop_url: None,
+            store_locator_url: None,
             notes: None,
         }],
     };

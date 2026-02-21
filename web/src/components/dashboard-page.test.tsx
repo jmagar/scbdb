@@ -89,6 +89,8 @@ vi.mock("../hooks/use-dashboard-data", () => {
         },
       ],
     }),
+    useLocationsSummary: () => ({ isLoading: false, isError: false, data: [] }),
+    useLocationsByState: () => ({ isLoading: false, isError: false, data: [] }),
   };
 });
 
@@ -108,10 +110,10 @@ describe("DashboardPage", () => {
     expect(html).toContain("mini-brand-fallback");
   });
 
-  it("renders four stat cards", () => {
+  it("renders five stat cards", () => {
     const html = renderToStaticMarkup(<DashboardPage />);
     const buttonCount = (html.match(/<button/g) ?? []).length;
-    expect(buttonCount).toBe(4);
+    expect(buttonCount).toBe(5);
   });
 
   it("renders sentiment panel with score badge", () => {

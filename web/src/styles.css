@@ -243,7 +243,7 @@ body {
   }
 
   .stats-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .card-stack {
@@ -314,4 +314,153 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ── Locations panel ────────────────────────────────────── */
+
+/* Source badge on brand cards */
+.source-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 99px;
+  background: #f0f0f0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-family: "IBM Plex Mono", monospace;
+  letter-spacing: 0.02em;
+}
+
+/* Top stat bar */
+.locations-stats-bar {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.locations-stat {
+  border: 1px solid var(--line);
+  border-radius: 0.8rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--accent-soft);
+}
+
+.locations-stat strong {
+  display: block;
+  font-size: 1.4rem;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.locations-stat span {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  .locations-stats-bar {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* US state tile map */
+.tile-map-wrap {
+  position: relative;
+  margin-bottom: 1.5rem;
+}
+
+.tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 0.35rem;
+  font-size: clamp(0.55rem, 1.5vw, 0.72rem);
+  font-family: "IBM Plex Mono", monospace;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  border: none;
+  cursor: default;
+  transition: filter 120ms ease;
+}
+
+button.tile {
+  cursor: pointer;
+}
+
+button.tile:hover {
+  filter: brightness(0.88);
+}
+
+.tile-placeholder {
+  background: transparent;
+}
+
+.tile-empty {
+  background: #ebebeb;
+  color: #9ba0a3;
+}
+
+.tile-low {
+  background: #c8eae5;
+  color: #0a5a51;
+}
+
+.tile-mid {
+  background: #7ecbc0;
+  color: #073d37;
+}
+
+.tile-high {
+  background: #2fa394;
+  color: #fff;
+}
+
+.tile-max {
+  background: #0f7a6d;
+  color: #fff;
+}
+
+/* Hover tooltip */
+.tile-tooltip {
+  position: absolute;
+  transform: translateX(-50%) translateY(calc(-100% - 8px));
+  background: var(--ink);
+  color: #fff;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  line-height: 1.3;
+}
+
+.tile-tooltip strong {
+  font-family: "IBM Plex Mono", monospace;
+  letter-spacing: 0.05em;
+}
+
+/* Map legend */
+.tile-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.tile-legend-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.tile-legend-item {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.3rem;
+  cursor: default;
 }

@@ -6,7 +6,7 @@ pub mod products;
 pub use app_config::{AppConfig, Environment};
 pub use brands::{load_brands, BrandConfig, BrandsFile, Relationship};
 pub use config::{load_app_config, load_app_config_from_env};
-pub use products::{NormalizedProduct, NormalizedVariant};
+pub use products::{NormalizedImage, NormalizedProduct, NormalizedVariant};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-describe("web scaffold", () => {
-  it("has a passing smoke test", () => {
+describe("web dashboard", () => {
+  it("retains baseline passing test", () => {
     expect(true).toBe(true);
   });
 });

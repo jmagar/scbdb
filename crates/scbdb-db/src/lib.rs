@@ -149,6 +149,7 @@ pub mod api_queries;
 pub mod bills;
 pub mod brands;
 pub mod collection_runs;
+pub mod locations;
 pub mod products;
 pub mod seed;
 pub mod sentiment;
@@ -165,11 +166,19 @@ pub use bills::{
     list_bill_events_batch, list_bill_events_by_public_id, list_bills, upsert_bill,
     upsert_bill_event, BillEventRow, BillRow,
 };
-pub use brands::{get_brand_by_slug, list_active_brands, update_brand_logo, BrandRow};
+pub use brands::{
+    get_brand_by_slug, list_active_brands, list_brands_with_locator, update_brand_logo,
+    update_brand_store_locator_url, BrandRow,
+};
 pub use collection_runs::{
     complete_collection_run, create_collection_run, fail_collection_run, get_collection_run,
     list_collection_run_brands, list_collection_runs, start_collection_run,
     upsert_collection_run_brand, CollectionRunBrandRow, CollectionRunRow,
+};
+pub use locations::{
+    deactivate_missing_locations, list_active_locations_by_brand, list_locations_by_state,
+    list_locations_dashboard_summary, list_new_locations_since, upsert_store_locations,
+    LocationsByStateRow, LocationsDashboardRow, NewStoreLocation, StoreLocationRow,
 };
 pub use products::{
     get_last_price_snapshot, insert_price_snapshot_if_changed, upsert_product, upsert_variant,

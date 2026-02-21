@@ -75,3 +75,19 @@ export type SentimentSnapshotItem = {
   signal_count: number;
   captured_at: string;
 };
+
+export type LocationBrandSummary = {
+  brand_name: string;
+  brand_slug: string;
+  active_count: number;
+  new_this_week: number;
+  states_covered: number;
+  locator_source: string | null;
+  last_seen_at: string | null;
+};
+
+export type LocationsByState = {
+  state: string;
+  brand_count: number;
+  location_count: number;
+};

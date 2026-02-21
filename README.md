@@ -28,7 +28,7 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
   - `bill_events`
   - `sentiment_snapshots`
   - `store_locations`
-- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with four data tabs: Products, Pricing, Regulatory, and Sentiment. Styling uses raw CSS variables (no Tailwind/shadcn).
+- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with five data tabs: Products, Pricing, Regulatory, Sentiment, and Locations. Styling uses raw CSS variables (no Tailwind/shadcn).
 
 ## Implemented Capabilities
 
@@ -37,7 +37,7 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
 - Legislative ingestion and reporting via LegiScan.
 - Sentiment collection and scoring pipeline (Google News RSS + Reddit sources), with snapshot persistence.
 - Store locator crawler — detects Locally.com, Storemapper, JSON-LD, and embedded JSON formats; tracks `first_seen_at` per location for territory monitoring.
-- Health-check API at `GET /api/v1/health` plus dashboard endpoints for products, pricing snapshots/summary, bills, and sentiment summary/snapshots.
+- Health-check API at `GET /api/v1/health` plus dashboard endpoints for products, pricing snapshots/summary, bills, sentiment summary/snapshots, and location summary/by-state.
 
 ## Known Limitations
 
@@ -215,3 +215,4 @@ Copy `.env.example` to `.env`.
 - `docs/EXTRACTION_PROMPT_SCHEMA.md`
 - `docs/SENTIMENT_PIPELINE.md`
 - `docs/STORE_LOCATOR.md`
+- `docs/LOCATIONS_DASHBOARD.md`

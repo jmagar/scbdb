@@ -1,5 +1,7 @@
 import type {
   BillItem,
+  LocationBrandSummary,
+  LocationsByState,
   PricingSnapshotItem,
   PricingSummaryItem,
   ProductItem,
@@ -36,4 +38,12 @@ export async function fetchSentimentSnapshots(): Promise<
   return apiGet<SentimentSnapshotItem[]>("/api/v1/sentiment/snapshots", {
     limit: 30,
   });
+}
+
+export async function fetchLocationsSummary(): Promise<LocationBrandSummary[]> {
+  return apiGet<LocationBrandSummary[]>("/api/v1/locations/summary");
+}
+
+export async function fetchLocationsByState(): Promise<LocationsByState[]> {
+  return apiGet<LocationsByState[]>("/api/v1/locations/by-state");
 }

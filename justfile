@@ -57,6 +57,25 @@ dev:
       pnpm --dir web dev; \
     fi
 
+# Start API server + web dev server together; Ctrl-C stops both
+serve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Starting postgres..."
+    docker compose up -d postgres
+    echo "Starting API server..."
+    cargo run --bin scbdb-server &
+    SERVER_PID=$!
+    cleanup() {
+        echo ""
+        echo "Shutting down..."
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+    }
+    trap cleanup EXIT INT TERM
+    echo "Starting web dev server..."
+    pnpm --dir web dev
+
 build:
     @if [ -f Cargo.toml ]; then cargo build --workspace; else echo "No Cargo workspace yet"; fi
 

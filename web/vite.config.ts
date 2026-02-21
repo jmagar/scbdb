@@ -3,27 +3,34 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
-  if (mode !== "test" && !env.VITE_API_BASE_URL) {
-    throw new Error(
-      `VITE_API_BASE_URL is required for mode "${mode}". Set it in env or web/.env.${mode}.`,
-    );
-  }
+  const apiProxyTarget = env.VITE_API_PROXY_TARGET ?? "http://127.0.0.1:3000";
 
   return {
     plugins: [react()],
     server: {
       port: 5173,
       host: true,
+      allowedHosts: ["dookie", "scbdb.tootie.tv"],
+      proxy: {
+        "/api": {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+      },
     },
     preview: {
-      allowedHosts: ["dookie"],
+      allowedHosts: ["dookie", "scbdb.tootie.tv"],
+      proxy: {
+        "/api": {
+          target: apiProxyTarget,
+          changeOrigin: true,
+        },
+      },
     },
     test: {
-      // Provide a placeholder base URL so client.ts does not throw at import
-      // time during vitest runs. Tests that exercise actual HTTP calls must
-      // mock fetch themselves.
+      // Tests that exercise HTTP behavior should mock fetch explicitly.
       env: {
-        VITE_API_BASE_URL: "http://localhost:3000",
+        VITE_API_BASE_URL: "",
       },
     },
   };

@@ -104,6 +104,43 @@ fn test_collect_pricing_with_brand() {
     ));
 }
 
+#[test]
+fn test_collect_verify_images_defaults() {
+    let cli = Cli::try_parse_from(["scbdb", "collect", "verify-images"]).unwrap();
+    assert!(matches!(
+        cli.command,
+        Some(Commands::Collect {
+            command: CollectCommands::VerifyImages {
+                brand: None,
+                concurrency: 12
+            }
+        })
+    ));
+}
+
+#[test]
+fn test_collect_verify_images_with_brand_and_concurrency() {
+    let cli = Cli::try_parse_from([
+        "scbdb",
+        "collect",
+        "verify-images",
+        "--brand",
+        "wynk",
+        "--concurrency",
+        "4",
+    ])
+    .unwrap();
+    assert!(matches!(
+        cli.command,
+        Some(Commands::Collect {
+            command: CollectCommands::VerifyImages {
+                brand: Some(ref b),
+                concurrency: 4
+            }
+        }) if b == "wynk"
+    ));
+}
+
 /// Verifies that brand + dry-run flags combine correctly when both are present.
 #[test]
 fn collect_products_brand_and_dry_run_together() {

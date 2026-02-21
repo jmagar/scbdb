@@ -1,19 +1,23 @@
 import type { ApiResponse } from "../../types/api";
 
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
-if (!apiBaseUrl) {
-  throw new Error(
-    "VITE_API_BASE_URL is required. Define it in your env profile (e.g. web/.env.development).",
-  );
-}
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const apiBaseUrl = (rawApiBaseUrl ?? "").replace(/\/+$/, "");
 
-try {
-  // Enforce absolute URL so browser/dev/proxy contexts resolve consistently.
-  new URL(apiBaseUrl);
-} catch {
-  throw new Error(
-    `VITE_API_BASE_URL must be an absolute URL, got: ${apiBaseUrl}`,
-  );
+if (apiBaseUrl) {
+  const isAbsolute = (() => {
+    try {
+      new URL(apiBaseUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  })();
+  const isRelative = apiBaseUrl.startsWith("/");
+  if (!isAbsolute && !isRelative) {
+    throw new Error(
+      `VITE_API_BASE_URL must be absolute or root-relative, got: ${apiBaseUrl}`,
+    );
+  }
 }
 
 const apiKey = import.meta.env.VITE_API_KEY as string | undefined;

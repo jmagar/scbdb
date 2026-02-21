@@ -6,6 +6,7 @@ brands:
     tier: 2
     domain: highrisebev.com
     shop_url: https://highrisebev.com/collections/all-products
+    store_locator_url: https://highrisebev.com/pages/where-to-buy
     notes: >
       Charleston SC local brand. 5mg, 10mg THC lines + CBD-only line +
       Adaptogen line. Founded 2022. Anchor brand for Reyes THC portfolio.
@@ -18,6 +19,7 @@ brands:
     tier: 1
     domain: drinkcann.com
     shop_url: https://drinkcann.com/collections/all
+    store_locator_url: https://drinkcann.com/pages/where-to-buy
     notes: >
       Three dosage tiers (2mg, 5mg Hi Boy, 10mg Hi'er Boy). Also distributed
       by United in GA — overlap brand. $34.7M raised, Total Wine in 20 states.
@@ -27,6 +29,7 @@ brands:
     tier: 1
     domain: drinkbrez.com
     shop_url: https://drinkbrez.com/collections
+    store_locator_url: https://drinkbrez.com/pages/where-to-buy
     notes: >
       Large catalog — OG, Amplify, Drift, Dream, Elevate, Spirit bottles,
       Shots. May need to hit sub-collections. $28M rev 2024, projecting $50M
@@ -37,6 +40,7 @@ brands:
     tier: 1
     domain: cyclingfrog.com
     shop_url: https://cyclingfrog.com/collections/seltzers-and-drinks
+    store_locator_url: https://cyclingfrog.com/pages/where-to-buy
     notes: >
       CBD:THC ratio products (5mg THC + 10mg CBD standard). Important to
       capture both values. Award-winning, Portland Pickles partnership.
@@ -46,6 +50,7 @@ brands:
     tier: 1
     domain: drinkwynk.com
     shop_url: https://drinkwynk.com/collections/all
+    store_locator_url: https://drinkwynk.com/pages/where-to-buy
     notes: >
       Zero-cal/zero-sugar positioning. Backed by cannabis MSO. 40 states DTC,
       20 retail markets.
@@ -76,6 +81,7 @@ brands:
     tier: 1
     domain: drinkcantrip.com
     shop_url: https://drinkcantrip.com/collections/all
+    store_locator_url: https://drinkcantrip.com/pages/where-to-buy
     notes: >
       Top-20 brand per Whitney. Seltzer focus.
 

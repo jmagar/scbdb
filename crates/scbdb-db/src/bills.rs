@@ -251,3 +251,50 @@ pub async fn list_bill_events_batch(
     }
     Ok(map)
 }
+
+/// Returns a single non-deleted bill by public UUID, or `None` if not found.
+///
+/// # Errors
+///
+/// Returns [`DbError::Sqlx`] if the query fails.
+pub async fn get_bill_by_public_id(
+    pool: &PgPool,
+    public_id: Uuid,
+) -> Result<Option<BillRow>, DbError> {
+    let row = sqlx::query_as::<_, BillRow>(
+        "SELECT id, public_id, jurisdiction, session, bill_number, title, summary, \
+                status, status_date, introduced_date, last_action_date, source_url, \
+                created_at, updated_at, deleted_at \
+         FROM bills \
+         WHERE public_id = $1 AND deleted_at IS NULL",
+    )
+    .bind(public_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row)
+}
+
+/// Returns all events for a bill identified by public UUID.
+///
+/// # Errors
+///
+/// Returns [`DbError::Sqlx`] if the query fails.
+pub async fn list_bill_events_by_public_id(
+    pool: &PgPool,
+    public_id: Uuid,
+) -> Result<Vec<BillEventRow>, DbError> {
+    let rows = sqlx::query_as::<_, BillEventRow>(
+        "SELECT be.id, be.bill_id, be.event_date, be.event_type, be.chamber, be.description, \
+                be.source_url, be.created_at \
+         FROM bill_events be \
+         JOIN bills b ON b.id = be.bill_id \
+         WHERE b.public_id = $1 AND b.deleted_at IS NULL \
+         ORDER BY be.event_date DESC NULLS LAST",
+    )
+    .bind(public_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}

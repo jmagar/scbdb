@@ -3,8 +3,13 @@ import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import reactHooks from "eslint-plugin-react-hooks";
 import jsxA11y from "eslint-plugin-jsx-a11y";
+import globals from "globals";
 
 export default [
+  // Ignore build output and generated files.
+  {
+    ignores: ["dist/**", "node_modules/**"],
+  },
   js.configs.recommended,
   {
     files: ["**/*.{ts,tsx}"],
@@ -15,8 +20,8 @@ export default [
         sourceType: "module",
       },
       globals: {
-        document: "readonly",
-        window: "readonly",
+        ...globals.browser,
+        ...globals.es2021,
       },
     },
     plugins: {
@@ -31,6 +36,15 @@ export default [
         "error",
         { argsIgnorePattern: "^_" },
       ],
+    },
+  },
+  // Vite config runs in Node — allow process and other Node globals.
+  {
+    files: ["vite.config.ts"],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
     },
   },
 ];
