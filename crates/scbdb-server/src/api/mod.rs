@@ -129,6 +129,14 @@ pub fn build_app(state: AppState, auth: AuthState, rate_limit: RateLimitState) -
             "/api/v1/bills/{bill_id}/events",
             get(bills::list_bill_events),
         )
+        .route(
+            "/api/v1/sentiment/summary",
+            get(sentiment::list_sentiment_summary),
+        )
+        .route(
+            "/api/v1/sentiment/snapshots",
+            get(sentiment::list_sentiment_snapshots),
+        )
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn_with_state(
