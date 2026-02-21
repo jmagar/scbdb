@@ -57,22 +57,20 @@ pub async fn fetch_brand_logo_url(
     }
 
     for ua in user_agents {
-        let response = match client
+        let Ok(response) = client
             .get(&origin)
             .header(reqwest::header::USER_AGENT, ua)
             .header(reqwest::header::ACCEPT, "text/html,application/xhtml+xml")
             .send()
             .await
-        {
-            Ok(resp) => resp,
-            Err(_) => continue,
+        else {
+            continue;
         };
         if !response.status().is_success() {
             continue;
         }
-        let body = match response.text().await {
-            Ok(text) => text,
-            Err(_) => continue,
+        let Ok(body) = response.text().await else {
+            continue;
         };
         if let Some(url) = extract_logo_candidate(&origin, &body) {
             return Ok(Some(url));

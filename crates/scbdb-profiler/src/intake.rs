@@ -88,17 +88,16 @@ pub async fn ingest_signals(
         // When no external_id, source_url, or title is available, generate a
         // unique fallback from a UUID to avoid ID collisions across signals.
         let fallback_key;
-        let content_key = match signal
+        let content_key = if let Some(key) = signal
             .external_id
             .as_deref()
             .or(signal.source_url.as_deref())
             .or(signal.title.as_deref())
         {
-            Some(key) => key,
-            None => {
-                fallback_key = uuid::Uuid::new_v4().to_string();
-                &fallback_key
-            }
+            key
+        } else {
+            fallback_key = uuid::Uuid::new_v4().to_string();
+            &fallback_key
         };
 
         let qdrant_point_id = crate::embedder::signal_point_id(content_key);
