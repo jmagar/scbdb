@@ -15,22 +15,33 @@ use super::{
 };
 
 /// Coordinate fingerprint for deduplication: 4-decimal lat,lng.
-fn coord_key(lat: Option<f64>, lng: Option<f64>) -> String {
+///
+/// Returns `None` when either coordinate is absent; callers keep such stores
+/// unconditionally rather than risk silently dropping them under a shared key.
+fn coord_key(lat: Option<f64>, lng: Option<f64>) -> Option<String> {
     match (lat, lng) {
-        (Some(la), Some(lo)) => format!("{la:.4},{lo:.4}"),
-        _ => format!("{lat:?},{lng:?}"),
+        (Some(la), Some(lo)) => Some(format!("{la:.4},{lo:.4}")),
+        _ => None,
     }
 }
 
 /// Deduplicate a vec of locations by coordinate key. First occurrence wins.
+/// Locations with no coordinates bypass the dedup map and are kept in full.
 #[allow(dead_code)] // used in tests; mirrors the inline dedup in fetch_destini_stores
 fn dedup_by_coordinates(locs: Vec<RawStoreLocation>) -> Vec<RawStoreLocation> {
     let mut seen: HashMap<String, RawStoreLocation> = HashMap::new();
+    let mut no_coords: Vec<RawStoreLocation> = Vec::new();
     for loc in locs {
-        let key = coord_key(loc.latitude, loc.longitude);
-        seen.entry(key).or_insert(loc);
+        match coord_key(loc.latitude, loc.longitude) {
+            Some(key) => {
+                seen.entry(key).or_insert(loc);
+            }
+            None => no_coords.push(loc),
+        }
     }
-    seen.into_values().collect()
+    let mut result: Vec<_> = seen.into_values().collect();
+    result.extend(no_coords);
+    result
 }
 
 /// Single Knox API call for one lat/lng center.
@@ -75,7 +86,7 @@ async fn fetch_knox_for_point(
 /// Fetch store locations from `Destini` using the provider's own bootstrap and
 /// API contract.
 ///
-/// Iterates a CONUS geographic grid (~140 points at 200-mile spacing) and
+/// Iterates a CONUS geographic grid (~168 points at 200-mile spacing) and
 /// deduplicates results by coordinate fingerprint so overlapping radius
 /// windows do not produce duplicate entries.
 pub(in crate::locator) async fn fetch_destini_stores(
@@ -131,11 +142,12 @@ pub(in crate::locator) async fn fetch_destini_stores(
         return Ok(vec![]);
     }
 
-    let grid = generate_grid(&GridConfig::conus_coarse()); // ~140 points
+    let grid = generate_grid(&GridConfig::conus_coarse()); // ~168 points
     let mut seen: HashMap<String, RawStoreLocation> = HashMap::new();
+    let mut no_coords: Vec<RawStoreLocation> = Vec::new();
 
     for point in &grid {
-        let locs = fetch_knox_for_point(
+        let locs = match fetch_knox_for_point(
             &client,
             user_agent,
             knox_base,
@@ -147,7 +159,19 @@ pub(in crate::locator) async fn fetch_destini_stores(
             text_style_bm,
             &product_ids,
         )
-        .await?;
+        .await
+        {
+            Ok(locs) => locs,
+            Err(e) => {
+                tracing::warn!(
+                    lat = point.lat,
+                    lng = point.lng,
+                    error = %e,
+                    "Knox request failed for grid point; skipping"
+                );
+                continue;
+            }
+        };
 
         if locs.len() as u64 >= max_stores {
             tracing::warn!(
@@ -159,15 +183,21 @@ pub(in crate::locator) async fn fetch_destini_stores(
         }
 
         for loc in locs {
-            let key = coord_key(loc.latitude, loc.longitude);
-            seen.entry(key).or_insert(loc);
+            match coord_key(loc.latitude, loc.longitude) {
+                Some(key) => {
+                    seen.entry(key).or_insert(loc);
+                }
+                None => no_coords.push(loc),
+            }
         }
 
-        // Courtesy delay — 140 calls at 500ms ≈ 70 s total per brand
+        // Courtesy delay — 168 calls at 500ms ≈ 84 s total per brand
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
-    Ok(seen.into_values().collect())
+    let mut result: Vec<_> = seen.into_values().collect();
+    result.extend(no_coords);
+    Ok(result)
 }
 
 async fn fetch_product_ids(
@@ -238,12 +268,14 @@ mod tests {
 
     #[test]
     fn coord_key_formats_to_four_decimals() {
-        assert_eq!(coord_key(Some(33.1234), Some(-80.9999)), "33.1234,-80.9999");
+        assert_eq!(
+            coord_key(Some(33.1234), Some(-80.9999)),
+            Some("33.1234,-80.9999".to_string())
+        );
     }
 
     #[test]
     fn coord_key_handles_none() {
-        let key = coord_key(None, None);
-        assert!(key.contains("None"));
+        assert_eq!(coord_key(None, None), None);
     }
 }

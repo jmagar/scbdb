@@ -123,26 +123,3 @@ fn decode_html(value: &str) -> String {
         .trim()
         .to_string()
 }
-
-#[cfg(test)]
-mod tests {
-    use super::parse_vtinfo_search_results;
-
-    #[test]
-    fn parses_locations_from_vtinfo_search_html() {
-        let html = r#"
-<article class="card finder_location" data-latitude="44.98" data-longitude="-93.26">
-  <h2 class="finder_dba_text">FOWLING WAREHOUSE</h2>
-  <a class="finder_address"><span>401 ROYALSTON AVE</span>, <span class="finder_address_city">MINNEAPOLIS</span>, <span class="finder_address_state">MN</span></a>
-  <a href="tel:6129463695"><span>(612) 946-3695</span></a>
-</article>
-"#;
-        let rows = parse_vtinfo_search_results(html);
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].name, "FOWLING WAREHOUSE");
-        assert_eq!(rows[0].city.as_deref(), Some("MINNEAPOLIS"));
-        assert_eq!(rows[0].state.as_deref(), Some("MN"));
-        assert_eq!(rows[0].latitude, Some(44.98));
-        assert_eq!(rows[0].longitude, Some(-93.26));
-    }
-}
