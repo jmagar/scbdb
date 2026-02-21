@@ -497,6 +497,94 @@ mod tests {
         );
     }
 
+    // -------------------------------------------------------------------------
+    // Brands — integration tests (with DB)
+    // -------------------------------------------------------------------------
+
+    /// Seed a minimal brand for brand API tests.
+    async fn seed_brand(pool: &sqlx::PgPool, slug: &str) -> i64 {
+        sqlx::query_scalar::<_, i64>(
+            "INSERT INTO brands (name, slug, relationship, tier, shop_url, is_active) \
+             VALUES ($1, $2, 'competitor', 1, $3, true) RETURNING id",
+        )
+        .bind(format!("Brand {slug}"))
+        .bind(slug)
+        .bind(format!("https://{slug}.example.com"))
+        .fetch_one(pool)
+        .await
+        .expect("seed_brand failed")
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn list_brands_returns_ok(pool: sqlx::PgPool) {
+        seed_brand(&pool, "test-brand-list").await;
+
+        let auth = crate::middleware::AuthState::from_env(true).expect("auth");
+        let app = build_app(AppState { pool }, auth, default_rate_limit_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/brands")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json parse");
+        let data = json["data"].as_array().expect("data array");
+        assert_eq!(data.len(), 1, "expected 1 brand");
+        assert_eq!(data[0]["slug"].as_str(), Some("test-brand-list"));
+        assert_eq!(data[0]["completeness_score"].as_i64(), Some(0));
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn get_brand_returns_404_for_unknown_slug(pool: sqlx::PgPool) {
+        let auth = crate::middleware::AuthState::from_env(true).expect("auth");
+        let app = build_app(AppState { pool }, auth, default_rate_limit_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/brands/nonexistent-slug-xyz")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[sqlx::test(migrations = "../../migrations")]
+    async fn get_brand_returns_brand_profile(pool: sqlx::PgPool) {
+        seed_brand(&pool, "test-brand-detail").await;
+
+        let auth = crate::middleware::AuthState::from_env(true).expect("auth");
+        let app = build_app(AppState { pool }, auth, default_rate_limit_state());
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/v1/brands/test-brand-detail")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body bytes");
+        let json: serde_json::Value = serde_json::from_slice(&body).expect("json parse");
+        assert_eq!(json["data"]["slug"].as_str(), Some("test-brand-detail"));
+        assert!(json["data"]["completeness"].is_object());
+        assert!(json["data"]["social_handles"].is_array());
+    }
+
     #[sqlx::test(migrations = "../../migrations")]
     async fn locations_by_state_returns_ok(pool: sqlx::PgPool) {
         let brand_id = seed_location_brand(&pool, "loc-state-brand").await;

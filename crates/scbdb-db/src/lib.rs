@@ -158,7 +158,9 @@ pub mod products;
 pub mod seed;
 pub mod sentiment;
 
-pub use brand_completeness::{get_brand_completeness, BrandCompletenessScore};
+pub use brand_completeness::{
+    get_all_brands_completeness, get_brand_completeness, BrandCompletenessScore,
+};
 pub use brand_intel::{
     insert_brand_competitor_relationship, insert_brand_distributor, insert_brand_funding_event,
     insert_brand_lab_test, insert_brand_legal_proceeding, insert_brand_media_appearance,

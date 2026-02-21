@@ -3,6 +3,8 @@
 //! Scores range from 0 to 100 and reflect how much data has been collected
 //! for a brand across all intelligence tables.
 
+use std::collections::HashMap;
+
 use sqlx::PgPool;
 
 use crate::DbError;
@@ -116,8 +118,8 @@ pub async fn get_brand_completeness(
                 (bp.id IS NOT NULL AND bp.tagline IS NOT NULL) AS has_tagline, \
                 (bp.id IS NOT NULL AND bp.founded_year IS NOT NULL) AS has_founded_year, \
                 (bp.id IS NOT NULL AND bp.hq_city IS NOT NULL AND bp.hq_state IS NOT NULL) AS has_location, \
-                EXISTS(SELECT 1 FROM brand_social_handles bsh WHERE bsh.brand_id = b.id) AS has_social_handles, \
-                EXISTS(SELECT 1 FROM brand_domains bd WHERE bd.brand_id = b.id) AS has_domains, \
+                EXISTS(SELECT 1 FROM brand_social_handles bsh WHERE bsh.brand_id = b.id AND bsh.is_active = true) AS has_social_handles, \
+                EXISTS(SELECT 1 FROM brand_domains bd WHERE bd.brand_id = b.id AND bd.is_active = true) AS has_domains, \
                 EXISTS(SELECT 1 FROM brand_signals bs WHERE bs.brand_id = b.id) AS has_signals, \
                 EXISTS(SELECT 1 FROM brand_funding_events bfe WHERE bfe.brand_id = b.id) AS has_funding, \
                 EXISTS(SELECT 1 FROM brand_lab_tests blt WHERE blt.brand_id = b.id) AS has_lab_tests, \
@@ -182,6 +184,80 @@ pub async fn get_brand_completeness(
     .await?;
 
     Ok(row)
+}
+
+/// Compute completeness scores for ALL active brands in one round-trip.
+///
+/// Returns a map of `brand_id → score` (0–100). Use this from list endpoints
+/// to avoid the N+1 problem of calling [`get_brand_completeness`] per brand.
+///
+/// # Errors
+///
+/// Returns [`DbError`] on database query failure.
+pub async fn get_all_brands_completeness(pool: &PgPool) -> Result<HashMap<i64, i32>, DbError> {
+    // Same CTE as get_brand_completeness but without WHERE b.id = $1,
+    // selecting only brand_id + score (the individual booleans are not needed
+    // for the list view).
+    let rows = sqlx::query_as::<_, (i64, i32)>(
+        "WITH presence AS ( \
+            SELECT \
+                b.id AS brand_id, \
+                (bp.id IS NOT NULL) AS has_profile, \
+                (bp.id IS NOT NULL AND bp.description IS NOT NULL) AS has_description, \
+                (bp.id IS NOT NULL AND bp.tagline IS NOT NULL) AS has_tagline, \
+                (bp.id IS NOT NULL AND bp.founded_year IS NOT NULL) AS has_founded_year, \
+                (bp.id IS NOT NULL AND bp.hq_city IS NOT NULL AND bp.hq_state IS NOT NULL) AS has_location, \
+                EXISTS(SELECT 1 FROM brand_social_handles bsh WHERE bsh.brand_id = b.id AND bsh.is_active = true) AS has_social_handles, \
+                EXISTS(SELECT 1 FROM brand_domains bd WHERE bd.brand_id = b.id AND bd.is_active = true) AS has_domains, \
+                EXISTS(SELECT 1 FROM brand_signals bs WHERE bs.brand_id = b.id) AS has_signals, \
+                EXISTS(SELECT 1 FROM brand_funding_events bfe WHERE bfe.brand_id = b.id) AS has_funding, \
+                EXISTS(SELECT 1 FROM brand_lab_tests blt WHERE blt.brand_id = b.id) AS has_lab_tests, \
+                EXISTS(SELECT 1 FROM brand_legal_proceedings blp WHERE blp.brand_id = b.id) AS has_legal, \
+                EXISTS(SELECT 1 FROM brand_sponsorships bsp WHERE bsp.brand_id = b.id) AS has_sponsorships, \
+                EXISTS(SELECT 1 FROM brand_distributors bdist WHERE bdist.brand_id = b.id) AS has_distributors, \
+                EXISTS(SELECT 1 FROM brand_media_appearances bma WHERE bma.brand_id = b.id) AS has_media \
+            FROM brands b \
+            LEFT JOIN brand_profiles bp ON bp.brand_id = b.id \
+            WHERE b.is_active = true AND b.deleted_at IS NULL \
+        ) \
+        SELECT \
+            brand_id, \
+            ( \
+                CASE WHEN has_profile THEN $1 ELSE 0 END + \
+                CASE WHEN has_description THEN $2 ELSE 0 END + \
+                CASE WHEN has_tagline THEN $3 ELSE 0 END + \
+                CASE WHEN has_founded_year THEN $4 ELSE 0 END + \
+                CASE WHEN has_location THEN $5 ELSE 0 END + \
+                CASE WHEN has_social_handles THEN $6 ELSE 0 END + \
+                CASE WHEN has_domains THEN $7 ELSE 0 END + \
+                CASE WHEN has_signals THEN $8 ELSE 0 END + \
+                CASE WHEN has_funding THEN $9 ELSE 0 END + \
+                CASE WHEN has_lab_tests THEN $10 ELSE 0 END + \
+                CASE WHEN has_legal THEN $11 ELSE 0 END + \
+                CASE WHEN has_sponsorships THEN $12 ELSE 0 END + \
+                CASE WHEN has_distributors THEN $13 ELSE 0 END + \
+                CASE WHEN has_media THEN $14 ELSE 0 END \
+            )::INT AS score \
+        FROM presence",
+    )
+    .bind(W_PROFILE)
+    .bind(W_DESCRIPTION)
+    .bind(W_TAGLINE)
+    .bind(W_FOUNDED_YEAR)
+    .bind(W_LOCATION)
+    .bind(W_SOCIAL)
+    .bind(W_DOMAINS)
+    .bind(W_SIGNALS)
+    .bind(W_FUNDING)
+    .bind(W_LAB_TESTS)
+    .bind(W_LEGAL)
+    .bind(W_SPONSORSHIPS)
+    .bind(W_DISTRIBUTORS)
+    .bind(W_MEDIA)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows.into_iter().collect())
 }
 
 #[cfg(test)]
