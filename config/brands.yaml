@@ -249,7 +249,8 @@ brands:
       - drinkhappyflower.com
     notes: >
       Tilray Brands product. 5mg + 10mg SuperBloom lines. Also distributed
-      by United in GA — overlap brand.
+      by United in GA — overlap brand. Locator page exists but brand has not
+      yet populated it with retail locations.
 
   - name: Trail Magic
     relationship: competitor
@@ -279,7 +280,9 @@ brands:
       - islandbrandsusa.com
     notes: >
       Sub-brand of Island Brands USA (also makes Active beer). Individual
-      products at /products/. 5mg THC + 10mg CBD.
+      products at /products/. 5mg THC + 10mg CBD. BeverageFinder widget
+      (key 690cda4f900046.11446315) is configured but account not yet
+      populated with store locations.
 
   - name: Levity
     relationship: competitor
@@ -298,18 +301,17 @@ brands:
   - name: Mary Jones
     relationship: competitor
     tier: 2
-    domain: maryjones.com
-    shop_url: null
+    domain: gomaryjones.com
+    shop_url: https://gomaryjones.com
     twitter_handle: MaryJonesBrand
     social:
       twitter: "@MaryJonesBrand"
       instagram: "@maryjonesbrand"
     domains:
-      - maryjones.com
+      - gomaryjones.com
     notes: >
-      Retro soda branding, conventional retail push.
-      drinkmaryjones.com 404s; maryjones.com returns error page — likely
-      retail-only distribution, no active DTC Shopify store.
+      Retro soda branding, conventional retail push. No store locator —
+      retail-only distribution. Correct domain is gomaryjones.com.
 
   - name: Dad Grass
     relationship: competitor
@@ -341,7 +343,8 @@ brands:
     domains:
       - adaptaphoria.com
     notes: >
-      Functional wellness + THC. Confirmed Shopify store at adaptaphoria.com.
+      Functional wellness + THC. Shopify store at adaptaphoria.com. No store
+      locator — does not have retail distribution tracking.
 
   - name: Señorita Drinks
     relationship: competitor
