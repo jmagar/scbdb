@@ -293,6 +293,20 @@ body {
   font-weight: 600;
   color: var(--ink);
   letter-spacing: -0.025em;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.panel h2::before {
+  content: "";
+  display: block;
+  width: 3px;
+  height: 1em;
+  background: linear-gradient(to bottom, var(--accent), var(--accent-dim));
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-shadow: 0 0 8px rgba(22, 203, 166, 0.55);
 }
 
 .panel h3 {
@@ -406,7 +420,7 @@ body {
 .data-card dl {
   margin: 0.75rem 0 0;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
   gap: 0.5rem;
 }
 
@@ -1052,6 +1066,24 @@ button.tile:hover {
 }
 
 /* ─────────────────────────────────────────────────────────
+   Regulatory: Bill Summary
+───────────────────────────────────────────────────────── */
+.bill-summary {
+  border: 1px solid var(--border-neutral);
+  border-radius: 0.75rem;
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.5rem;
+  background: var(--surface);
+}
+
+.bill-summary-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--ink);
+}
+
+/* ─────────────────────────────────────────────────────────
    Regulatory: Activity Timeline
 ───────────────────────────────────────────────────────── */
 .bill-timeline {
@@ -1318,4 +1350,688 @@ button.tile:hover {
   color: var(--muted);
   white-space: nowrap;
   font-family: var(--font-mono);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Shimmer Skeleton Loading
+───────────────────────────────────────────────────────── */
+@keyframes shimmer {
+  from {
+    background-position: -220% 0;
+  }
+  to {
+    background-position: 220% 0;
+  }
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+}
+
+@media (min-width: 768px) {
+  .skeleton-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.skeleton-card {
+  border: 1px solid var(--border-neutral);
+  border-radius: 1rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  animation: card-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.skeleton-line {
+  border-radius: 0.35rem;
+  background: linear-gradient(
+    90deg,
+    var(--surface-3) 25%,
+    rgba(255, 255, 255, 0.045) 50%,
+    var(--surface-3) 75%
+  );
+  background-size: 220% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+.skeleton-line--title {
+  height: 0.95rem;
+  width: 58%;
+}
+
+.skeleton-line--sub {
+  height: 0.75rem;
+  width: 38%;
+  opacity: 0.65;
+}
+
+.skeleton-dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.15rem;
+}
+
+.skeleton-line--stat {
+  height: 1.4rem;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Code Elements
+───────────────────────────────────────────────────────── */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.84em;
+  background: var(--surface-3);
+  color: var(--accent);
+  padding: 0.1em 0.45em;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border-neutral);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Tier Badges (product tier 1 / 2 / 3)
+───────────────────────────────────────────────────────── */
+.tier-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+}
+
+.tier-badge--1 {
+  background: rgba(232, 150, 60, 0.14);
+  color: var(--amber);
+  border-color: rgba(232, 150, 60, 0.25);
+}
+
+.tier-badge--2 {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(22, 203, 166, 0.2);
+}
+
+.tier-badge--3 {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  border-color: var(--border-neutral);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Relationship Badge (portfolio / competitor)
+   Replaces the plain brand-name span in product cards
+───────────────────────────────────────────────────────── */
+.rel-badge {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 99px;
+  font-size: 0.74rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rel-badge--portfolio {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: rgba(22, 203, 166, 0.2);
+}
+
+.rel-badge--competitor {
+  background: var(--amber-soft);
+  color: var(--amber);
+  border-color: rgba(232, 150, 60, 0.22);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Brand Profile Page
+───────────────────────────────────────────────────────── */
+.brand-profile {
+  padding: 1.5rem;
+  max-width: 1080px;
+  margin: 0 auto;
+  animation: page-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.brand-profile-header {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border-neutral);
+  border-radius: 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.brand-hero-logo {
+  width: 72px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-neutral);
+  background: var(--surface-3);
+  padding: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.brand-header-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.brand-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.brand-header-title .brand-name {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0;
+}
+
+.brand-tagline {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+.brand-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.brand-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.83rem;
+}
+
+.brand-meta-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 500;
+}
+
+.brand-meta-value {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 0.83rem;
+}
+
+.social-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.1rem;
+}
+
+.social-link {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 99px;
+  background: var(--surface-3);
+  color: var(--accent);
+  font-size: 0.73rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  border: 1px solid rgba(22, 203, 166, 0.2);
+  text-decoration: none;
+  text-transform: capitalize;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.social-link:hover {
+  background: var(--accent-soft);
+  border-color: var(--border-mid);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Profile Tabs
+───────────────────────────────────────────────────────── */
+.profile-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0;
+}
+
+.profile-tab-btn {
+  padding: 0.45rem 1rem;
+  border: 1px solid var(--border-neutral);
+  border-radius: 0.6rem;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.profile-tab-btn:hover {
+  border-color: var(--border-mid);
+  color: var(--ink);
+}
+
+.profile-tab-btn.is-active {
+  border-color: var(--border-strong);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.profile-tab-content {
+  margin-top: 0.5rem;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Signal Feed
+───────────────────────────────────────────────────────── */
+.signal-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.signal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.signal-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-neutral);
+  border-radius: 0.875rem;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.signal-item:hover {
+  border-color: var(--border-mid);
+  box-shadow: var(--shadow-md);
+}
+
+.signal-type-icon {
+  font-size: 1rem;
+  line-height: 1.4;
+  flex: 0 0 auto;
+  width: 1.5rem;
+  text-align: center;
+}
+
+.signal-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.signal-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.signal-summary {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.signal-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.15rem;
+}
+
+.signal-source {
+  font-size: 0.78rem;
+  color: var(--accent-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  transition: color 120ms ease;
+}
+
+.signal-source:hover {
+  color: var(--accent);
+}
+
+.signal-date {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--subtle);
+}
+
+.load-more-btn {
+  align-self: center;
+  padding: 0.45rem 1.25rem;
+  border: 1px solid var(--border-neutral);
+  border-radius: 0.6rem;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease;
+}
+
+.load-more-btn:hover {
+  border-color: var(--border-mid);
+  color: var(--accent);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Brand Content Tab
+───────────────────────────────────────────────────────── */
+.brand-content-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.content-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.content-group-heading {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.content-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.content-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-neutral);
+  border-radius: 0.875rem;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  transition: border-color 150ms ease;
+}
+
+.content-item:hover {
+  border-color: var(--border-mid);
+}
+
+.content-thumbnail {
+  width: 80px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-neutral);
+  background: var(--surface-3);
+  flex: 0 0 auto;
+}
+
+.content-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.content-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.content-summary {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.content-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.content-link {
+  font-size: 0.78rem;
+  color: var(--accent-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  transition: color 120ms ease;
+}
+
+.content-link:hover {
+  color: var(--accent);
+}
+
+.content-date {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--subtle);
+}
+
+/* ─────────────────────────────────────────────────────────
+   Brand Recon Tab
+───────────────────────────────────────────────────────── */
+.recon-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.recon-sub-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.recon-sub-tab-btn {
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border-neutral);
+  border-radius: 0.55rem;
+  background: var(--surface-2);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    color 150ms ease,
+    background 150ms ease;
+}
+
+.recon-sub-tab-btn:hover {
+  border-color: var(--border-mid);
+  color: var(--ink);
+}
+
+.recon-sub-tab-btn.is-active {
+  border-color: var(--border-strong);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.recon-sub-content {
+  min-height: 4rem;
+}
+
+.recon-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.recon-item {
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--border-neutral);
+  border-radius: 0.875rem;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  transition: border-color 150ms ease;
+}
+
+.recon-item:hover {
+  border-color: var(--border-mid);
+}
+
+.recon-item-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.recon-item-type {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-family: var(--font-mono);
+}
+
+.recon-item-amount {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -0.02em;
+}
+
+.recon-item-date {
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--subtle);
+  margin-left: auto;
+}
+
+.recon-passed {
+  font-size: 1rem;
+}
+
+.recon-item-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.recon-item-detail {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.recon-item-link {
+  font-size: 0.78rem;
+  color: var(--accent-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  align-self: flex-start;
+  transition: color 120ms ease;
+}
+
+.recon-item-link:hover {
+  color: var(--accent);
+}
+
+.recon-status-badge {
+  display: inline-block;
+  padding: 0.1rem 0.45rem;
+  border-radius: 99px;
+  font-size: 0.71rem;
+  font-family: var(--font-mono);
+  background: var(--surface-3);
+  color: var(--muted);
+  border: 1px solid var(--border-neutral);
+  text-transform: capitalize;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Webkit Scrollbar
+───────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--subtle);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
 }
