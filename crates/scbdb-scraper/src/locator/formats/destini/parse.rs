@@ -23,6 +23,7 @@ fn coord_key(lat: Option<f64>, lng: Option<f64>) -> String {
 }
 
 /// Deduplicate a vec of locations by coordinate key. First occurrence wins.
+#[allow(dead_code)] // used in tests; mirrors the inline dedup in fetch_destini_stores
 fn dedup_by_coordinates(locs: Vec<RawStoreLocation>) -> Vec<RawStoreLocation> {
     let mut seen: HashMap<String, RawStoreLocation> = HashMap::new();
     for loc in locs {
@@ -33,6 +34,7 @@ fn dedup_by_coordinates(locs: Vec<RawStoreLocation>) -> Vec<RawStoreLocation> {
 }
 
 /// Single Knox API call for one lat/lng center.
+#[allow(clippy::too_many_arguments)]
 async fn fetch_knox_for_point(
     client: &reqwest::Client,
     user_agent: &str,

@@ -12,7 +12,7 @@ mod grid;
 pub mod trust;
 pub mod types;
 
-pub(crate) use grid::{generate_grid, GridConfig, GridPoint, STRATEGIC_US_POINTS};
+pub(crate) use grid::{generate_grid, GridConfig, STRATEGIC_US_POINTS};
 
 pub use trust::{make_location_key, validate_store_locations_trust};
 pub use types::{LocatorError, RawStoreLocation};

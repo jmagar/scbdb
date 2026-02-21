@@ -25,6 +25,7 @@ pub struct GridConfig {
 
 impl GridConfig {
     /// SC + immediate neighbors. 30-mile step → ~60 points.
+    #[allow(dead_code)] // available for future SC-specific scraping tasks
     pub fn sc_region() -> Self {
         Self {
             min_lat: 32.0,
@@ -48,7 +49,7 @@ impl GridConfig {
 }
 
 /// Strategic US city centers covering all major population regions including the Southeast.
-/// Shared by Destini and VTInfo as their default search origin set.
+/// Shared by Destini and `VTInfo` as their default search origin set.
 pub const STRATEGIC_US_POINTS: &[GridPoint] = &[
     GridPoint {
         lat: 44.977_8,

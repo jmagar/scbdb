@@ -54,7 +54,7 @@ pub(in crate::locator) fn extract_vtinfo_embed(html: &str) -> Option<VtinfoEmbed
     })
 }
 
-/// VTInfo search points: [`crate::locator::STRATEGIC_US_POINTS`] paired with
+/// `VTInfo` search points: [`crate::locator::STRATEGIC_US_POINTS`] paired with
 /// representative zip codes.
 ///
 /// Zip codes are form-submission hints only; lat/lng drives the actual
