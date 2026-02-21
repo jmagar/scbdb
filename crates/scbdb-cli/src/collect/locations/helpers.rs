@@ -45,6 +45,26 @@ pub(super) async fn record_brand_failure(
     }
 }
 
+/// Log added/removed store location counts after upsert+deactivate.
+///
+/// `prev` is the active key set snapshotted **before** the upsert.
+/// `curr_keys` is the list of keys from the current scrape.
+pub(super) fn log_location_changeset(
+    brand_slug: &str,
+    prev: &std::collections::HashSet<String>,
+    curr_keys: &[String],
+) {
+    let curr: std::collections::HashSet<_> = curr_keys.iter().cloned().collect();
+    let added = curr.difference(prev).count();
+    let removed = prev.difference(&curr).count();
+    if added > 0 {
+        tracing::info!(brand = %brand_slug, count = added, "new store locations detected");
+    }
+    if removed > 0 {
+        tracing::info!(brand = %brand_slug, count = removed, "store locations deactivated");
+    }
+}
+
 /// Convert a [`scbdb_scraper::RawStoreLocation`] to a [`scbdb_db::NewStoreLocation`].
 ///
 /// `country` defaults to `"US"` when not present in the raw record.
