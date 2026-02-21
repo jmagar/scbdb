@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 
 import {
+  fetchBillEvents,
   fetchBills,
+  fetchBrandDistributors,
+  fetchBrandFunding,
+  fetchBrandProfile,
+  fetchBrandSignals,
+  fetchBrands,
   fetchLocationsByState,
   fetchLocationsSummary,
   fetchPricingSnapshots,
@@ -10,6 +16,7 @@ import {
   fetchSentimentSnapshots,
   fetchSentimentSummary,
 } from "../lib/api/dashboard";
+import type { BrandSignalType } from "../types/api";
 
 const STALE_TIME_MS = 60_000;
 
@@ -45,6 +52,15 @@ export function useBills() {
   });
 }
 
+export function useBillEvents(billId: string | null) {
+  return useQuery({
+    queryKey: ["bill-events", billId],
+    queryFn: () => fetchBillEvents(billId!),
+    enabled: billId !== null,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
 export function useSentimentSummary() {
   return useQuery({
     queryKey: ["sentiment-summary"],
@@ -73,6 +89,53 @@ export function useLocationsByState() {
   return useQuery({
     queryKey: ["locations-by-state"],
     queryFn: fetchLocationsByState,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+// ── Brand Intelligence Layer ──────────────────────────────────────────────────
+
+export function useBrands() {
+  return useQuery({
+    queryKey: ["brands"],
+    queryFn: fetchBrands,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandProfile(slug: string) {
+  return useQuery({
+    queryKey: ["brand", slug],
+    queryFn: () => fetchBrandProfile(slug),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandSignals(slug: string, type?: BrandSignalType) {
+  return useQuery({
+    queryKey: ["brand-signals", slug, type],
+    queryFn: () =>
+      fetchBrandSignals(slug, type ? { type, limit: 50 } : { limit: 50 }),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandFunding(slug: string) {
+  return useQuery({
+    queryKey: ["brand-funding", slug],
+    queryFn: () => fetchBrandFunding(slug),
+    enabled: !!slug,
+    staleTime: STALE_TIME_MS,
+  });
+}
+
+export function useBrandDistributors(slug: string) {
+  return useQuery({
+    queryKey: ["brand-distributors", slug],
+    queryFn: () => fetchBrandDistributors(slug),
+    enabled: !!slug,
     staleTime: STALE_TIME_MS,
   });
 }

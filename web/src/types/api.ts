@@ -60,6 +60,14 @@ export type BillItem = {
   event_count: number;
 };
 
+export type BillEventItem = {
+  event_date: string | null;
+  event_type: string | null;
+  chamber: string | null;
+  description: string;
+  source_url: string | null;
+};
+
 export type SentimentSummaryItem = {
   brand_name: string;
   brand_slug: string;
@@ -108,3 +116,22 @@ export type LocationsByState = {
   brand_count: number;
   location_count: number;
 };
+
+// ── Brand Intelligence Layer — re-exported from ./brands ──────────────────────
+export type {
+  BrandCompleteness,
+  BrandProfile,
+  BrandProfileResponse,
+  BrandSignalType,
+  BrandSummaryItem,
+  CompetitorItem,
+  DistributorItem,
+  FundingEventItem,
+  LabTestItem,
+  LegalProceedingItem,
+  MediaAppearanceItem,
+  PaginatedSignals,
+  SignalItem,
+  SocialHandle,
+  SponsorshipItem,
+} from "./brands";
