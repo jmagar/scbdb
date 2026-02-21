@@ -28,6 +28,8 @@ pub async fn run_brand_sentiment(
     config: &SentimentConfig,
     brand_slug: &str,
     brand_name: &str,
+    brand_base_url: Option<&str>,
+    twitter_handle: Option<&str>,
 ) -> Result<BrandSentimentResult, SentimentError> {
     let tei = TeiClient::new(&config.tei_url);
     let qdrant = QdrantClient::new(&config.qdrant_url, &config.qdrant_collection);
@@ -36,7 +38,14 @@ pub async fn run_brand_sentiment(
     qdrant.ensure_collection().await?;
 
     // Step 1: Collect signals from all sources.
-    let mut signals = collect_signals(config, brand_slug, brand_name, None).await;
+    let mut signals = collect_signals(
+        config,
+        brand_slug,
+        brand_name,
+        brand_base_url,
+        twitter_handle,
+    )
+    .await;
 
     if signals.is_empty() {
         tracing::info!(
