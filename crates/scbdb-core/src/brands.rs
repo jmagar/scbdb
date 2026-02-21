@@ -31,6 +31,13 @@ pub struct BrandConfig {
     #[serde(default)]
     pub store_locator_url: Option<String>,
     pub notes: Option<String>,
+    /// Social platform handles: platform name → handle/username.
+    /// e.g. `twitter: drinkcann`, `youtube: UCxxxxxxx`, `reddit: r/drinkcann`
+    #[serde(default)]
+    pub social: std::collections::HashMap<String, String>,
+    /// All known domains for this brand (primary, redirects, defunct, etc.)
+    #[serde(default)]
+    pub domains: Vec<String>,
 }
 
 impl BrandConfig {

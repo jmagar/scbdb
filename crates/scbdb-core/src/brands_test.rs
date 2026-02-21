@@ -12,6 +12,8 @@ fn slug_simple_name() {
         shop_url: None,
         store_locator_url: None,
         notes: None,
+        social: Default::default(),
+        domains: vec![],
     };
     assert_eq!(brand.slug(), "high-rise");
 }
@@ -26,6 +28,8 @@ fn slug_special_characters() {
         shop_url: None,
         store_locator_url: None,
         notes: None,
+        social: Default::default(),
+        domains: vec![],
     };
     assert_eq!(brand.slug(), "uncle-arnies");
 }
@@ -40,6 +44,8 @@ fn slug_accented_characters() {
         shop_url: None,
         store_locator_url: None,
         notes: None,
+        social: Default::default(),
+        domains: vec![],
     };
     // Non-ASCII chars are stripped; no dash inserted between adjacent ASCII chars
     assert_eq!(brand.slug(), "brz");
@@ -55,6 +61,8 @@ fn slug_with_tilde() {
         shop_url: None,
         store_locator_url: None,
         notes: None,
+        social: Default::default(),
+        domains: vec![],
     };
     // ñ is non-ASCII and stripped; no dash between 'e' and 'o'
     assert_eq!(brand.slug(), "seorita-drinks");
@@ -71,6 +79,8 @@ fn validate_rejects_invalid_tier() {
             shop_url: None,
             store_locator_url: None,
             notes: None,
+            social: Default::default(),
+            domains: vec![],
         }],
     };
     let err = validate_brands(&brands_file).unwrap_err();
@@ -88,6 +98,8 @@ fn validate_rejects_empty_name() {
             shop_url: None,
             store_locator_url: None,
             notes: None,
+            social: Default::default(),
+            domains: vec![],
         }],
     };
     let err = validate_brands(&brands_file).unwrap_err();
@@ -106,6 +118,8 @@ fn validate_rejects_duplicate_name() {
                 shop_url: None,
                 store_locator_url: None,
                 notes: None,
+                social: Default::default(),
+                domains: vec![],
             },
             BrandConfig {
                 name: "cann".to_string(),
@@ -115,6 +129,8 @@ fn validate_rejects_duplicate_name() {
                 shop_url: None,
                 store_locator_url: None,
                 notes: None,
+                social: Default::default(),
+                domains: vec![],
             },
         ],
     };
@@ -134,6 +150,8 @@ fn validate_rejects_duplicate_slug() {
                 shop_url: None,
                 store_locator_url: None,
                 notes: None,
+                social: Default::default(),
+                domains: vec![],
             },
             BrandConfig {
                 name: "High--Rise".to_string(),
@@ -143,6 +161,8 @@ fn validate_rejects_duplicate_slug() {
                 shop_url: None,
                 store_locator_url: None,
                 notes: None,
+                social: Default::default(),
+                domains: vec![],
             },
         ],
     };
@@ -162,6 +182,8 @@ fn validate_accepts_valid_brands() {
                 shop_url: None,
                 store_locator_url: None,
                 notes: None,
+                social: Default::default(),
+                domains: vec![],
             },
             BrandConfig {
                 name: "Cann".to_string(),
@@ -171,6 +193,8 @@ fn validate_accepts_valid_brands() {
                 shop_url: None,
                 store_locator_url: None,
                 notes: None,
+                social: Default::default(),
+                domains: vec![],
             },
         ],
     };
@@ -188,6 +212,8 @@ fn validate_rejects_empty_slug() {
             shop_url: None,
             store_locator_url: None,
             notes: None,
+            social: Default::default(),
+            domains: vec![],
         }],
     };
     let err = validate_brands(&brands_file).unwrap_err();
@@ -230,4 +256,31 @@ fn load_brands_from_real_file() {
 fn relationship_display() {
     assert_eq!(Relationship::Portfolio.to_string(), "portfolio");
     assert_eq!(Relationship::Competitor.to_string(), "competitor");
+}
+
+#[test]
+fn brand_config_parses_social_and_domains() {
+    let yaml = r#"
+brands:
+  - name: TestBrand
+    relationship: competitor
+    tier: 1
+    social:
+      twitter: testbrand
+      youtube: UCxxxxxxxxxx
+      reddit: r/testbrand
+    domains:
+      - testbrand.com
+      - shop.testbrand.com
+"#;
+    let file: BrandsFile = serde_yaml::from_str(yaml).expect("parse");
+    let brand = &file.brands[0];
+    let social = &brand.social;
+    assert_eq!(social.get("twitter").map(String::as_str), Some("testbrand"));
+    assert_eq!(
+        social.get("youtube").map(String::as_str),
+        Some("UCxxxxxxxxxx")
+    );
+    assert_eq!(brand.domains.len(), 2);
+    assert_eq!(brand.domains[0], "testbrand.com");
 }
