@@ -5,7 +5,6 @@ import {
   fetchBills,
   fetchLocationsByState,
   fetchLocationsSummary,
-  fetchPricingSnapshots,
   fetchPricingSummary,
   fetchProducts,
   fetchSentimentSnapshots,
@@ -105,12 +104,6 @@ export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
   });
 
   // Detail queries only enabled when their tab is active
-  const pricingSnapshots = useQuery({
-    queryKey: ["pricing-snapshots"],
-    queryFn: fetchPricingSnapshots,
-    staleTime: STALE_TIME_MS,
-    enabled: activeTab === "pricing",
-  });
   const sentimentSnapshots = useQuery({
     queryKey: ["sentiment-snapshots"],
     queryFn: fetchSentimentSnapshots,
@@ -172,17 +165,6 @@ export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
     ],
   );
 
-  const pricingLogosByBrand = useMemo(
-    () =>
-      new Map(
-        (pricingSummary.data ?? []).map((item) => [
-          item.brand_slug,
-          item.brand_logo_url ?? undefined,
-        ]),
-      ),
-    [pricingSummary.data],
-  );
-
   return (
     <main className="app-shell">
       <header className="hero">
@@ -219,29 +201,11 @@ export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
       </section>
 
       <section className="panel" aria-live="polite">
-        {activeTab === "products" && (
-          <ProductsPanel
-            isLoading={products.isLoading}
-            isError={products.isError}
-            data={products.data}
-          />
-        )}
+        {activeTab === "products" && <ProductsPanel />}
 
-        {activeTab === "pricing" && (
-          <PricingPanel
-            summary={pricingSummary}
-            snapshots={pricingSnapshots}
-            logosByBrand={pricingLogosByBrand}
-          />
-        )}
+        {activeTab === "pricing" && <PricingPanel />}
 
-        {activeTab === "regulatory" && (
-          <RegulatoryPanel
-            isLoading={bills.isLoading}
-            isError={bills.isError}
-            data={bills.data}
-          />
-        )}
+        {activeTab === "regulatory" && <RegulatoryPanel />}
 
         {activeTab === "sentiment" && (
           <SentimentPanel

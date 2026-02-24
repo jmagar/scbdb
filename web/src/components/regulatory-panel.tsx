@@ -153,7 +153,8 @@ function BillDetail({ bill, onBack }: DetailProps) {
   );
 }
 
-export function RegulatoryPanel({ isLoading, isError, data }: Props) {
+export function RegulatoryPanel() {
+  const { isLoading, isError, data } = useBills();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const selectedBill = selectedId

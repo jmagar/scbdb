@@ -69,7 +69,9 @@ export function BrandEditMetaForm({ slug, brand }: Props) {
             <select
               className="form-select"
               value={relationship}
-              onChange={(e) => setRelationship(e.target.value)}
+              onChange={(e) =>
+                setRelationship(e.target.value as "portfolio" | "competitor")
+              }
             >
               <option value="portfolio">Portfolio</option>
               <option value="competitor">Competitor</option>
@@ -79,7 +81,7 @@ export function BrandEditMetaForm({ slug, brand }: Props) {
             <select
               className="form-select-sm"
               value={tier}
-              onChange={(e) => setTier(e.target.value)}
+              onChange={(e) => setTier(Number(e.target.value) as 1 | 2 | 3)}
             >
               <option value="1">1</option>
               <option value="2">2</option>

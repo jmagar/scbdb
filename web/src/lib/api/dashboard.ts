@@ -8,8 +8,7 @@ import type {
   PricingSnapshotItem,
   PricingSummaryItem,
   ProductItem,
-  SentimentSnapshotItem,
-  SentimentSummaryItem,
+  SentimentDataPoint,
 } from "../../types/api";
 import { apiGet } from "./client";
 
@@ -45,14 +44,12 @@ export async function fetchBillTexts(billId: string): Promise<BillTextItem[]> {
   );
 }
 
-export async function fetchSentimentSummary(): Promise<SentimentSummaryItem[]> {
-  return apiGet<SentimentSummaryItem[]>("/api/v1/sentiment/summary");
+export async function fetchSentimentSummary(): Promise<SentimentDataPoint[]> {
+  return apiGet<SentimentDataPoint[]>("/api/v1/sentiment/summary");
 }
 
-export async function fetchSentimentSnapshots(): Promise<
-  SentimentSnapshotItem[]
-> {
-  return apiGet<SentimentSnapshotItem[]>("/api/v1/sentiment/snapshots", {
+export async function fetchSentimentSnapshots(): Promise<SentimentDataPoint[]> {
+  return apiGet<SentimentDataPoint[]>("/api/v1/sentiment/snapshots", {
     limit: 30,
   });
 }

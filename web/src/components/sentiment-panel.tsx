@@ -19,12 +19,12 @@ type Props = {
   summary: {
     isLoading: boolean;
     isError: boolean;
-    data: SentimentSummaryItem[] | undefined;
+    data: SentimentDataPoint[] | undefined;
   };
   snapshots: {
     isLoading: boolean;
     isError: boolean;
-    data: SentimentSnapshotItem[] | undefined;
+    data: SentimentDataPoint[] | undefined;
   };
 };
 
@@ -118,7 +118,8 @@ export function SentimentPanel({ summary, snapshots }: Props) {
                 ? "unknown"
                 : insight.sourceMix
                     .map(
-                      ([source, count]) => `${sourceLabel(source)} (${count})`,
+                      ([source, count]) =>
+                        `${sentimentSourceLabel(source)} (${count})`,
                     )
                     .join(", ")}
             </p>
