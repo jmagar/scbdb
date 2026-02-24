@@ -1,4 +1,4 @@
-import type { SentimentSnapshotItem, SentimentSummaryItem } from "../types/api";
+import type { SentimentDataPoint } from "../types/api";
 import {
   ErrorState,
   LoadingState,
@@ -11,7 +11,7 @@ import {
 import {
   buildSentimentInsight,
   formatSignedDelta,
-  sourceLabel,
+  sentimentSourceLabel,
   trendClass,
 } from "./sentiment-utils";
 

@@ -76,17 +76,7 @@ export type BillTextItem = {
   url: string | null;
 };
 
-export type SentimentSummaryItem = {
-  brand_name: string;
-  brand_slug: string;
-  score: string;
-  signal_count: number;
-  captured_at: string;
-  metadata?: SentimentMetadata;
-};
-
-// TODO: consider merging with SentimentSummaryItem if these types remain structurally identical
-export type SentimentSnapshotItem = {
+export type SentimentDataPoint = {
   brand_name: string;
   brand_slug: string;
   score: string;
@@ -143,11 +133,11 @@ export type LocationPin = {
 
 // ── Brand Intelligence Layer — re-exported from ./brands ──────────────────────
 export type {
-  BrandCompletenessDetail as BrandCompleteness,
-  BrandProfileDetail as BrandProfile,
+  BrandCompletenessDetail,
+  BrandProfileDetail,
   BrandProfileResponse,
   BrandSignalType,
-  BrandSocialHandleItem as SocialHandle,
+  BrandSocialHandleItem,
   BrandSummaryItem,
   CompetitorItem,
   DistributorItem,

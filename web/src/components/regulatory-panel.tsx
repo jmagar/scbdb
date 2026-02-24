@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-import { useBillEvents, useBillTexts } from "../hooks/use-dashboard-data";
+import {
+  useBillEvents,
+  useBills,
+  useBillTexts,
+} from "../hooks/use-dashboard-data";
 import { type BillItem } from "../types/api";
 import { ErrorState, LoadingState, formatDate } from "./dashboard-utils";
 
@@ -23,12 +27,6 @@ function statusBadgeClass(status: string): string {
   const modifier = billStatusClass(status);
   return modifier ? `bill-status-badge ${modifier}` : "bill-status-badge";
 }
-
-type Props = {
-  isLoading: boolean;
-  isError: boolean;
-  data: BillItem[] | undefined;
-};
 
 type DetailProps = {
   bill: BillItem;

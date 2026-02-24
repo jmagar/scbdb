@@ -10,8 +10,10 @@ type Props = {
 
 export function BrandEditMetaForm({ slug, brand }: Props) {
   const [name, setName] = useState(brand.name);
-  const [relationship, setRelationship] = useState(brand.relationship);
-  const [tier, setTier] = useState(String(brand.tier));
+  const [relationship, setRelationship] = useState<"portfolio" | "competitor">(
+    brand.relationship as "portfolio" | "competitor",
+  );
+  const [tier, setTier] = useState<1 | 2 | 3>(brand.tier as 1 | 2 | 3);
   const [domain, setDomain] = useState(brand.domain ?? "");
   const [shopUrl, setShopUrl] = useState(brand.shop_url ?? "");
   const [locatorUrl, setLocatorUrl] = useState(brand.store_locator_url ?? "");
@@ -26,9 +28,10 @@ export function BrandEditMetaForm({ slug, brand }: Props) {
   function validate(): boolean {
     const next: Record<string, string> = {};
     if (!name.trim()) next.name = "Name is required";
-    if (!["portfolio", "competitor"].includes(relationship))
+    if (relationship !== "portfolio" && relationship !== "competitor")
       next.relationship = "Must be portfolio or competitor";
-    if (!["1", "2", "3"].includes(tier)) next.tier = "Must be 1, 2, or 3";
+    if (tier !== 1 && tier !== 2 && tier !== 3)
+      next.tier = "Must be 1, 2, or 3";
     if (shopUrl && !isValidUrl(shopUrl)) next.shop_url = "Must be a valid URL";
     if (locatorUrl && !isValidUrl(locatorUrl))
       next.store_locator_url = "Must be a valid URL";
@@ -41,8 +44,8 @@ export function BrandEditMetaForm({ slug, brand }: Props) {
     if (!validate()) return;
     mutation.mutate({
       name: name.trim(),
-      relationship: relationship as "portfolio" | "competitor",
-      tier: Number(tier) as 1 | 2 | 3,
+      relationship,
+      tier,
       domain: domain.trim() || null,
       shop_url: shopUrl.trim() || null,
       store_locator_url: locatorUrl.trim() || null,

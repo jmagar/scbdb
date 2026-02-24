@@ -1,8 +1,4 @@
-import type {
-  SentimentEvidence,
-  SentimentSnapshotItem,
-  SentimentSummaryItem,
-} from "../types/api";
+import type { SentimentDataPoint, SentimentEvidence } from "../types/api";
 
 export type InsightModel = {
   positiveCount: number;
@@ -10,9 +6,9 @@ export type InsightModel = {
   neutralCount: number;
   totalSignals: number;
   marketAverage: number;
-  leaders: SentimentSummaryItem[];
-  laggards: SentimentSummaryItem[];
-  highestSignalBrand: SentimentSummaryItem | null;
+  leaders: SentimentDataPoint[];
+  laggards: SentimentDataPoint[];
+  highestSignalBrand: SentimentDataPoint | null;
   deltaByBrand: Map<string, number>;
   freshestAt: string | null;
   sourceMix: Array<[string, number]>;
@@ -20,8 +16,8 @@ export type InsightModel = {
 };
 
 export function buildSentimentInsight(
-  summary: SentimentSummaryItem[],
-  snapshots: SentimentSnapshotItem[],
+  summary: SentimentDataPoint[],
+  snapshots: SentimentDataPoint[],
 ): InsightModel {
   const scored = summary.map((item) => ({
     item,
@@ -52,7 +48,7 @@ export function buildSentimentInsight(
       : ([...summary].sort((a, b) => b.signal_count - a.signal_count)[0] ??
         null);
 
-  const byBrand = new Map<string, SentimentSnapshotItem[]>();
+  const byBrand = new Map<string, SentimentDataPoint[]>();
   for (const item of snapshots) {
     const rows = byBrand.get(item.brand_slug);
     if (rows) {
@@ -92,7 +88,7 @@ export function buildSentimentInsight(
 
   const sourceCounts = new Map<string, number>();
   const evidence: SentimentEvidence[] = [];
-  const pushMetadata = (row: SentimentSummaryItem | SentimentSnapshotItem) => {
+  const pushMetadata = (row: SentimentDataPoint) => {
     const counts = row.metadata?.source_counts;
     if (counts) {
       for (const [source, count] of Object.entries(counts)) {
@@ -152,7 +148,7 @@ export function trendClass(value: number | null): string {
   return "sentiment-trend sentiment-trend--flat";
 }
 
-export function sourceLabel(source: string): string {
+export function sentimentSourceLabel(source: string): string {
   switch (source) {
     case "google_news":
       return "Google News";

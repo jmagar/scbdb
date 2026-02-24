@@ -1,6 +1,7 @@
 import type {
-  BrandSummaryItem,
   BrandProfileResponse,
+  BrandSignalType,
+  BrandSummaryItem,
   CompetitorItem,
   CreateBrandBody,
   CreateBrandResponse,
@@ -23,61 +24,88 @@ export async function fetchBrands(): Promise<BrandSummaryItem[]> {
 }
 
 export async function fetchBrand(slug: string): Promise<BrandProfileResponse> {
-  return apiGet<BrandProfileResponse>(`/api/v1/brands/${slug}`);
+  return apiGet<BrandProfileResponse>(
+    `/api/v1/brands/${encodeURIComponent(slug)}`,
+  );
+}
+
+export async function fetchBrandProfile(
+  slug: string,
+): Promise<BrandProfileResponse> {
+  return apiGet<BrandProfileResponse>(
+    `/api/v1/brands/${encodeURIComponent(slug)}`,
+  );
 }
 
 export async function fetchBrandSignals(
   slug: string,
-  params?: { type?: string; cursor?: number; limit?: number },
+  params?: { type?: BrandSignalType; cursor?: number; limit?: number },
 ): Promise<PaginatedSignals> {
-  return apiGet<PaginatedSignals>(`/api/v1/brands/${slug}/signals`, {
-    type: params?.type,
-    cursor: params?.cursor,
-    limit: params?.limit,
-  });
+  return apiGet<PaginatedSignals>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/signals`,
+    {
+      type: params?.type,
+      cursor: params?.cursor,
+      limit: params?.limit,
+    },
+  );
 }
 
 export async function fetchBrandFunding(
   slug: string,
 ): Promise<FundingEventItem[]> {
-  return apiGet<FundingEventItem[]>(`/api/v1/brands/${slug}/funding`);
+  return apiGet<FundingEventItem[]>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/funding`,
+  );
 }
 
 export async function fetchBrandLabTests(slug: string): Promise<LabTestItem[]> {
-  return apiGet<LabTestItem[]>(`/api/v1/brands/${slug}/lab-tests`);
+  return apiGet<LabTestItem[]>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/lab-tests`,
+  );
 }
 
 export async function fetchBrandLegal(
   slug: string,
 ): Promise<LegalProceedingItem[]> {
-  return apiGet<LegalProceedingItem[]>(`/api/v1/brands/${slug}/legal`);
+  return apiGet<LegalProceedingItem[]>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/legal`,
+  );
 }
 
 export async function fetchBrandSponsorships(
   slug: string,
 ): Promise<SponsorshipItem[]> {
-  return apiGet<SponsorshipItem[]>(`/api/v1/brands/${slug}/sponsorships`);
+  return apiGet<SponsorshipItem[]>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/sponsorships`,
+  );
 }
 
 export async function fetchBrandDistributors(
   slug: string,
 ): Promise<DistributorItem[]> {
-  return apiGet<DistributorItem[]>(`/api/v1/brands/${slug}/distributors`);
+  return apiGet<DistributorItem[]>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/distributors`,
+  );
 }
 
 export async function fetchBrandCompetitors(
   slug: string,
 ): Promise<CompetitorItem[]> {
-  return apiGet<CompetitorItem[]>(`/api/v1/brands/${slug}/competitors`);
+  return apiGet<CompetitorItem[]>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/competitors`,
+  );
 }
 
 export async function fetchBrandMedia(
   slug: string,
 ): Promise<MediaAppearanceItem[]> {
-  return apiGet<MediaAppearanceItem[]>(`/api/v1/brands/${slug}/media`);
+  return apiGet<MediaAppearanceItem[]>(
+    `/api/v1/brands/${encodeURIComponent(slug)}/media`,
+  );
 }
 
-// ── Write functions ───────────────────────────────────────────────────────────
+// -- Write functions ----------------------------------------------------------
 
 export async function createBrand(
   body: CreateBrandBody,
@@ -95,7 +123,7 @@ export async function updateBrandMeta(
 ): Promise<void> {
   return apiMutate<UpdateBrandMetaBody, void>(
     "PATCH",
-    `/api/v1/brands/${slug}`,
+    `/api/v1/brands/${encodeURIComponent(slug)}`,
     body,
   );
 }
@@ -106,7 +134,7 @@ export async function updateBrandProfile(
 ): Promise<void> {
   return apiMutate<UpdateBrandProfileBody, void>(
     "PUT",
-    `/api/v1/brands/${slug}/profile`,
+    `/api/v1/brands/${encodeURIComponent(slug)}/profile`,
     body,
   );
 }
@@ -117,7 +145,7 @@ export async function updateBrandSocial(
 ): Promise<void> {
   return apiMutate<UpdateSocialHandlesBody, void>(
     "PUT",
-    `/api/v1/brands/${slug}/social`,
+    `/api/v1/brands/${encodeURIComponent(slug)}/social`,
     body,
   );
 }
@@ -128,11 +156,14 @@ export async function updateBrandDomains(
 ): Promise<void> {
   return apiMutate<UpdateDomainsBody, void>(
     "PUT",
-    `/api/v1/brands/${slug}/domains`,
+    `/api/v1/brands/${encodeURIComponent(slug)}/domains`,
     body,
   );
 }
 
 export async function deactivateBrand(slug: string): Promise<void> {
-  return apiMutate<undefined, void>("DELETE", `/api/v1/brands/${slug}`);
+  return apiMutate<undefined, void>(
+    "DELETE",
+    `/api/v1/brands/${encodeURIComponent(slug)}`,
+  );
 }

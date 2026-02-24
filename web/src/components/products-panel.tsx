@@ -1,13 +1,8 @@
-import { type ProductItem } from "../types/api";
+import { useProducts } from "../hooks/use-dashboard-data";
 import { ErrorState, LoadingState, formatMoney } from "./dashboard-utils";
 
-type Props = {
-  isLoading: boolean;
-  isError: boolean;
-  data: ProductItem[] | undefined;
-};
-
-export function ProductsPanel({ isLoading, isError, data }: Props) {
+export function ProductsPanel() {
+  const { isLoading, isError, data } = useProducts();
   return (
     <>
       <h2>Product Catalog</h2>

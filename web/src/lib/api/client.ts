@@ -1,4 +1,5 @@
 import type { ApiResponse } from "../../types/api";
+import { ApiEnvelopeSchema } from "./schemas";
 
 const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
 const apiBaseUrl = (rawApiBaseUrl ?? "").replace(/\/+$/, "");
@@ -102,10 +103,18 @@ export async function apiGet<T>(
   }
 
   const body = (await response.json()) as ApiResponse<T>;
+
+  const parsed = ApiEnvelopeSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new Error(
+      `API response missing 'data' field: ${parsed.error.message}`,
+    );
+  }
+
   return body.data;
 }
 
-export async function apiMutate<TBody, TResponse>(
+export async function apiMutate<TBody, TResponse = void>(
   method: "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: TBody,
@@ -154,7 +163,7 @@ export async function apiMutate<TBody, TResponse>(
     throw new ApiError(response.status, errorCode, errorMessage);
   }
 
-  if (response.status === 204) return undefined as TResponse;
+  if (response.status === 204) return undefined as TResponse & void;
   const json = (await response.json()) as ApiResponse<TResponse>;
   return json.data;
 }

@@ -1,4 +1,3 @@
-import { useState } from "react";
 import type { SignalItem } from "../types/brands";
 import { useBrandSignals } from "../hooks/use-dashboard-data";
 import {
@@ -59,14 +58,19 @@ function SignalRow({ signal }: { signal: SignalItem }) {
 }
 
 export function BrandSignalFeed({ slug }: { slug: string }) {
-  const [cursor, setCursor] = useState<number | undefined>(undefined);
-  const { data, isLoading, error } = useBrandSignals(slug, undefined, cursor);
+  const {
+    data,
+    isLoading,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useBrandSignals(slug);
 
   if (isLoading) return <LoadingState label="signals" />;
   if (error) return <ErrorState label="signals" />;
 
-  const items = data?.items ?? [];
-  const nextCursor = data?.next_cursor ?? null;
+  const items = data?.pages.flatMap((page) => page.items) ?? [];
 
   if (items.length === 0) {
     return <p className="panel-status">No signals yet.</p>;
@@ -79,13 +83,14 @@ export function BrandSignalFeed({ slug }: { slug: string }) {
           <SignalRow key={signal.public_id} signal={signal} />
         ))}
       </ul>
-      {nextCursor !== null && (
+      {hasNextPage && (
         <button
           className="load-more-btn"
-          onClick={() => setCursor(nextCursor)}
+          onClick={() => void fetchNextPage()}
+          disabled={isFetchingNextPage}
           type="button"
         >
-          Load More
+          {isFetchingNextPage ? "Loading..." : "Load More"}
         </button>
       )}
     </div>

@@ -5,7 +5,16 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DashboardPage } from "./components/dashboard-page";
 import { BrandsPage } from "./components/brands-page";
 import { BrandProfilePage } from "./components/brand-profile-page";
+import { NotFoundPage } from "./components/not-found-page";
 import "./styles.css";
+
+export const ROUTES = {
+  dashboard: "#/",
+  brands: "#/brands",
+  brand: (slug: string) => `#/brands/${encodeURIComponent(slug)}`,
+} as const;
+
+const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 const queryClient = new QueryClient();
 
@@ -18,14 +27,20 @@ function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  if (hash.startsWith("#/brands/")) {
-    const slug = hash.replace("#/brands/", "");
+  const decoded = decodeURIComponent(hash);
+
+  if (decoded.startsWith("#/brands/")) {
+    const slug = decoded.replace("#/brands/", "");
+    if (!slug || !SLUG_PATTERN.test(slug)) return <NotFoundPage />;
     return <BrandProfilePage slug={slug} />;
   }
-  if (hash === "#/brands") {
+  if (decoded === "#/brands") {
     return <BrandsPage />;
   }
-  return <DashboardPage />;
+  if (decoded === "" || decoded === "#" || decoded === "#/") {
+    return <DashboardPage />;
+  }
+  return <NotFoundPage />;
 }
 
 const rootElement = document.getElementById("root");

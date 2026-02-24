@@ -1,7 +1,9 @@
+import { useMemo } from "react";
+
 import {
-  type PricingSnapshotItem,
-  type PricingSummaryItem,
-} from "../types/api";
+  usePricingSnapshots,
+  usePricingSummary,
+} from "../hooks/use-dashboard-data";
 import {
   ErrorState,
   LoadingState,
@@ -9,21 +11,19 @@ import {
   formatMoney,
 } from "./dashboard-utils";
 
-type Props = {
-  summary: {
-    isLoading: boolean;
-    isError: boolean;
-    data: PricingSummaryItem[] | undefined;
-  };
-  snapshots: {
-    isLoading: boolean;
-    isError: boolean;
-    data: PricingSnapshotItem[] | undefined;
-  };
-  logosByBrand: Map<string, string | undefined>;
-};
-
-export function PricingPanel({ summary, snapshots, logosByBrand }: Props) {
+export function PricingPanel() {
+  const summary = usePricingSummary();
+  const snapshots = usePricingSnapshots();
+  const logosByBrand = useMemo(
+    () =>
+      new Map(
+        (summary.data ?? []).map((item) => [
+          item.brand_slug,
+          item.brand_logo_url ?? undefined,
+        ]),
+      ),
+    [summary.data],
+  );
   return (
     <>
       <h2>Pricing Summary</h2>

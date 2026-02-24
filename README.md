@@ -24,15 +24,15 @@ SCBDB is a self-hosted competitive intelligence and regulatory tracking platform
   - Sentiment: `sentiment_snapshots`
   - Locations: `store_locations`
   - Brand intelligence: `brand_profiles`, `brand_social_handles`, `brand_domains`, `brand_signals`, `brand_funding_events`, `brand_lab_tests`, `brand_legal_proceedings`, `brand_sponsorships`, `brand_distributors`, `brand_competitor_relationships`, `brand_newsletters`, `brand_media_appearances`, `brand_profile_runs`
-- Frontend (`web/`) is a Vite + React 19 + TypeScript dashboard with six sections: Products, Pricing, Regulatory, Sentiment, Locations, and Brands. Styling uses CSS variables and custom component styles.
+- Frontend (`web/`) is a Vite + React 19 + TypeScript single-page app with a five-tab dashboard (Products, Pricing, Regulatory, Sentiment, Locations) and a separate Brands registry page (`#/brands`). Styling uses CSS variables and custom component styles (no Tailwind).
 
 ## Implemented Capabilities
 
 - Product catalog collection from Shopify storefronts.
 - Pricing snapshot collection tied to auditable collection runs.
 - Legislative ingestion and reporting via LegiScan.
-- Sentiment collection and scoring pipeline (Google News RSS + Reddit sources), with snapshot persistence.
-- Store locator crawler — detects Locally.com, Storemapper, JSON-LD, and embedded JSON formats; tracks `first_seen_at` per location for territory monitoring.
+- Sentiment collection and scoring pipeline (Google News RSS, Bing News RSS, Yahoo News RSS, Reddit, and Twitter/X sources), with snapshot persistence.
+- Store locator crawler — detects 13 formats (Locally.com, Storemapper, Stockist, Storepoint, Roseperl, VTInfo, AskHoodie, BeverageFinder, Agile Store Locator, StoreRocket, Destini, JSON-LD, embedded JSON); tracks `first_seen_at` per location for territory monitoring.
 - Brand intelligence API: list brands with completeness scores, full brand profile, cursor-paginated signal feed, funding events, lab tests, legal proceedings, sponsorships, distributors, competitors, media appearances.
 - Brand management API: create, update (sparse patch), and soft-delete brands; overwrite profile, social handles, and domains.
 - LegiScan change-hash caching: `getMasterList` replaces search-per-page discovery; only changed bills call `getBill`. `--all-sessions` backfills historical legislative sessions; `--state US` tracks federal bills.
@@ -122,6 +122,10 @@ cargo run --bin scbdb-cli -- collect products --dry-run
 
 cargo run --bin scbdb-cli -- collect pricing
 cargo run --bin scbdb-cli -- collect pricing --brand <slug>
+
+cargo run --bin scbdb-cli -- collect verify-images
+cargo run --bin scbdb-cli -- collect verify-images --brand <slug>
+cargo run --bin scbdb-cli -- collect verify-images --concurrency 12
 ```
 
 ### Regulatory Tracking
@@ -193,6 +197,8 @@ Copy `.env.example` to `.env`.
 | `REDDIT_CLIENT_ID` | No** | empty | Parsed by sentiment pipeline |
 | `REDDIT_CLIENT_SECRET` | No** | empty | Parsed by sentiment pipeline |
 | `REDDIT_USER_AGENT` | No** | `scbdb/0.1.0` | Parsed by sentiment pipeline |
+| `TWITTER_AUTH_TOKEN` | No** | empty | Parsed by sentiment pipeline (Twitter/X source) |
+| `TWITTER_CT0` | No** | empty | Parsed by sentiment pipeline (Twitter/X source) |
 
 - `*` `LEGISCAN_API_KEY` is optional for booting, but required to ingest real regulatory data.
 - `**` Sentiment vars are not required for server startup, but they are required for `sentiment collect` (the command fails if any key is missing from env).

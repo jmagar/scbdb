@@ -1,5 +1,6 @@
 import type { BrandSummaryItem } from "../types/api";
 import { useBrands } from "../hooks/use-dashboard-data";
+import { ROUTES } from "../main";
 import { ErrorState, LoadingState } from "./dashboard-utils";
 import { BrandCreateDialog } from "./brand-create-dialog";
 
@@ -19,7 +20,7 @@ export function BrandsPage() {
       </div>
       <BrandCreateDialog
         onCreated={(slug) => {
-          window.location.hash = `#/brands/${slug}`;
+          window.location.hash = ROUTES.brand(slug);
         }}
       />
       <div className="brand-grid">
@@ -33,7 +34,7 @@ export function BrandsPage() {
 
 function BrandCard({ brand }: { brand: BrandSummaryItem }) {
   return (
-    <a href={`#/brands/${brand.slug}`} className="brand-card">
+    <a href={ROUTES.brand(brand.slug)} className="brand-card">
       <div className="brand-card-body">
         <div className="brand-card-header">
           {brand.logo_url && (

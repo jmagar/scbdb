@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { BrandProfileResponse } from "../types/brands";
 import { useDeactivateBrand } from "../hooks/use-dashboard-data";
+import { ROUTES } from "../main";
 import { FormSection } from "./form-utils";
 import { BrandEditMetaForm } from "./brand-edit-meta-form";
 import { BrandEditProfileForm } from "./brand-edit-profile-form";
@@ -19,7 +20,7 @@ function DeactivateSection({ slug, name }: { slug: string; name: string }) {
   function handleDeactivate() {
     mutation.mutate(undefined, {
       onSuccess: () => {
-        window.location.hash = "#/brands";
+        window.location.hash = ROUTES.brands;
       },
     });
   }
@@ -71,10 +72,14 @@ function DeactivateSection({ slug, name }: { slug: string; name: string }) {
 export function BrandEditTab({ slug, brand }: Props) {
   return (
     <div className="brand-edit-tab">
-      <BrandEditMetaForm slug={slug} brand={brand} />
-      <BrandEditProfileForm slug={slug} profile={brand.profile} />
-      <BrandEditSocialForm slug={slug} handles={brand.social_handles} />
-      <BrandEditDomainsForm slug={slug} domains={brand.domains} />
+      <BrandEditMetaForm key={slug} slug={slug} brand={brand} />
+      <BrandEditProfileForm key={slug} slug={slug} profile={brand.profile} />
+      <BrandEditSocialForm
+        key={slug}
+        slug={slug}
+        handles={brand.social_handles}
+      />
+      <BrandEditDomainsForm key={slug} slug={slug} domains={brand.domains} />
       <DeactivateSection slug={slug} name={brand.name} />
     </div>
   );
