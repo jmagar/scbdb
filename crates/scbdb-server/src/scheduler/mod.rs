@@ -82,23 +82,32 @@ async fn run_locations_job(pool: &PgPool, config: &scbdb_core::AppConfig) {
         "scheduler: collecting locations for brands"
     );
 
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(
+            config.scraper_request_timeout_secs,
+        ))
+        .build()
+        .expect("failed to build HTTP client");
+
     for brand in &brands {
         let Some(locator_url) = &brand.store_locator_url else {
             // list_brands_with_locator guarantees Some; guard defensively.
             continue;
         };
-        collect_brand_locations(pool, config, brand, locator_url).await;
+        collect_brand_locations(pool, &http_client, config, brand, locator_url).await;
     }
 }
 
 /// Fetch, upsert, and deactivate locations for a single brand.
 async fn collect_brand_locations(
     pool: &PgPool,
+    client: &reqwest::Client,
     config: &scbdb_core::AppConfig,
     brand: &scbdb_db::BrandRow,
     locator_url: &str,
 ) {
     let raw = match scbdb_scraper::fetch_store_locations(
+        client,
         locator_url,
         config.scraper_request_timeout_secs,
         &config.scraper_user_agent,
@@ -144,8 +153,6 @@ async fn collect_brand_locations(
         return;
     }
 
-    // TODO: de-duplicate with CLI raw_to_new_location helper
-    //       (see crates/scbdb-cli/src/collect/locations/helpers.rs)
     let new_locations: Vec<scbdb_db::NewStoreLocation> = raw
         .iter()
         .map(|loc| scbdb_db::NewStoreLocation {
@@ -155,7 +162,7 @@ async fn collect_brand_locations(
             city: loc.city.clone(),
             state: loc.state.clone(),
             zip: loc.zip.clone(),
-            country: loc.country.clone(),
+            country: loc.country.clone().or_else(|| Some("US".to_string())),
             latitude: loc.latitude,
             longitude: loc.longitude,
             phone: loc.phone.clone(),

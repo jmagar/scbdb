@@ -28,14 +28,10 @@ pub(in crate::locator) fn extract_beveragefinder_key(html: &str) -> Option<Strin
 
 /// Fetch `BeverageFinder` results and parse the embedded `data-locations` JSON.
 pub(in crate::locator) async fn fetch_beveragefinder_stores(
+    client: &reqwest::Client,
     key: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout_secs))
-        .build()?;
-
     let config_response = client
         .get("https://beveragefinder.net/users/beveragefinder-map.php")
         .header(reqwest::header::USER_AGENT, user_agent)

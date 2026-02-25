@@ -15,6 +15,7 @@ use super::BrandLocationOutcome;
 #[allow(clippy::too_many_lines)] // Orchestration function: URL resolve, scrape, upsert, deactivate, audit
 pub(super) async fn collect_brand_locations(
     pool: &sqlx::PgPool,
+    client: &reqwest::Client,
     config: &scbdb_core::AppConfig,
     run_id: i64,
     brand: &scbdb_db::BrandRow,
@@ -34,6 +35,7 @@ pub(super) async fn collect_brand_locations(
     };
 
     let raw_locations = match scbdb_scraper::fetch_store_locations(
+        client,
         &locator_url,
         config.scraper_request_timeout_secs,
         &config.scraper_user_agent,

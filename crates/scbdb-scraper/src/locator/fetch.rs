@@ -10,6 +10,7 @@ const HTML_FETCH_BACKOFF_MS: [u64; 3] = [0, 300, 900];
 /// Fetch the HTML body of a URL, trying the supplied user-agent first and
 /// then the browser fallback UA.  Returns the first successful body.
 pub(crate) async fn fetch_html(
+    client: &reqwest::Client,
     url: &str,
     timeout_secs: u64,
     user_agent: &str,
@@ -24,6 +25,10 @@ pub(crate) async fn fetch_html(
         // while allowing curl/browser fingerprints.
         let curl_output = tokio::process::Command::new("curl")
             .arg("-Lsf")
+            .arg("--proto")
+            .arg("=https,http")
+            .arg("--max-filesize")
+            .arg("10485760")
             .arg("--max-time")
             .arg(timeout_secs.to_string())
             .arg("--user-agent")
@@ -40,10 +45,6 @@ pub(crate) async fn fetch_html(
                 }
             }
         }
-
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(timeout_secs))
-            .build()?;
 
         let mut user_agents = vec![user_agent.to_string()];
         if user_agent != BROWSER_FALLBACK_UA {
@@ -139,14 +140,10 @@ fn contains_locator_hint(body: &str) -> bool {
 
 /// Fetch a plain-text resource body.
 pub(crate) async fn fetch_text(
+    client: &reqwest::Client,
     url: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<String, LocatorError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout_secs))
-        .build()?;
-
     let response = client
         .get(url)
         .header(reqwest::header::USER_AGENT, user_agent)
@@ -159,13 +156,10 @@ pub(crate) async fn fetch_text(
 
 /// Perform a simple GET and parse the body as JSON.
 pub(crate) async fn fetch_json(
+    client: &reqwest::Client,
     url: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<serde_json::Value, LocatorError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout_secs))
-        .build()?;
     let response = client
         .get(url)
         .header(reqwest::header::USER_AGENT, user_agent)

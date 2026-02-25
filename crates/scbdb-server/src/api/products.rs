@@ -47,7 +47,7 @@ pub(super) async fn list_products(
             brand_slug: query.brand_slug.as_deref(),
             relationship: query.relationship.as_deref(),
             tier: query.tier,
-            limit: query.limit.map(|n| normalize_limit(Some(n))),
+            limit: Some(normalize_limit(query.limit)),
         },
     )
     .await

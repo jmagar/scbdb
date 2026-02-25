@@ -81,6 +81,7 @@ pub struct LocationsByStateRow {
 /// both `latitude` and `longitude` are non-null are included.
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct LocationPinRow {
+    pub id: i64,
     pub latitude: f64,
     pub longitude: f64,
     pub store_name: String,

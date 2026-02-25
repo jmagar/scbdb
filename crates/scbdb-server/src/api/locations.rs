@@ -1,10 +1,13 @@
-use axum::{extract::State, Extension, Json};
+use axum::{
+    extract::{Query, State},
+    Extension, Json,
+};
 use chrono::{DateTime, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::middleware::RequestId;
 
-use super::{map_db_error, ApiError, ApiResponse, AppState, ResponseMeta};
+use super::{map_db_error, normalize_limit, ApiError, ApiResponse, AppState, ResponseMeta};
 
 #[derive(Debug, Serialize)]
 pub(super) struct LocationsDashboardItem {
@@ -53,6 +56,7 @@ pub(super) async fn list_locations_summary(
 
 #[derive(Debug, Serialize)]
 pub(super) struct LocationPinItem {
+    pub id: i64,
     pub latitude: f64,
     pub longitude: f64,
     pub store_name: String,
@@ -67,17 +71,45 @@ pub(super) struct LocationPinItem {
     pub brand_tier: i16,
 }
 
+#[derive(Debug, Deserialize)]
+pub(super) struct LocationPinsQuery {
+    pub limit: Option<i64>,
+    pub cursor: Option<i64>,
+    pub brand_slug: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(super) struct PaginatedLocationPins {
+    pub items: Vec<LocationPinItem>,
+    pub next_cursor: Option<i64>,
+}
+
 pub(super) async fn list_location_pins(
     State(state): State<AppState>,
     Extension(req_id): Extension<RequestId>,
-) -> Result<Json<ApiResponse<Vec<LocationPinItem>>>, ApiError> {
-    let rows = scbdb_db::list_active_location_pins(&state.pool)
-        .await
-        .map_err(|e| map_db_error(req_id.0.clone(), &scbdb_db::DbError::from(e)))?;
+    Query(query): Query<LocationPinsQuery>,
+) -> Result<Json<ApiResponse<PaginatedLocationPins>>, ApiError> {
+    let limit = normalize_limit(query.limit);
 
-    let data = rows
+    let rows = scbdb_db::list_active_location_pins(
+        &state.pool,
+        limit + 1, // fetch one extra to detect next page
+        query.cursor,
+        query.brand_slug.as_deref(),
+    )
+    .await
+    .map_err(|e| map_db_error(req_id.0.clone(), &scbdb_db::DbError::from(e)))?;
+
+    // `normalize_limit` clamps to 1..=200, so the conversion is always safe.
+    let limit_usize = usize::try_from(limit).unwrap_or(usize::MAX);
+    let has_more = rows.len() > limit_usize;
+    let take = if has_more { limit_usize } else { rows.len() };
+
+    let items: Vec<LocationPinItem> = rows
         .into_iter()
+        .take(take)
         .map(|row| LocationPinItem {
+            id: row.id,
             latitude: row.latitude,
             longitude: row.longitude,
             store_name: row.store_name,
@@ -93,8 +125,14 @@ pub(super) async fn list_location_pins(
         })
         .collect();
 
+    let next_cursor = if has_more {
+        items.last().map(|item| item.id)
+    } else {
+        None
+    };
+
     Ok(Json(ApiResponse {
-        data,
+        data: PaginatedLocationPins { items, next_cursor },
         meta: ResponseMeta::new(req_id.0),
     }))
 }

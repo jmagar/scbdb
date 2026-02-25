@@ -2,7 +2,6 @@
 
 use regex::Regex;
 
-use crate::locator::fetch::fetch_json;
 use crate::locator::types::{LocatorError, RawStoreLocation};
 
 /// Extract the Storepoint widget ID from HTML.
@@ -36,12 +35,12 @@ pub(in crate::locator) fn extract_storepoint_widget_id(html: &str) -> Option<Str
 
 /// Fetch stores from the Storepoint API and map them to `RawStoreLocation`.
 pub(in crate::locator) async fn fetch_storepoint_stores(
+    client: &reqwest::Client,
     widget_id: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let url = format!("https://api.storepoint.co/v2/{widget_id}/locations");
-    let data = fetch_json(&url, timeout_secs, user_agent).await?;
+    let data = crate::locator::fetch::fetch_json(client, &url, user_agent).await?;
 
     let Some(stores) = data
         .get("results")
@@ -191,10 +190,6 @@ fn parse_storepoint_address_tail(
 }
 
 /// Parse city/state/zip from an address string when country is already known.
-///
-/// When the API provides an explicit `country` field, the last comma-separated
-/// segment of the address is city+state+zip (not country), so we parse it
-/// directly instead of assuming the last segment is a country code.
 fn parse_storepoint_address_tail_with_country(
     address: &str,
 ) -> (
@@ -209,10 +204,6 @@ fn parse_storepoint_address_tail_with_country(
         .filter(|p| !p.is_empty())
         .collect();
 
-    // Try the last segment as "City ST 12345".
-    // When an explicit country is provided the last segment may itself be a
-    // country name, so fall back to the second-to-last when the last segment
-    // doesn't look like a city/state/zip triple.
     let mut city_state_zip_segment = parts.last().copied().unwrap_or("");
 
     let mut tokens: Vec<&str> = city_state_zip_segment

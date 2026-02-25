@@ -19,6 +19,8 @@ async fn main() -> anyhow::Result<()> {
         .or_else(|_| EnvFilter::try_new(config.log_level.clone()))?;
     tracing_subscriber::fmt().with_env_filter(env_filter).init();
 
+    check_curl_available().await;
+
     let pool_config = scbdb_db::PoolConfig::from_app_config(&config);
     let pool = scbdb_db::connect_pool(&config.database_url, pool_config).await?;
     scbdb_db::run_migrations(&pool).await?;
@@ -33,6 +35,28 @@ async fn main() -> anyhow::Result<()> {
         .with_graceful_shutdown(shutdown_signal())
         .await?;
     Ok(())
+}
+
+/// Log a warning at startup if `curl` is not available on the system PATH.
+///
+/// The store locator pipeline shells out to curl for HTML fetching (some
+/// anti-bot stacks block reqwest but pass curl). Missing curl degrades
+/// locator coverage but is not fatal.
+async fn check_curl_available() {
+    match tokio::process::Command::new("curl")
+        .arg("--version")
+        .output()
+        .await
+    {
+        Ok(output) if output.status.success() => {
+            tracing::debug!("curl is available");
+        }
+        _ => {
+            tracing::warn!(
+                "curl is not available on PATH; store locator HTML fetching will be degraded"
+            );
+        }
+    }
 }
 
 async fn shutdown_signal() {

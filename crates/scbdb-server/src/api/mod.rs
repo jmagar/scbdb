@@ -268,7 +268,9 @@ pub fn default_rate_limit_state() -> RateLimitState {
 
 #[cfg(test)]
 mod tests {
-    use super::locations::{LocationPinItem, LocationsByStateItem, LocationsDashboardItem};
+    use super::locations::{
+        LocationPinItem, LocationsByStateItem, LocationsDashboardItem, PaginatedLocationPins,
+    };
     use super::sentiment::SentimentSummaryItem;
     use super::*;
     use axum::body::{to_bytes, Body};
@@ -454,6 +456,7 @@ mod tests {
     #[test]
     fn location_pin_item_is_serializable() {
         let item = LocationPinItem {
+            id: 42,
             latitude: 30.2672,
             longitude: -97.7431,
             store_name: "Pin Store".to_string(),
@@ -484,6 +487,43 @@ mod tests {
             (round_tripped["latitude"].as_f64().unwrap() - 30.2672).abs() < 0.001,
             "latitude round-trip"
         );
+    }
+
+    #[test]
+    fn paginated_location_pins_includes_next_cursor() {
+        let paginated = PaginatedLocationPins {
+            items: vec![LocationPinItem {
+                id: 99,
+                latitude: 30.2672,
+                longitude: -97.7431,
+                store_name: "Cursor Store".to_string(),
+                address_line1: None,
+                city: None,
+                state: None,
+                zip: None,
+                locator_source: None,
+                brand_name: "Brand".to_string(),
+                brand_slug: "brand".to_string(),
+                brand_relationship: "portfolio".to_string(),
+                brand_tier: 1,
+            }],
+            next_cursor: Some(99),
+        };
+        let json = serde_json::to_string(&paginated).expect("serialize PaginatedLocationPins");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert_eq!(parsed["next_cursor"].as_i64(), Some(99));
+        assert_eq!(parsed["items"].as_array().map(|a| a.len()), Some(1));
+    }
+
+    #[test]
+    fn paginated_location_pins_null_cursor_when_no_more() {
+        let paginated = PaginatedLocationPins {
+            items: vec![],
+            next_cursor: None,
+        };
+        let json = serde_json::to_string(&paginated).expect("serialize");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("parse");
+        assert!(parsed["next_cursor"].is_null());
     }
 
     #[test]

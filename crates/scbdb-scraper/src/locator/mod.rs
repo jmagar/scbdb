@@ -44,11 +44,12 @@ use formats::{
 /// Returns [`LocatorError::Http`] if the locator page cannot be fetched.
 #[allow(clippy::too_many_lines)]
 pub async fn fetch_store_locations(
+    client: &reqwest::Client,
     locator_url: &str,
     timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
-    let html = match fetch_html(locator_url, timeout_secs, user_agent).await {
+    let html = match fetch_html(client, locator_url, timeout_secs, user_agent).await {
         Ok(body) => body,
         Err(e @ LocatorError::AllAttemptsFailed { .. }) => {
             tracing::warn!(locator_url, "all fetch attempts failed; no locator found");
@@ -60,7 +61,7 @@ pub async fn fetch_store_locations(
     // Strategy 1: Locally.com widget
     if let Some(company_id) = extract_locally_company_id(&html) {
         tracing::debug!(locator_url, company_id, "detected Locally.com widget");
-        match fetch_locally_stores(&company_id, timeout_secs, user_agent).await {
+        match fetch_locally_stores(client, &company_id, user_agent).await {
             Ok(stores) if !stores.is_empty() => return Ok(stores),
             Ok(_) => {}
             Err(e) => {
@@ -72,7 +73,7 @@ pub async fn fetch_store_locations(
     // Strategy 2: Storemapper widget
     if let Some(token) = extract_storemapper_token(&html) {
         tracing::debug!(locator_url, token, "detected Storemapper widget");
-        match fetch_storemapper_stores(&token, timeout_secs, user_agent).await {
+        match fetch_storemapper_stores(client, &token, user_agent).await {
             Ok(stores) if !stores.is_empty() => return Ok(stores),
             Ok(_) => {}
             Err(e) => {
@@ -82,7 +83,7 @@ pub async fn fetch_store_locations(
     }
     if let Some(user_id) = extract_storemapper_user_id(&html) {
         tracing::debug!(locator_url, user_id, "detected Storemapper user-id widget");
-        match fetch_storemapper_stores_by_user_id(&user_id, timeout_secs, user_agent).await {
+        match fetch_storemapper_stores_by_user_id(client, &user_id, user_agent).await {
             Ok(stores) if !stores.is_empty() => return Ok(stores),
             Ok(_) => {}
             Err(e) => {
@@ -94,13 +95,13 @@ pub async fn fetch_store_locations(
     // Strategy 3: Stockist widget
     if let Some(tag) = extract_stockist_widget_tag(&html) {
         tracing::debug!(locator_url, tag, "detected Stockist widget");
-        let stores = fetch_stockist_stores(&tag, timeout_secs, user_agent).await?;
+        let stores = fetch_stockist_stores(client, &tag, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
     }
     if let Some(dealers_url) = extract_dealers_page_url(&html, locator_url) {
-        if let Ok(dealers_html) = fetch_html(&dealers_url, timeout_secs, user_agent).await {
+        if let Ok(dealers_html) = fetch_html(client, &dealers_url, timeout_secs, user_agent).await {
             if let Some(tag) = extract_stockist_widget_tag(&dealers_html) {
                 tracing::debug!(
                     locator_url,
@@ -108,7 +109,7 @@ pub async fn fetch_store_locations(
                     tag,
                     "detected Stockist widget on linked dealers page"
                 );
-                let stores = fetch_stockist_stores(&tag, timeout_secs, user_agent).await?;
+                let stores = fetch_stockist_stores(client, &tag, user_agent).await?;
                 if !stores.is_empty() {
                     return Ok(stores);
                 }
@@ -119,7 +120,7 @@ pub async fn fetch_store_locations(
     // Strategy 4: Storepoint widget
     if let Some(widget_id) = extract_storepoint_widget_id(&html) {
         tracing::debug!(locator_url, widget_id, "detected Storepoint widget");
-        let stores = fetch_storepoint_stores(&widget_id, timeout_secs, user_agent).await?;
+        let stores = fetch_storepoint_stores(client, &widget_id, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -128,7 +129,7 @@ pub async fn fetch_store_locations(
     // Strategy 5: Roseperl/Secomapp WTB JS
     if let Some(wtb_url) = extract_roseperl_wtb_url(&html) {
         tracing::debug!(locator_url, wtb_url, "detected Roseperl store locator");
-        let stores = fetch_roseperl_stores(&wtb_url, timeout_secs, user_agent).await?;
+        let stores = fetch_roseperl_stores(client, &wtb_url, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -142,7 +143,8 @@ pub async fn fetch_store_locations(
             uuid = embed.uuid,
             "detected VTInfo finder widget"
         );
-        let stores = fetch_vtinfo_stores(&embed, locator_url, timeout_secs, user_agent).await?;
+        let stores =
+            fetch_vtinfo_stores(client, &embed, locator_url, timeout_secs, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -151,7 +153,7 @@ pub async fn fetch_store_locations(
     // Strategy 7: AskHoodie widget
     if let Some(embed_id) = extract_askhoodie_embed_id(&html) {
         tracing::debug!(locator_url, embed_id, "detected AskHoodie widget");
-        let stores = fetch_askhoodie_stores(&embed_id, timeout_secs, user_agent).await?;
+        let stores = fetch_askhoodie_stores(client, &embed_id, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -160,7 +162,7 @@ pub async fn fetch_store_locations(
     // Strategy 8: BeverageFinder widget
     if let Some(key) = extract_beveragefinder_key(&html) {
         tracing::debug!(locator_url, key, "detected BeverageFinder widget");
-        let stores = fetch_beveragefinder_stores(&key, timeout_secs, user_agent).await?;
+        let stores = fetch_beveragefinder_stores(client, &key, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -171,7 +173,7 @@ pub async fn fetch_store_locations(
     if agile_config.is_none() && html.contains("agile-store-locator") {
         if let Some(locator_page_url) = extract_store_locator_page_url(&html, locator_url) {
             if let Ok(locator_page_html) =
-                fetch_html(&locator_page_url, timeout_secs, user_agent).await
+                fetch_html(client, &locator_page_url, timeout_secs, user_agent).await
             {
                 agile_config = extract_agile_store_locator_config(&locator_page_html);
             }
@@ -181,13 +183,13 @@ pub async fn fetch_store_locations(
     if let Some((ajax_url, nonce, lang, load_all, layout, stores_filter)) = agile_config {
         tracing::debug!(locator_url, ajax_url, "detected Agile Store Locator widget");
         let stores = fetch_agile_store_locator_stores(
+            client,
             &ajax_url,
             &nonce,
             &lang,
             &load_all,
             &layout,
             stores_filter.as_deref(),
-            timeout_secs,
             user_agent,
         )
         .await?;
@@ -197,9 +199,9 @@ pub async fn fetch_store_locations(
     }
 
     // Strategy 10: StoreRocket widget
-    if let Some(account) = discover_storerocket_account(&html, timeout_secs, user_agent).await {
+    if let Some(account) = discover_storerocket_account(client, &html, user_agent).await {
         tracing::debug!(locator_url, account, "detected StoreRocket widget");
-        let stores = fetch_storerocket_stores(&account, timeout_secs, user_agent).await?;
+        let stores = fetch_storerocket_stores(client, &account, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -207,7 +209,7 @@ pub async fn fetch_store_locations(
 
     // Strategy 11: Destini / lets.shop locator
     if let Some(config) =
-        discover_destini_locator_config(&html, locator_url, timeout_secs, user_agent).await
+        discover_destini_locator_config(client, &html, locator_url, user_agent).await
     {
         tracing::debug!(
             locator_url,
@@ -216,7 +218,7 @@ pub async fn fetch_store_locations(
             "detected Destini locator"
         );
         let stores: Vec<RawStoreLocation> =
-            fetch_destini_stores(&config, timeout_secs, user_agent).await?;
+            fetch_destini_stores(client, &config, user_agent).await?;
         if !stores.is_empty() {
             return Ok(stores);
         }
@@ -297,8 +299,10 @@ fn extract_dealers_page_url(html: &str, locator_url: &str) -> Option<String> {
 mod tests {
     use super::*;
     use formats::{
-        extract_balanced_array, extract_json_embed_locations, extract_jsonld_locations,
-        extract_locally_company_id, extract_storemapper_token, extract_storemapper_user_id,
+        extract_askhoodie_embed_id, extract_balanced_array, extract_beveragefinder_key,
+        extract_json_embed_locations, extract_jsonld_locations, extract_locally_company_id,
+        extract_roseperl_wtb_url, extract_stockist_widget_tag, extract_storemapper_token,
+        extract_storemapper_user_id, extract_storepoint_widget_id, extract_storerocket_account,
     };
 
     // -----------------------------------------------------------------------
@@ -697,6 +701,498 @@ mod tests {
         assert!(
             validate_store_locations_trust(&locations).is_err(),
             "low-quality json_embed must be untrusted"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // extract_store_locator_page_url
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extract_store_locator_page_url_absolute() {
+        let html = r#"<a href="https://example.com/store-locator/">Find a Store</a>"#;
+        let url = extract_store_locator_page_url(html, "https://example.com/pages/main");
+        assert_eq!(
+            url.as_deref(),
+            Some("https://example.com/store-locator/"),
+            "absolute URL should be returned as-is"
+        );
+    }
+
+    #[test]
+    fn extract_store_locator_page_url_relative() {
+        let html = r#"<a href="/store-locator/">Find a Store</a>"#;
+        let url = extract_store_locator_page_url(html, "https://example.com/pages/main");
+        assert_eq!(
+            url.as_deref(),
+            Some("https://example.com/store-locator/"),
+            "relative path should be resolved against locator_url host"
+        );
+    }
+
+    #[test]
+    fn extract_store_locator_page_url_with_query() {
+        let html = r#"<a href="/store-locator/?brand=foo">Stores</a>"#;
+        let url = extract_store_locator_page_url(html, "https://shop.example.com/where-to-buy");
+        assert_eq!(
+            url.as_deref(),
+            Some("https://shop.example.com/store-locator/?brand=foo"),
+        );
+    }
+
+    #[test]
+    fn extract_store_locator_page_url_returns_none_when_absent() {
+        let html = r#"<a href="/about">About Us</a>"#;
+        assert_eq!(
+            extract_store_locator_page_url(html, "https://example.com/"),
+            None,
+            "no store-locator link means None"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // extract_dealers_page_url — additional edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extract_dealers_page_url_returns_none_when_absent() {
+        let html = r#"<a href="/pages/about">About</a>"#;
+        assert_eq!(extract_dealers_page_url(html, "https://example.com/"), None,);
+    }
+
+    #[test]
+    fn extract_dealers_page_url_with_trailing_slash() {
+        let html = r#"<a href="/pages/dealers/">Dealers</a>"#;
+        let url = extract_dealers_page_url(html, "https://brand.com/pages/locations");
+        assert_eq!(url.as_deref(), Some("https://brand.com/pages/dealers/"));
+    }
+
+    // -----------------------------------------------------------------------
+    // Stockist widget tag extraction
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extracts_stockist_tag_from_data_attribute() {
+        let html = r#"<div data-stockist-widget-tag="u23010" class="stockist-widget"></div>"#;
+        assert_eq!(
+            formats::extract_stockist_widget_tag(html).as_deref(),
+            Some("u23010"),
+        );
+    }
+
+    #[test]
+    fn extracts_stockist_tag_from_api_url() {
+        let html = r#"<script src="https://stockist.co/api/v1/u55555/widget.js"></script>"#;
+        assert_eq!(
+            formats::extract_stockist_widget_tag(html).as_deref(),
+            Some("u55555"),
+        );
+    }
+
+    #[test]
+    fn extracts_stockist_tag_from_callback() {
+        let html = r#"<script>function _stockistConfigCallback_u99999(config) {}</script>"#;
+        assert_eq!(
+            formats::extract_stockist_widget_tag(html).as_deref(),
+            Some("u99999"),
+        );
+    }
+
+    #[test]
+    fn stockist_returns_none_without_stockist_signal() {
+        let html = r#"<div>Just a normal page</div>"#;
+        assert_eq!(formats::extract_stockist_widget_tag(html), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Storepoint widget ID extraction
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extracts_storepoint_widget_from_constructor() {
+        let html = r#"<script>new StorepointWidget('1682cd22fcf354', {})</script>"#;
+        assert_eq!(
+            formats::extract_storepoint_widget_id(html).as_deref(),
+            Some("1682cd22fcf354"),
+        );
+    }
+
+    #[test]
+    fn extracts_storepoint_widget_from_api_url() {
+        let html = r#"<script src="https://api.storepoint.co/v2/abc123def/locations"></script>"#;
+        assert_eq!(
+            formats::extract_storepoint_widget_id(html).as_deref(),
+            Some("abc123def"),
+        );
+    }
+
+    #[test]
+    fn storepoint_returns_none_without_signal() {
+        let html = r#"<div>No storepoint here</div>"#;
+        assert_eq!(formats::extract_storepoint_widget_id(html), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // StoreRocket account extraction
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extracts_storerocket_from_init_call() {
+        let html = r#"<script>StoreRocket.init({ account: "Or85AG58NM" })</script>"#;
+        assert_eq!(
+            formats::extract_storerocket_account(html).as_deref(),
+            Some("Or85AG58NM"),
+        );
+    }
+
+    #[test]
+    fn extracts_storerocket_from_data_attribute() {
+        let html = r#"<div data-storerocket-account="XyZ123"></div>"#;
+        assert_eq!(
+            formats::extract_storerocket_account(html).as_deref(),
+            Some("XyZ123"),
+        );
+    }
+
+    #[test]
+    fn extracts_storerocket_from_api_url() {
+        let html = r#"<script src="https://storerocket.io/api/user/AbCdEf/locations"></script>"#;
+        assert_eq!(
+            formats::extract_storerocket_account(html).as_deref(),
+            Some("AbCdEf"),
+        );
+    }
+
+    #[test]
+    fn storerocket_returns_none_without_signal() {
+        let html = r#"<div>Plain page</div>"#;
+        assert_eq!(formats::extract_storerocket_account(html), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // AskHoodie embed ID extraction
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extracts_askhoodie_embed_id() {
+        let html = r#"<script src="https://www.askhoodie.com/embed.js"></script><script>hoodieEmbedWtbV2("a1b2c3d4-e5f6-7890-abcd-ef1234567890"</script>"#;
+        assert_eq!(
+            formats::extract_askhoodie_embed_id(html).as_deref(),
+            Some("a1b2c3d4-e5f6-7890-abcd-ef1234567890"),
+        );
+    }
+
+    #[test]
+    fn askhoodie_returns_none_without_signal() {
+        let html = r#"<div>No hoodie here</div>"#;
+        assert_eq!(formats::extract_askhoodie_embed_id(html), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // BeverageFinder key extraction
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extracts_beveragefinder_key_from_data_attribute() {
+        let html = r#"<script src="https://beveragefinder.net/users/embed.js" data-key="abc123"></script>"#;
+        assert_eq!(
+            formats::extract_beveragefinder_key(html).as_deref(),
+            Some("abc123"),
+        );
+    }
+
+    #[test]
+    fn extracts_beveragefinder_key_from_iframe() {
+        let html = r#"<iframe src="https://beveragefinder.net/beveragefinder-map.php?key=xyz789&amp;brand=test"></iframe>"#;
+        assert_eq!(
+            formats::extract_beveragefinder_key(html).as_deref(),
+            Some("xyz789"),
+        );
+    }
+
+    #[test]
+    fn beveragefinder_returns_none_without_signal() {
+        let html = r#"<div>No beveragefinder here</div>"#;
+        assert_eq!(formats::extract_beveragefinder_key(html), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Roseperl WTB URL extraction
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extracts_roseperl_wtb_url() {
+        let html = r#"<script src="https://cdn.roseperl.com/storelocator-prod/wtb/12345.js?shop=test.myshopify.com"></script>"#;
+        let url = formats::extract_roseperl_wtb_url(html);
+        assert!(url.is_some(), "should find roseperl WTB URL");
+        assert!(url.unwrap().contains("cdn.roseperl.com"));
+    }
+
+    #[test]
+    fn roseperl_returns_none_without_signal() {
+        let html = r#"<div>No roseperl</div>"#;
+        assert_eq!(formats::extract_roseperl_wtb_url(html), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // JSON-LD edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn jsonld_handles_missing_geo() {
+        let html = r#"
+            <html><head>
+            <script type="application/ld+json">
+            {
+                "@type": "Store",
+                "name": "No Geo Store",
+                "address": {
+                    "addressLocality": "Portland",
+                    "addressRegion": "OR"
+                }
+            }
+            </script>
+            </head></html>
+        "#;
+        let locs = extract_jsonld_locations(html);
+        assert_eq!(locs.len(), 1);
+        assert_eq!(locs[0].name, "No Geo Store");
+        assert!(
+            locs[0].latitude.is_none(),
+            "missing geo should produce None lat"
+        );
+        assert!(
+            locs[0].longitude.is_none(),
+            "missing geo should produce None lng"
+        );
+    }
+
+    #[test]
+    fn jsonld_handles_malformed_json() {
+        let html = r#"
+            <html><head>
+            <script type="application/ld+json">
+            { this is not valid json }
+            </script>
+            </head></html>
+        "#;
+        let locs = extract_jsonld_locations(html);
+        assert!(
+            locs.is_empty(),
+            "malformed JSON-LD should produce empty vec"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // Embedded JSON — edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn json_embed_returns_empty_for_non_store_arrays() {
+        let html = r#"
+            <html><body>
+            <script>
+            var items = [
+                {"title": "Blog Post", "author": "John"},
+                {"title": "Another Post", "author": "Jane"}
+            ];
+            </script>
+            </body></html>
+        "#;
+        let locs = extract_json_embed_locations(html);
+        assert!(
+            locs.is_empty(),
+            "arrays without store-like fields should not produce locations"
+        );
+    }
+
+    #[test]
+    fn json_embed_handles_missing_coordinates() {
+        let html = r#"
+            <html><body>
+            <script>
+            var stores = [
+                {"name": "Store A", "city": "Austin", "state": "TX"},
+                {"name": "Store B", "city": "Dallas", "state": "TX"}
+            ];
+            </script>
+            </body></html>
+        "#;
+        let locs = extract_json_embed_locations(html);
+        for loc in &locs {
+            assert!(loc.latitude.is_none(), "no lat/lng in source -> None");
+            assert!(loc.longitude.is_none(), "no lat/lng in source -> None");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // extract_balanced_array — additional edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn extract_balanced_array_empty_array() {
+        assert_eq!(extract_balanced_array("[]"), Some("[]"));
+    }
+
+    #[test]
+    fn extract_balanced_array_with_string_escapes() {
+        let s = r#"[{"key": "val\"ue"}]"#;
+        assert_eq!(extract_balanced_array(s), Some(s));
+    }
+
+    #[test]
+    fn extract_balanced_array_returns_none_for_non_array() {
+        assert_eq!(extract_balanced_array("{\"a\": 1}"), None);
+    }
+
+    #[test]
+    fn extract_balanced_array_unterminated() {
+        assert_eq!(extract_balanced_array("[1, 2, 3"), None);
+    }
+
+    // -----------------------------------------------------------------------
+    // Trust validation — additional coverage
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn trust_guard_rejects_unknown_source() {
+        let locations = vec![RawStoreLocation {
+            external_id: None,
+            name: "Test".to_string(),
+            address_line1: Some("123 Main".to_string()),
+            city: Some("Austin".to_string()),
+            state: Some("TX".to_string()),
+            zip: None,
+            country: None,
+            latitude: Some(30.0),
+            longitude: Some(-97.0),
+            phone: None,
+            locator_source: "totally_unknown_provider".to_string(),
+            raw_data: serde_json::Value::Null,
+        }];
+
+        let result = validate_store_locations_trust(&locations);
+        assert!(result.is_err(), "unknown locator source must be rejected");
+        assert!(
+            result.unwrap_err().contains("unknown locator source"),
+            "error message should mention the source"
+        );
+    }
+
+    #[test]
+    fn trust_guard_accepts_high_quality_json_embed() {
+        let locations: Vec<RawStoreLocation> = (0..6)
+            .map(|i| RawStoreLocation {
+                external_id: None,
+                name: format!("Store {i}"),
+                address_line1: Some(format!("{i} Main St")),
+                city: Some("Austin".to_string()),
+                state: Some("TX".to_string()),
+                zip: None,
+                country: None,
+                latitude: Some(30.0),
+                longitude: Some(-97.0),
+                phone: None,
+                locator_source: "json_embed".to_string(),
+                raw_data: serde_json::Value::Null,
+            })
+            .collect();
+
+        assert!(
+            validate_store_locations_trust(&locations).is_ok(),
+            "high-quality json_embed with 6 records should be trusted"
+        );
+    }
+
+    #[test]
+    fn trust_guard_accepts_all_named_providers() {
+        let providers = [
+            "locally",
+            "storemapper",
+            "stockist",
+            "storepoint",
+            "roseperl",
+            "vtinfo",
+            "askhoodie",
+            "beveragefinder",
+            "storerocket",
+            "agile_store_locator",
+            "jsonld",
+            "destini",
+        ];
+
+        for provider in providers {
+            let locations = vec![RawStoreLocation {
+                external_id: None,
+                name: "Test Store".to_string(),
+                address_line1: None,
+                city: None,
+                state: None,
+                zip: None,
+                country: None,
+                latitude: None,
+                longitude: None,
+                phone: None,
+                locator_source: provider.to_string(),
+                raw_data: serde_json::Value::Null,
+            }];
+
+            assert!(
+                validate_store_locations_trust(&locations).is_ok(),
+                "provider '{provider}' should always be trusted"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // make_location_key — additional edge cases
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn location_key_handles_all_none_fields() {
+        let loc = RawStoreLocation {
+            external_id: None,
+            name: "Minimal".to_string(),
+            address_line1: None,
+            city: None,
+            state: None,
+            zip: None,
+            country: None,
+            latitude: None,
+            longitude: None,
+            phone: None,
+            locator_source: "jsonld".to_string(),
+            raw_data: serde_json::Value::Null,
+        };
+
+        let key = make_location_key(1, &loc);
+        assert_eq!(key.len(), 64, "SHA-256 hex is always 64 chars");
+        assert_eq!(key, make_location_key(1, &loc));
+    }
+
+    #[test]
+    fn location_key_normalises_whitespace() {
+        let make = |name: &str| RawStoreLocation {
+            external_id: None,
+            name: name.to_string(),
+            address_line1: None,
+            city: Some("  Austin  ".to_string()),
+            state: Some("  tx  ".to_string()),
+            zip: None,
+            country: None,
+            latitude: None,
+            longitude: None,
+            phone: None,
+            locator_source: "jsonld".to_string(),
+            raw_data: serde_json::Value::Null,
+        };
+
+        let trimmed = make("  Store Name  ");
+        let clean = make("Store Name");
+        assert_eq!(
+            make_location_key(1, &trimmed),
+            make_location_key(1, &clean),
+            "leading/trailing whitespace should be trimmed before hashing"
         );
     }
 }

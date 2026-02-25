@@ -84,6 +84,13 @@ pub(crate) async fn run_collect_locations(
 
     println!("Collecting store locations for {} brands...", brands.len());
 
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(
+            config.scraper_request_timeout_secs,
+        ))
+        .build()
+        .expect("failed to build HTTP client");
+
     let run = scbdb_db::create_collection_run(pool, "locations", "cli").await?;
     if let Err(e) = scbdb_db::start_collection_run(pool, run.id).await {
         fail_run_best_effort(pool, run.id, "locations", format!("{e:#}")).await;
@@ -94,7 +101,7 @@ pub(crate) async fn run_collect_locations(
 
     let results: Vec<(&scbdb_db::BrandRow, BrandLocationOutcome)> = stream::iter(&brands)
         .map(|brand| {
-            let fut = collect_brand_locations(pool, config, run.id, brand);
+            let fut = collect_brand_locations(pool, &http_client, config, run.id, brand);
             async move { (brand, fut.await) }
         })
         .buffer_unordered(max_concurrent)

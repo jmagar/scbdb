@@ -22,9 +22,6 @@ const MAX_SUMMARY_LEN: usize = 2000;
 #[derive(Debug, Deserialize)]
 struct SearchResponse {
     items: Vec<SearchItem>,
-    #[serde(rename = "nextPageToken")]
-    #[allow(dead_code)] // reserved for future pagination
-    next_page_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -305,7 +302,6 @@ mod tests {
         assert_eq!(resp.items.len(), 1);
         assert_eq!(resp.items[0].id.video_id.as_deref(), Some("abc123"));
         assert_eq!(resp.items[0].snippet.title, "Test Video");
-        assert_eq!(resp.next_page_token.as_deref(), Some("CDIQAA"));
     }
 
     #[test]
@@ -316,7 +312,6 @@ mod tests {
 
         let resp: SearchResponse = serde_json::from_str(json).expect("should deserialize");
         assert!(resp.items.is_empty());
-        assert!(resp.next_page_token.is_none());
     }
 
     #[test]

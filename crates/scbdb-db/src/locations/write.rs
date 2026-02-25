@@ -10,79 +10,101 @@ use super::types::NewStoreLocation;
 /// - `new_count`: rows that did not exist before (were inserted)
 /// - `updated_count`: rows that already existed (were updated)
 ///
-/// Uses `INSERT … ON CONFLICT (brand_id, location_key) DO UPDATE` so that
-/// existing rows have their `last_seen_at`, `is_active`, and mutable address
-/// fields refreshed in place.
+/// Uses a single `INSERT … SELECT * FROM UNNEST(…) ON CONFLICT` so that
+/// the entire batch is upserted in one round-trip regardless of batch size.
 ///
-/// Latitude and longitude are bound as `Option<f64>` and cast to
-/// `NUMERIC(9,6)` inside the SQL statement so that the database engine
+/// Latitude and longitude are bound as `Option<f64>` slices and cast to
+/// `NUMERIC(9,6)[]` inside the SQL statement so that the database engine
 /// performs the type coercion consistently (matching the pattern used in
 /// `upsert_variant` for dosage/size columns).
 ///
 /// # Errors
 ///
-/// Returns [`sqlx::Error`] if any query fails.
-// TODO: batch insert using UNNEST for performance — each location currently
-// issues a separate INSERT (N+1). For brands with hundreds of stores this
-// should be a single round-trip.
+/// Returns [`sqlx::Error`] if the query fails.
 pub async fn upsert_store_locations(
     pool: &PgPool,
     brand_id: i64,
     locations: &[NewStoreLocation],
 ) -> Result<(u64, u64), sqlx::Error> {
-    let mut new_count: u64 = 0;
-    let mut updated_count: u64 = 0;
+    if locations.is_empty() {
+        return Ok((0, 0));
+    }
+
+    // Collect each column into a parallel Vec for UNNEST binding.
+    let mut location_keys: Vec<String> = Vec::with_capacity(locations.len());
+    let mut names: Vec<String> = Vec::with_capacity(locations.len());
+    let mut address_line1s: Vec<Option<String>> = Vec::with_capacity(locations.len());
+    let mut cities: Vec<Option<String>> = Vec::with_capacity(locations.len());
+    let mut states: Vec<Option<String>> = Vec::with_capacity(locations.len());
+    let mut zips: Vec<Option<String>> = Vec::with_capacity(locations.len());
+    let mut countries: Vec<String> = Vec::with_capacity(locations.len());
+    let mut latitudes: Vec<Option<f64>> = Vec::with_capacity(locations.len());
+    let mut longitudes: Vec<Option<f64>> = Vec::with_capacity(locations.len());
+    let mut phones: Vec<Option<String>> = Vec::with_capacity(locations.len());
+    let mut external_ids: Vec<Option<String>> = Vec::with_capacity(locations.len());
+    let mut locator_sources: Vec<Option<String>> = Vec::with_capacity(locations.len());
+    let mut raw_datas: Vec<serde_json::Value> = Vec::with_capacity(locations.len());
 
     for loc in locations {
-        let country = loc.country.as_deref().unwrap_or("US");
-
-        let is_new: bool = sqlx::query_scalar::<_, bool>(
-            "INSERT INTO store_locations \
-                 (brand_id, location_key, name, address_line1, city, state, zip, country, \
-                  latitude, longitude, phone, external_id, locator_source, raw_data) \
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, \
-                     $9::NUMERIC(9,6), $10::NUMERIC(9,6), $11, $12, $13, $14::JSONB) \
-             ON CONFLICT (brand_id, location_key) DO UPDATE SET \
-                 last_seen_at    = NOW(), \
-                 is_active       = TRUE, \
-                 updated_at      = NOW(), \
-                 name            = EXCLUDED.name, \
-                 address_line1   = EXCLUDED.address_line1, \
-                 city            = EXCLUDED.city, \
-                 state           = EXCLUDED.state, \
-                 zip             = EXCLUDED.zip, \
-                 country         = EXCLUDED.country, \
-                 latitude        = EXCLUDED.latitude, \
-                 longitude       = EXCLUDED.longitude, \
-                 phone           = EXCLUDED.phone, \
-                 external_id     = EXCLUDED.external_id, \
-                 locator_source  = EXCLUDED.locator_source, \
-                 raw_data        = EXCLUDED.raw_data \
-             RETURNING (xmax = 0) AS is_new",
-        )
-        .bind(brand_id)
-        .bind(&loc.location_key)
-        .bind(&loc.name)
-        .bind(&loc.address_line1)
-        .bind(&loc.city)
-        .bind(&loc.state)
-        .bind(&loc.zip)
-        .bind(country)
-        .bind(loc.latitude)
-        .bind(loc.longitude)
-        .bind(&loc.phone)
-        .bind(&loc.external_id)
-        .bind(&loc.locator_source)
-        .bind(&loc.raw_data)
-        .fetch_one(pool)
-        .await?;
-
-        if is_new {
-            new_count += 1;
-        } else {
-            updated_count += 1;
-        }
+        location_keys.push(loc.location_key.clone());
+        names.push(loc.name.clone());
+        address_line1s.push(loc.address_line1.clone());
+        cities.push(loc.city.clone());
+        states.push(loc.state.clone());
+        zips.push(loc.zip.clone());
+        countries.push(loc.country.as_deref().unwrap_or("US").to_string());
+        latitudes.push(loc.latitude);
+        longitudes.push(loc.longitude);
+        phones.push(loc.phone.clone());
+        external_ids.push(loc.external_id.clone());
+        locator_sources.push(loc.locator_source.clone());
+        raw_datas.push(loc.raw_data.clone());
     }
+
+    let rows: Vec<bool> = sqlx::query_scalar::<_, bool>(
+        "INSERT INTO store_locations \
+             (brand_id, location_key, name, address_line1, city, state, zip, country, \
+              latitude, longitude, phone, external_id, locator_source, raw_data) \
+         SELECT $1, * FROM UNNEST(\
+              $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], \
+              $9::float8[], $10::float8[], $11::text[], $12::text[], $13::text[], $14::jsonb[]) \
+         ON CONFLICT (brand_id, location_key) DO UPDATE SET \
+             last_seen_at    = NOW(), \
+             is_active       = TRUE, \
+             updated_at      = NOW(), \
+             name            = EXCLUDED.name, \
+             address_line1   = EXCLUDED.address_line1, \
+             city            = EXCLUDED.city, \
+             state           = EXCLUDED.state, \
+             zip             = EXCLUDED.zip, \
+             country         = EXCLUDED.country, \
+             latitude        = EXCLUDED.latitude, \
+             longitude       = EXCLUDED.longitude, \
+             phone           = EXCLUDED.phone, \
+             external_id     = EXCLUDED.external_id, \
+             locator_source  = EXCLUDED.locator_source, \
+             raw_data        = EXCLUDED.raw_data \
+         RETURNING (xmax = 0) AS is_new",
+    )
+    .bind(brand_id)
+    .bind(&location_keys)
+    .bind(&names)
+    .bind(&address_line1s)
+    .bind(&cities)
+    .bind(&states)
+    .bind(&zips)
+    .bind(&countries)
+    .bind(&latitudes)
+    .bind(&longitudes)
+    .bind(&phones)
+    .bind(&external_ids)
+    .bind(&locator_sources)
+    .bind(&raw_datas)
+    .fetch_all(pool)
+    .await?;
+
+    let new_count = rows.iter().filter(|&&is_new| is_new).count() as u64;
+    let updated_count = rows.len() as u64 - new_count;
 
     Ok((new_count, updated_count))
 }

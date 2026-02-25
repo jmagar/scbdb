@@ -1,15 +1,14 @@
 import { useMemo, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import {
-  fetchBills,
-  fetchLocationsByState,
-  fetchLocationsSummary,
-  fetchPricingSummary,
-  fetchProducts,
-  fetchSentimentSnapshots,
-  fetchSentimentSummary,
-} from "../lib/api/dashboard";
+  useBills,
+  useLocationsByState,
+  useLocationsSummary,
+  usePricingSummary,
+  useProducts,
+  useSentimentSnapshots,
+  useSentimentSummary,
+} from "../hooks/use-dashboard-data";
 import { LocationsPanel } from "./locations-panel";
 import { PricingPanel } from "./pricing-panel";
 import { ProductsPanel } from "./products-panel";
@@ -74,48 +73,16 @@ const IconMapPin = () => (
 export function DashboardPage({ initialTab = "products" }: DashboardPageProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>(initialTab);
 
-  const STALE_TIME_MS = 60_000;
-
   // Summary queries always enabled — their counts drive the stat cards
-  const products = useQuery({
-    queryKey: ["products"],
-    queryFn: fetchProducts,
-    staleTime: STALE_TIME_MS,
-  });
-  const pricingSummary = useQuery({
-    queryKey: ["pricing-summary"],
-    queryFn: fetchPricingSummary,
-    staleTime: STALE_TIME_MS,
-  });
-  const bills = useQuery({
-    queryKey: ["bills"],
-    queryFn: fetchBills,
-    staleTime: STALE_TIME_MS,
-  });
-  const sentimentSummary = useQuery({
-    queryKey: ["sentiment-summary"],
-    queryFn: fetchSentimentSummary,
-    staleTime: STALE_TIME_MS,
-  });
-  const locationsSummary = useQuery({
-    queryKey: ["locations-summary"],
-    queryFn: fetchLocationsSummary,
-    staleTime: STALE_TIME_MS,
-  });
+  const products = useProducts();
+  const pricingSummary = usePricingSummary();
+  const bills = useBills();
+  const sentimentSummary = useSentimentSummary();
+  const locationsSummary = useLocationsSummary();
 
   // Detail queries only enabled when their tab is active
-  const sentimentSnapshots = useQuery({
-    queryKey: ["sentiment-snapshots"],
-    queryFn: fetchSentimentSnapshots,
-    staleTime: STALE_TIME_MS,
-    enabled: activeTab === "sentiment",
-  });
-  const locationsByState = useQuery({
-    queryKey: ["locations-by-state"],
-    queryFn: fetchLocationsByState,
-    staleTime: STALE_TIME_MS,
-    enabled: activeTab === "locations",
-  });
+  const sentimentSnapshots = useSentimentSnapshots(activeTab === "sentiment");
+  const locationsByState = useLocationsByState(activeTab === "locations");
 
   const tabStats = useMemo(
     () =>

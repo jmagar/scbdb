@@ -41,6 +41,7 @@ Default bind address: `0.0.0.0:3000` (override with `SCBDB_BIND_ADDR`)
 | `TEI_URL` | No | `""` | Text Embeddings Inference endpoint for brand profiler |
 | `YOUTUBE_API_KEY` | No | — | YouTube Data API key for brand intake scheduler job |
 | `BRAND_INTAKE_CRON` | No | `0 0 6 * * *` | Override cron for brand intake job |
+| `SCBDB_CORS_ORIGINS` | No | `http://localhost:5173` | Comma-separated allowed CORS origins |
 | `RUST_LOG` | No | — | Standard tracing filter (takes priority over `SCBDB_LOG_LEVEL`) |
 
 ---
@@ -53,7 +54,7 @@ Implemented in `src/middleware.rs` as `AuthState`.
 - When **unset** in `SCBDB_ENV=development`: auth is disabled, all endpoints open. Logs a warning.
 - When **unset** outside development: startup fails with an error.
 - When **set**: all non-`/api/v1/health` endpoints require `Authorization: Bearer <token>`.
-- Token comparison is via `HashSet` lookup (not constant-time — see `SECURITY TODO` in `middleware.rs`).
+- Tokens are SHA-256 hashed on load; comparison uses constant-time equality (`subtle::ConstantTimeEq`) with `.fold()` to prevent timing side-channels.
 - Rate limiting keys off the authenticated token when auth is enabled; falls back to `X-Forwarded-For` or `"global"`.
 
 ---
@@ -66,10 +67,13 @@ Assembled in `src/api/mod.rs` via Tower `ServiceBuilder`. Layer ordering matters
 ### Outer layer (applied to all routes via `build_app`)
 ```
 ServiceBuilder
-  .layer(CorsLayer)            ← runs last in response, first in request
-  .layer(request_id)           ← runs first for all requests (outermost)
+  .layer(DefaultBodyLimit::max(1_048_576))  ← 1 MiB body size limit
+  .layer(CompressionLayer)                  ← gzip/deflate response compression
+  .layer(security_headers)                  ← x-content-type-options: nosniff, x-frame-options: DENY
+  .layer(CorsLayer)                         ← runs last in response, first in request
+  .layer(request_id)                        ← runs first for all requests (outermost)
 ```
-`request_id` middleware: reads `x-request-id` header if present, otherwise generates a UUIDv4.
+`request_id` middleware: reads `x-request-id` header if present (validated: alphanumeric + hyphens, max 128 chars), otherwise generates a UUIDv4.
 Stores as a request extension (`RequestId`) and echoes on the response header.
 
 ### Inner layer (applied only to protected routes via `protected_router`)
@@ -184,15 +188,15 @@ Every error response uses `ApiError`:
 }
 ```
 
-Error code → HTTP status mapping (in `ApiError::into_response`):
-- `not_found` → 404
-- `unauthorized` → 401
-- `bad_request` / `validation_error` → 400
-- `conflict` → 409
-- `rate_limited` → 429
-- anything else → 500
+Error code → HTTP status mapping (via `ErrorCode::status_code()`):
+- `ErrorCode::NotFound` → 404
+- `ErrorCode::Unauthorized` → 401
+- `ErrorCode::BadRequest` / `ErrorCode::ValidationError` → 400
+- `ErrorCode::Conflict` → 409
+- `ErrorCode::RateLimited` → 429
+- `ErrorCode::InternalError` → 500
 
-Middleware errors (auth/rate-limit) use a separate `MiddlewareErrorBody` struct and do NOT go through `ApiError::into_response` — they are constructed as raw `(StatusCode, Json(...))` tuples.
+All error responses (including middleware auth/rate-limit errors) use the unified `ApiError` envelope with `ErrorCode` and `request_id`.
 
 ---
 
@@ -340,3 +344,4 @@ Brand write handlers validate inline (no external validator crate):
 - **Locations partial-scrape guard** — The scheduler skips upsert and deactivation if a scrape returns 0 locations. This is intentional — an empty result is treated as a transient failure, not as proof that all locations closed.
 - **Signal cursor pagination** — The `next_cursor` value is the `id` of the last item returned, not an offset. Pass it as `?cursor=<id>` on the next request.
 - **`normalize_limit`** — Shared helper in `api/mod.rs`. Defaults to 50, clamps to 1–200. All list endpoints use it.
+- **Rate limiter eviction** — HashMap entries are pruned when count exceeds 1000 to prevent memory exhaustion from spoofed IPs.

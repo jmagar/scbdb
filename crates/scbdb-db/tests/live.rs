@@ -15,16 +15,16 @@ use scbdb_db::{
     insert_brand_competitor_relationship, insert_brand_distributor, insert_brand_funding_event,
     insert_brand_lab_test, insert_brand_legal_proceeding, insert_brand_media_appearance,
     insert_brand_newsletter, insert_brand_sponsorship, insert_price_snapshot_if_changed,
-    list_active_brands, list_active_location_pins, list_bill_events, list_bills,
-    list_brand_competitor_relationships, list_brand_distributors, list_brand_funding_events,
-    list_brand_lab_tests, list_brand_legal_proceedings, list_brand_media_appearances,
-    list_brand_newsletters, list_brand_sponsorships, list_brands_without_profiles,
-    list_collection_run_brands, list_locations_by_state, list_locations_dashboard_summary,
-    start_collection_run, update_brand_logo, upsert_bill, upsert_bill_event, upsert_brand_profile,
-    upsert_collection_run_brand, upsert_product, upsert_store_locations, upsert_variant,
-    NewBrandCompetitorRelationship, NewBrandDistributor, NewBrandFundingEvent, NewBrandLabTest,
-    NewBrandLegalProceeding, NewBrandMediaAppearance, NewBrandNewsletter, NewBrandSponsorship,
-    NewStoreLocation,
+    list_active_brands, list_active_location_pins, list_active_locations_by_brand,
+    list_bill_events, list_bills, list_brand_competitor_relationships, list_brand_distributors,
+    list_brand_funding_events, list_brand_lab_tests, list_brand_legal_proceedings,
+    list_brand_media_appearances, list_brand_newsletters, list_brand_sponsorships,
+    list_brands_without_profiles, list_collection_run_brands, list_locations_by_state,
+    list_locations_dashboard_summary, start_collection_run, update_brand_logo, upsert_bill,
+    upsert_bill_event, upsert_brand_profile, upsert_collection_run_brand, upsert_product,
+    upsert_store_locations, upsert_variant, NewBrandCompetitorRelationship, NewBrandDistributor,
+    NewBrandFundingEvent, NewBrandLabTest, NewBrandLegalProceeding, NewBrandMediaAppearance,
+    NewBrandNewsletter, NewBrandSponsorship, NewStoreLocation,
 };
 
 // ---------------------------------------------------------------------------
@@ -2221,7 +2221,7 @@ async fn brand_completeness_score_partial_profile(pool: sqlx::PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn list_active_location_pins_empty_when_no_locations(pool: sqlx::PgPool) {
-    let pins = list_active_location_pins(&pool)
+    let pins = list_active_location_pins(&pool, 1000, None, None)
         .await
         .expect("query failed");
     assert!(pins.is_empty());
@@ -2251,7 +2251,7 @@ async fn list_active_location_pins_returns_rows_with_coords(pool: sqlx::PgPool) 
     )
     .await
     .expect("upsert");
-    let pins = list_active_location_pins(&pool)
+    let pins = list_active_location_pins(&pool, 1000, None, None)
         .await
         .expect("query failed");
     assert_eq!(pins.len(), 1);
@@ -2283,7 +2283,7 @@ async fn list_active_location_pins_excludes_null_coords(pool: sqlx::PgPool) {
     )
     .await
     .expect("upsert");
-    let pins = list_active_location_pins(&pool)
+    let pins = list_active_location_pins(&pool, 1000, None, None)
         .await
         .expect("query failed");
     assert!(pins.is_empty(), "null coords should be excluded");
@@ -2320,7 +2320,7 @@ async fn list_active_location_pins_excludes_inactive_locations(pool: sqlx::PgPoo
     .execute(&pool)
     .await
     .expect("deactivate");
-    let pins = list_active_location_pins(&pool)
+    let pins = list_active_location_pins(&pool, 1000, None, None)
         .await
         .expect("query failed");
     assert!(pins.is_empty(), "inactive locations should be excluded");
@@ -2350,7 +2350,7 @@ async fn list_active_location_pins_includes_brand_fields(pool: sqlx::PgPool) {
     )
     .await
     .expect("upsert");
-    let pins = list_active_location_pins(&pool)
+    let pins = list_active_location_pins(&pool, 1000, None, None)
         .await
         .expect("query failed");
     assert_eq!(pins.len(), 1);
@@ -2401,4 +2401,298 @@ async fn get_active_location_keys_returns_only_active_keys(pool: sqlx::PgPool) {
         !keys.contains("test-loc-ak-2"),
         "deactivated key must not be present"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Section 13: Store Locations — Batch Upsert
+// ---------------------------------------------------------------------------
+
+/// Build a `NewStoreLocation` with full field coverage for upsert tests.
+fn make_full_location(
+    key: &str,
+    name: &str,
+    address: &str,
+    city: &str,
+    state: &str,
+    zip: &str,
+    lat: f64,
+    lng: f64,
+) -> NewStoreLocation {
+    NewStoreLocation {
+        location_key: key.to_string(),
+        name: name.to_string(),
+        address_line1: Some(address.to_string()),
+        city: Some(city.to_string()),
+        state: Some(state.to_string()),
+        zip: Some(zip.to_string()),
+        country: Some("US".to_string()),
+        latitude: Some(lat),
+        longitude: Some(lng),
+        phone: Some("555-0100".to_string()),
+        external_id: Some(format!("ext-{key}")),
+        locator_source: Some("locally".to_string()),
+        raw_data: serde_json::json!({"source": "test"}),
+    }
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_upsert_inserts_new_locations(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "upsert-insert", true).await;
+
+    let locs = vec![
+        make_full_location(
+            "ins-1",
+            "Store Alpha",
+            "100 Main St",
+            "Austin",
+            "TX",
+            "78701",
+            30.27,
+            -97.74,
+        ),
+        make_full_location(
+            "ins-2",
+            "Store Beta",
+            "200 Oak Ave",
+            "Dallas",
+            "TX",
+            "75201",
+            32.78,
+            -96.80,
+        ),
+        make_full_location(
+            "ins-3",
+            "Store Gamma",
+            "300 Elm Rd",
+            "Houston",
+            "TX",
+            "77001",
+            29.76,
+            -95.37,
+        ),
+    ];
+
+    let (new_count, updated_count) = upsert_store_locations(&pool, brand_id, &locs)
+        .await
+        .expect("upsert failed");
+
+    assert_eq!(new_count, 3, "all 3 locations should be new inserts");
+    assert_eq!(updated_count, 0, "no existing rows to update");
+
+    let rows = list_active_locations_by_brand(&pool, brand_id)
+        .await
+        .expect("list failed");
+
+    assert_eq!(rows.len(), 3, "should have 3 active locations");
+
+    let alpha = rows
+        .iter()
+        .find(|r| r.location_key == "ins-1")
+        .expect("ins-1 missing");
+    assert_eq!(alpha.name, "Store Alpha");
+    assert_eq!(alpha.address_line1.as_deref(), Some("100 Main St"));
+    assert_eq!(alpha.city.as_deref(), Some("Austin"));
+    assert_eq!(alpha.state.as_deref(), Some("TX"));
+    assert_eq!(alpha.zip.as_deref(), Some("78701"));
+    assert_eq!(alpha.country, "US");
+    assert!(alpha.is_active);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_upsert_updates_existing_locations(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "upsert-update", true).await;
+
+    // Insert initial locations.
+    let initial = vec![
+        make_full_location(
+            "upd-1",
+            "Store Original",
+            "100 Main St",
+            "Austin",
+            "TX",
+            "78701",
+            30.27,
+            -97.74,
+        ),
+        make_full_location(
+            "upd-2",
+            "Store Unchanged",
+            "200 Oak Ave",
+            "Dallas",
+            "TX",
+            "75201",
+            32.78,
+            -96.80,
+        ),
+    ];
+    upsert_store_locations(&pool, brand_id, &initial)
+        .await
+        .expect("initial upsert failed");
+
+    // Upsert with changed data for upd-1 (new address, new city), upd-2 unchanged.
+    let updated = vec![
+        make_full_location(
+            "upd-1",
+            "Store Renamed",
+            "999 New Blvd",
+            "San Antonio",
+            "TX",
+            "78201",
+            29.42,
+            -98.49,
+        ),
+        make_full_location(
+            "upd-2",
+            "Store Unchanged",
+            "200 Oak Ave",
+            "Dallas",
+            "TX",
+            "75201",
+            32.78,
+            -96.80,
+        ),
+    ];
+    let (new_count, updated_count) = upsert_store_locations(&pool, brand_id, &updated)
+        .await
+        .expect("update upsert failed");
+
+    assert_eq!(new_count, 0, "no new rows — both keys already exist");
+    assert_eq!(updated_count, 2, "both rows hit the ON CONFLICT path");
+
+    let rows = list_active_locations_by_brand(&pool, brand_id)
+        .await
+        .expect("list failed");
+
+    let renamed = rows
+        .iter()
+        .find(|r| r.location_key == "upd-1")
+        .expect("upd-1 missing");
+    assert_eq!(renamed.name, "Store Renamed", "name should be updated");
+    assert_eq!(
+        renamed.address_line1.as_deref(),
+        Some("999 New Blvd"),
+        "address should be updated"
+    );
+    assert_eq!(
+        renamed.city.as_deref(),
+        Some("San Antonio"),
+        "city should be updated"
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_upsert_handles_conflict(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "upsert-conflict", true).await;
+
+    let loc = make_full_location(
+        "conflict-1",
+        "Original Name",
+        "100 Main St",
+        "Austin",
+        "TX",
+        "78701",
+        30.27,
+        -97.74,
+    );
+    let (new1, upd1) = upsert_store_locations(&pool, brand_id, &[loc])
+        .await
+        .expect("first upsert failed");
+    assert_eq!(new1, 1);
+    assert_eq!(upd1, 0);
+
+    // Upsert same key with different data — should update, not duplicate.
+    let loc2 = make_full_location(
+        "conflict-1",
+        "Updated Name",
+        "200 New Ave",
+        "Dallas",
+        "TX",
+        "75201",
+        32.78,
+        -96.80,
+    );
+    let (new2, upd2) = upsert_store_locations(&pool, brand_id, &[loc2])
+        .await
+        .expect("second upsert failed");
+    assert_eq!(new2, 0, "same key should not produce a new row");
+    assert_eq!(upd2, 1, "should update the existing row");
+
+    let rows = list_active_locations_by_brand(&pool, brand_id)
+        .await
+        .expect("list failed");
+
+    assert_eq!(
+        rows.len(),
+        1,
+        "should have exactly 1 location — no duplicates"
+    );
+    assert_eq!(
+        rows[0].name, "Updated Name",
+        "data should reflect the latest upsert"
+    );
+    assert_eq!(rows[0].city.as_deref(), Some("Dallas"));
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_upsert_empty_vec(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "upsert-empty", true).await;
+
+    let (new_count, updated_count) = upsert_store_locations(&pool, brand_id, &[])
+        .await
+        .expect("upsert with empty vec should not error");
+
+    assert_eq!(new_count, 0);
+    assert_eq!(updated_count, 0);
+
+    let rows = list_active_locations_by_brand(&pool, brand_id)
+        .await
+        .expect("list failed");
+    assert_eq!(rows.len(), 0, "no locations should exist");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_upsert_large_batch(pool: sqlx::PgPool) {
+    let brand_id = insert_test_brand(&pool, "upsert-large", true).await;
+
+    let locations: Vec<NewStoreLocation> = (0..150)
+        .map(|i| NewStoreLocation {
+            location_key: format!("large-{i:04}"),
+            name: format!("Store #{i}"),
+            address_line1: Some(format!("{i} Main St")),
+            city: Some("Testville".to_string()),
+            state: Some("TX".to_string()),
+            zip: Some(format!("7{i:04}")),
+            country: Some("US".to_string()),
+            latitude: Some(30.0 + f64::from(i) * 0.01),
+            longitude: Some(-97.0 - f64::from(i) * 0.01),
+            phone: None,
+            external_id: None,
+            locator_source: Some("locally".to_string()),
+            raw_data: serde_json::json!({"index": i}),
+        })
+        .collect();
+
+    let (new_count, updated_count) = upsert_store_locations(&pool, brand_id, &locations)
+        .await
+        .expect("large batch upsert failed");
+
+    assert_eq!(new_count, 150, "all 150 locations should be new");
+    assert_eq!(updated_count, 0);
+
+    let rows = list_active_locations_by_brand(&pool, brand_id)
+        .await
+        .expect("list failed");
+    assert_eq!(
+        rows.len(),
+        150,
+        "all 150 locations should be persisted and active"
+    );
+
+    // Verify a spot-check row.
+    let row_42 = rows
+        .iter()
+        .find(|r| r.location_key == "large-0042")
+        .expect("large-0042 missing");
+    assert_eq!(row_42.name, "Store #42");
+    assert_eq!(row_42.address_line1.as_deref(), Some("42 Main St"));
 }

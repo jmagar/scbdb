@@ -31,28 +31,13 @@ const MAX_LLM_DISCOVERY_URLS_PER_BRAND: usize = 8;
 /// Returns empty when no usable base URL is available or no pages are found.
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn fetch_brand_newsroom_signals(
+    client: &reqwest::Client,
     brand_slug: &str,
     brand_name: &str,
     brand_base_url: Option<&str>,
 ) -> Vec<SentimentSignal> {
     let Some(base) = urls::normalize_base_url(brand_base_url) else {
         return Vec::new();
-    };
-
-    let client = match reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .build()
-    {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::warn!(
-                brand = brand_slug,
-                source = "brand_newsroom",
-                error = %e,
-                "failed to build newsroom client"
-            );
-            return Vec::new();
-        }
     };
 
     let mut candidate_article_urls: std::collections::HashSet<String> =
@@ -156,10 +141,10 @@ pub(crate) async fn fetch_brand_newsroom_signals(
     }
 
     let mut llm_discovered_urls: Vec<String> = Vec::new();
-    if let Ok(resp) = client.get(&base).send().await {
-        if resp.status().is_success() {
-            if let Ok(homepage_html) = resp.text().await {
-                let inferred = infer_newsroom_urls_with_llm(&client, &base, &homepage_html).await;
+    match client.get(&base).send().await {
+        Ok(resp) if resp.status().is_success() => match resp.text().await {
+            Ok(homepage_html) => {
+                let inferred = infer_newsroom_urls_with_llm(client, &base, &homepage_html).await;
                 llm_discovered_urls = inferred
                     .into_iter()
                     .filter_map(|url| resolve_and_canonicalize(&url, &base))
@@ -174,6 +159,30 @@ pub(crate) async fn fetch_brand_newsroom_signals(
                     );
                 }
             }
+            Err(e) => {
+                tracing::debug!(
+                    brand = brand_slug,
+                    source = "brand_newsroom",
+                    error = %e,
+                    "failed reading homepage body for llm discovery"
+                );
+            }
+        },
+        Ok(resp) => {
+            tracing::debug!(
+                brand = brand_slug,
+                source = "brand_newsroom",
+                status = resp.status().as_u16(),
+                "homepage returned non-success status for llm discovery"
+            );
+        }
+        Err(e) => {
+            tracing::debug!(
+                brand = brand_slug,
+                source = "brand_newsroom",
+                error = %e,
+                "failed fetching homepage for llm discovery"
+            );
         }
     }
 
@@ -240,7 +249,7 @@ pub(crate) async fn fetch_brand_newsroom_signals(
         let deterministic_text = extract_article_text(&body);
         let llm_text = if llm_enrich_calls < MAX_LLM_ENRICH_CALLS_PER_BRAND {
             llm_enrich_calls += 1;
-            extract_article_text_with_llm(&client, &body).await
+            extract_article_text_with_llm(client, &body).await
         } else {
             None
         };

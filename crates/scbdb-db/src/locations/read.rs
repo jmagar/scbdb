@@ -138,18 +138,29 @@ pub async fn list_locations_by_state(
     .await
 }
 
-/// Return all active store locations with coordinates, joined with brand info.
+/// Return active store locations with coordinates, joined with brand info.
 ///
-/// Used to populate the interactive map pins. Only returns locations where
-/// both `latitude` and `longitude` are non-null. Results are ordered by
-/// `brand_slug ASC, name ASC`.
+/// Supports cursor-based pagination keyed on `sl.id ASC`. Pass `cursor` as the
+/// `id` of the last pin from the previous page to fetch the next page. Pass
+/// `brand_slug` to filter to a single brand.
+///
+/// The caller should request `limit + 1` rows to detect whether a next page
+/// exists.
+///
+/// Only returns locations where both `latitude` and `longitude` are non-null.
 ///
 /// # Errors
 ///
 /// Returns [`sqlx::Error`] if the query fails.
-pub async fn list_active_location_pins(pool: &PgPool) -> Result<Vec<LocationPinRow>, sqlx::Error> {
+pub async fn list_active_location_pins(
+    pool: &PgPool,
+    limit: i64,
+    cursor: Option<i64>,
+    brand_slug: Option<&str>,
+) -> Result<Vec<LocationPinRow>, sqlx::Error> {
     sqlx::query_as::<_, LocationPinRow>(
         "SELECT \
+            sl.id, \
             sl.latitude::float8 AS latitude, \
             sl.longitude::float8 AS longitude, \
             sl.name AS store_name, \
@@ -165,8 +176,14 @@ pub async fn list_active_location_pins(pool: &PgPool) -> Result<Vec<LocationPinR
            AND sl.longitude IS NOT NULL \
            AND b.is_active = TRUE \
            AND b.deleted_at IS NULL \
-         ORDER BY b.slug ASC, sl.name ASC",
+           AND ($1::BIGINT IS NULL OR sl.id > $1) \
+           AND ($2::TEXT IS NULL OR b.slug = $2) \
+         ORDER BY sl.id ASC \
+         LIMIT $3",
     )
+    .bind(cursor)
+    .bind(brand_slug)
+    .bind(limit)
     .fetch_all(pool)
     .await
 }

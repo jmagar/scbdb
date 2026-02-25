@@ -35,11 +35,11 @@ pub(in crate::locator) fn extract_stockist_widget_tag(html: &str) -> Option<Stri
 
 /// Fetch stores from the Stockist API and map them to `RawStoreLocation`.
 pub(in crate::locator) async fn fetch_stockist_stores(
+    client: &reqwest::Client,
     tag: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
-    let config = fetch_stockist_config(tag, timeout_secs, user_agent).await?;
+    let config = fetch_stockist_config(client, tag, user_agent).await?;
 
     let latitude = json_number_or_string(&config, "latitude").unwrap_or(39.828_175);
     let longitude = json_number_or_string(&config, "longitude").unwrap_or(-98.579_5);
@@ -53,7 +53,7 @@ pub(in crate::locator) async fn fetch_stockist_stores(
         "https://stockist.co/api/v1/{tag}/locations/search?latitude={latitude}&longitude={longitude}&distance={distance}&units=mi&page=1&per_page=10000"
     );
 
-    let data = crate::locator::fetch::fetch_json(&search_url, timeout_secs, user_agent).await?;
+    let data = crate::locator::fetch::fetch_json(client, &search_url, user_agent).await?;
 
     let Some(stores) = data.get("locations").and_then(serde_json::Value::as_array) else {
         return Ok(vec![]);
@@ -124,14 +124,14 @@ pub(in crate::locator) async fn fetch_stockist_stores(
 }
 
 async fn fetch_stockist_config(
+    client: &reqwest::Client,
     tag: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<serde_json::Value, LocatorError> {
     let url = format!(
         "https://stockist.co/api/v1/{tag}/widget.js?callback=_stockistConfigCallback_{tag}"
     );
-    let body = crate::locator::fetch::fetch_text(&url, timeout_secs, user_agent).await?;
+    let body = crate::locator::fetch::fetch_text(client, &url, user_agent).await?;
 
     let open = body.find('(').unwrap_or(0);
     let close = body.rfind(')').unwrap_or(body.len());

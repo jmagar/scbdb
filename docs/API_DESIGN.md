@@ -2,9 +2,9 @@
 
 ## Document Metadata
 
-- Version: 1.2
+- Version: 1.1
 - Status: Active
-- Last Updated (EST): 21:30:00 | 02/20/2026 EST
+- Last Updated (EST): 18:55:35 | 02/18/2026 EST
 
 ## Purpose
 
@@ -71,27 +71,28 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
 
 ### Path Parameter Convention
 
-All `{*_id}` path parameters accept the **public UUID** (`public_id` column), not the internal integer PK. Using UUIDs in public URLs prevents sequential enumeration of resources. Internal integer PKs are not exposed in any API response.
+Brand endpoints use `{slug}` (the URL-safe brand slug string, e.g. `cann`, `jones-soda`). Bill endpoints use `{bill_id}` (UUID). Internal integer PKs are not exposed in any API response.
 
 ### Brands
 
 - `GET /brands`
   - Filters: `relationship`, `tier`, `is_active`, `q`.
-- `GET /brands/{brand_id}` — `brand_id` is the public UUID
-- `POST /brands` *(Post-MVP — server is read-only in MVP scope)*
-- `PATCH /brands/{brand_id}` *(Post-MVP — server is read-only in MVP scope)*
+- `GET /brands/{slug}` — `slug` is the brand slug string
+- `POST /brands`
+- `PATCH /brands/{slug}`
+- `DELETE /brands/{slug}` — soft-delete (deactivate)
 
 ### Products
 
 - `GET /products`
-  - Filters: `brand_id`, `tier`, `relationship`, `updated_after`.
-- `GET /products/{product_id}` — `product_id` is the public UUID
+  - Filters: `brand_slug`, `tier`, `relationship`, `limit`.
+- `GET /products/{product_id}`
 - `GET /products/{product_id}/variants`
 
 ### Pricing
 
 - `GET /pricing/snapshots`
-  - Filters: `brand_id`, `variant_id`, `from`, `to`.
+  - Filters: `brand_slug`, `from`, `to`, `limit`.
 - `GET /pricing/summary`
   - Aggregates by brand, dosage, and timeframe.
 
@@ -113,42 +114,23 @@ All `{*_id}` path parameters accept the **public UUID** (`public_id` column), no
 - `GET /bills/{bill_id}`
 - `GET /bills/{bill_id}/events`
 
-### Sentiment
+### Sentiment (Post-MVP)
 
-- `GET /sentiment/summary`
-  - Returns most recent snapshot per active brand, ordered by brand name.
-  - Fields: `brand_name`, `brand_slug`, `score` (string-encoded decimal), `signal_count`, `captured_at`.
 - `GET /sentiment/snapshots`
-  - Query params: `limit` (default `50`, max `200`).
-  - Returns recent snapshots across all brands, ordered by `captured_at DESC`.
-  - Fields: same as summary.
+- `GET /sentiment/summary`
 
 ## Scope Status
 
-### Locations
-
-- `GET /locations/summary`
-  - Per-brand location stats for all brands with at least one active location.
-  - Fields: `brand_name`, `brand_slug`, `active_count`, `new_this_week`, `states_covered`, `locator_source`, `last_seen_at`.
-- `GET /locations/by-state`
-  - State-level location counts across all active locations.
-  - Fields: `state`, `brand_count`, `location_count`.
-
-### Implemented
+### Defined for MVP Scope
 
 - API versioning convention (`/api/v1`)
 - Auth convention (`Authorization: Bearer <api_key>`)
 - Response envelope format
-- `GET /health`
-- `GET /products`
-- `GET /pricing/snapshots`, `GET /pricing/summary`
-- `GET /bills`, `GET /bills/{bill_id}/events`
-- `GET /sentiment/summary`, `GET /sentiment/snapshots`
-- `GET /locations/summary`, `GET /locations/by-state`
+- Endpoint contract definitions for brands, products, pricing, collection runs, and bills
 
 ### Planned Post-MVP / Future Work
 
-- Brand and product detail endpoints
+- Sentiment endpoints
 - Idempotency key enforcement across write operations
 - OpenAPI generation and publication endpoint
 

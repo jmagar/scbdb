@@ -27,15 +27,11 @@ pub(in crate::locator) fn extract_askhoodie_embed_id(html: &str) -> Option<Strin
 /// - payload: `{ embedToken, method: "search", args: [[{ indexName, query, params }]] }`
 /// - response: `{ results: [{ hits: [...] }] }`
 pub(in crate::locator) async fn fetch_askhoodie_stores(
+    client: &reqwest::Client,
     embed_id: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let embed_token = format!("{embed_id}__dummy");
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout_secs))
-        .build()?;
 
     // Query a broad radius around a few US hubs to maximize coverage.
     let search_centers = [
@@ -50,7 +46,7 @@ pub(in crate::locator) async fn fetch_askhoodie_stores(
         std::collections::HashMap::new();
 
     for (lat, lng) in search_centers {
-        search_center(&client, user_agent, &embed_token, lat, lng, &mut dedup).await?;
+        search_center(client, user_agent, &embed_token, lat, lng, &mut dedup).await?;
     }
 
     if dedup.is_empty() {

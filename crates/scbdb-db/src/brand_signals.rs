@@ -162,60 +162,21 @@ pub async fn list_brand_signals(
     limit: i64,
     cursor: Option<i64>,
 ) -> Result<Vec<BrandSignalRow>, DbError> {
-    let rows =
-        match (signal_type_filter, cursor) {
-            (Some(st), Some(c)) => sqlx::query_as::<_, BrandSignalRow>(
-                "SELECT id, public_id, brand_id, signal_type::TEXT, source_platform, source_url, \
-                    external_id, title, summary, image_url, view_count, like_count, \
-                    comment_count, share_count, qdrant_point_id, published_at, collected_at \
-             FROM brand_signals \
-             WHERE brand_id = $1 AND signal_type = $2::brand_signal_type AND id < $3 \
-             ORDER BY id DESC LIMIT $4",
-            )
-            .bind(brand_id)
-            .bind(st)
-            .bind(c)
-            .bind(limit)
-            .fetch_all(pool)
-            .await?,
-            (Some(st), None) => sqlx::query_as::<_, BrandSignalRow>(
-                "SELECT id, public_id, brand_id, signal_type::TEXT, source_platform, source_url, \
-                    external_id, title, summary, image_url, view_count, like_count, \
-                    comment_count, share_count, qdrant_point_id, published_at, collected_at \
-             FROM brand_signals \
-             WHERE brand_id = $1 AND signal_type = $2::brand_signal_type \
-             ORDER BY id DESC LIMIT $3",
-            )
-            .bind(brand_id)
-            .bind(st)
-            .bind(limit)
-            .fetch_all(pool)
-            .await?,
-            (None, Some(c)) => sqlx::query_as::<_, BrandSignalRow>(
-                "SELECT id, public_id, brand_id, signal_type::TEXT, source_platform, source_url, \
-                    external_id, title, summary, image_url, view_count, like_count, \
-                    comment_count, share_count, qdrant_point_id, published_at, collected_at \
-             FROM brand_signals \
-             WHERE brand_id = $1 AND id < $2 \
-             ORDER BY id DESC LIMIT $3",
-            )
-            .bind(brand_id)
-            .bind(c)
-            .bind(limit)
-            .fetch_all(pool)
-            .await?,
-            (None, None) => sqlx::query_as::<_, BrandSignalRow>(
-                "SELECT id, public_id, brand_id, signal_type::TEXT, source_platform, source_url, \
-                    external_id, title, summary, image_url, view_count, like_count, \
-                    comment_count, share_count, qdrant_point_id, published_at, collected_at \
-             FROM brand_signals \
-             WHERE brand_id = $1 \
-             ORDER BY id DESC LIMIT $2",
-            )
-            .bind(brand_id)
-            .bind(limit)
-            .fetch_all(pool)
-            .await?,
-        };
+    let rows = sqlx::query_as::<_, BrandSignalRow>(
+        "SELECT id, public_id, brand_id, signal_type::TEXT, source_platform, source_url, \
+                external_id, title, summary, image_url, view_count, like_count, \
+                comment_count, share_count, qdrant_point_id, published_at, collected_at \
+         FROM brand_signals \
+         WHERE brand_id = $1 \
+           AND ($2::TEXT IS NULL OR signal_type = $2::brand_signal_type) \
+           AND ($3::BIGINT IS NULL OR id < $3) \
+         ORDER BY id DESC LIMIT $4",
+    )
+    .bind(brand_id)
+    .bind(signal_type_filter)
+    .bind(cursor)
+    .bind(limit)
+    .fetch_all(pool)
+    .await?;
     Ok(rows)
 }

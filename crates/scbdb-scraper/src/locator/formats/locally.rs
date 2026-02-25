@@ -2,7 +2,6 @@
 
 use regex::Regex;
 
-use crate::locator::fetch::fetch_json;
 use crate::locator::types::{LocatorError, RawStoreLocation};
 
 /// Extract the Locally.com company ID from HTML.
@@ -38,12 +37,12 @@ pub(in crate::locator) fn extract_locally_company_id(html: &str) -> Option<Strin
 
 /// Fetch stores from the Locally.com JSON API and map them to `RawStoreLocation`.
 pub(in crate::locator) async fn fetch_locally_stores(
+    client: &reqwest::Client,
     company_id: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let url = format!("https://api.locally.com/stores/json?company_id={company_id}&take=10000");
-    let data = fetch_json(&url, timeout_secs, user_agent).await?;
+    let data = crate::locator::fetch::fetch_json(client, &url, user_agent).await?;
 
     let stores = match data.get("stores").and_then(|v| v.as_array()) {
         Some(arr) => arr.clone(),

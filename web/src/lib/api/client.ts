@@ -35,6 +35,22 @@ export class ApiError extends Error {
   }
 }
 
+async function throwApiError(response: Response, path: string): Promise<never> {
+  let errorMessage = `Request failed (${response.status}) for ${path}`;
+  let errorCode = "unknown_error";
+  try {
+    const errorBody = await response.json();
+    if (errorBody?.error && typeof errorBody.error === "object") {
+      const { code, message } = errorBody.error;
+      if (typeof code === "string") errorCode = code;
+      if (typeof message === "string") errorMessage = message;
+    }
+  } catch {
+    /* not JSON */
+  }
+  throw new ApiError(response.status, errorCode, errorMessage);
+}
+
 export function withQuery(
   path: string,
   query?: Record<string, string | number | undefined>,
@@ -76,30 +92,7 @@ export async function apiGet<T>(
   });
 
   if (!response.ok) {
-    let errorMessage = `Request failed (${response.status}) for ${path}`;
-    let errorCode = "unknown_error";
-
-    try {
-      const errorBody = await response.json();
-      if (
-        errorBody &&
-        typeof errorBody === "object" &&
-        "error" in errorBody &&
-        errorBody.error &&
-        typeof errorBody.error === "object"
-      ) {
-        const { code, message } = errorBody.error;
-        if (typeof code === "string") errorCode = code;
-        if (typeof message === "string") errorMessage = message;
-      } else {
-        // Include raw response body for debugging when it doesn't match the expected error format
-        errorMessage = `Request failed (${response.status}) for ${path}: ${JSON.stringify(errorBody)}`;
-      }
-    } catch {
-      // Response was not JSON or did not match expected error format
-    }
-
-    throw new ApiError(response.status, errorCode, errorMessage);
+    await throwApiError(response, path);
   }
 
   const body = (await response.json()) as ApiResponse<T>;
@@ -137,33 +130,10 @@ export async function apiMutate<TBody, TResponse = void>(
   });
 
   if (!response.ok) {
-    let errorMessage = `Request failed (${response.status}) for ${path}`;
-    let errorCode = "unknown_error";
-
-    try {
-      const errorBody = await response.json();
-      if (
-        errorBody &&
-        typeof errorBody === "object" &&
-        "error" in errorBody &&
-        errorBody.error &&
-        typeof errorBody.error === "object"
-      ) {
-        const { code, message } = errorBody.error as {
-          code?: string;
-          message?: string;
-        };
-        if (typeof code === "string") errorCode = code;
-        if (typeof message === "string") errorMessage = message;
-      }
-    } catch {
-      // Response was not JSON
-    }
-
-    throw new ApiError(response.status, errorCode, errorMessage);
+    await throwApiError(response, path);
   }
 
-  if (response.status === 204) return undefined as TResponse & void;
+  if (response.status === 204) return undefined as TResponse;
   const json = (await response.json()) as ApiResponse<TResponse>;
   return json.data;
 }

@@ -16,7 +16,16 @@ export const ROUTES = {
 
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60_000,
+      gcTime: 10 * 60_000,
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
+});
 
 function App() {
   const [hash, setHash] = useState(window.location.hash);

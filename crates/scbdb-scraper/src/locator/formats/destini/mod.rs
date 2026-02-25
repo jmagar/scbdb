@@ -81,9 +81,9 @@ pub(in crate::locator) fn extract_destini_locator_config(
 /// This is needed for modern SPA locator pages that render provider metadata
 /// inside route chunks (for example `/_nuxt/*.js`) instead of inline HTML.
 pub(in crate::locator) async fn discover_destini_locator_config(
+    client: &reqwest::Client,
     html: &str,
     locator_url: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Option<DestiniLocatorConfig> {
     if let Some(config) = extract_destini_locator_config(html) {
@@ -92,7 +92,7 @@ pub(in crate::locator) async fn discover_destini_locator_config(
 
     let script_urls = extract_script_urls_for_destini_probe(html, locator_url);
     for script_url in script_urls.iter().take(MAX_SCRIPT_PROBES) {
-        match crate::locator::fetch::fetch_text(script_url, timeout_secs, user_agent).await {
+        match crate::locator::fetch::fetch_text(client, script_url, user_agent).await {
             Ok(script_body) => {
                 if let Some(config) = extract_destini_locator_config(&script_body) {
                     return Some(config);

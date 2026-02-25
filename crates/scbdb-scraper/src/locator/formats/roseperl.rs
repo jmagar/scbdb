@@ -2,13 +2,9 @@
 
 use regex::Regex;
 
-use crate::locator::fetch::fetch_text;
 use crate::locator::types::{LocatorError, RawStoreLocation};
 
 /// Extract a Roseperl "where to buy" JS URL from HTML.
-///
-/// Recognises links such as:
-/// - `https://cdn.roseperl.com/storelocator-prod/wtb/<id>.js?shop=...`
 pub(in crate::locator) fn extract_roseperl_wtb_url(html: &str) -> Option<String> {
     let normalized = html.replace("\\/", "/");
     let re = Regex::new(r#"https://cdn\.roseperl\.com/storelocator-prod/wtb/[^"'\s]+"#)
@@ -25,11 +21,11 @@ pub(in crate::locator) fn extract_roseperl_wtb_url(html: &str) -> Option<String>
 /// Fetch stores from a Roseperl WTB JS endpoint and map them to
 /// `RawStoreLocation`.
 pub(in crate::locator) async fn fetch_roseperl_stores(
+    client: &reqwest::Client,
     wtb_url: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
-    let body = fetch_text(wtb_url, timeout_secs, user_agent).await?;
+    let body = crate::locator::fetch::fetch_text(client, wtb_url, user_agent).await?;
     let Some(payload) = extract_assignment_payload(&body, "SCASLWtb") else {
         return Ok(vec![]);
     };

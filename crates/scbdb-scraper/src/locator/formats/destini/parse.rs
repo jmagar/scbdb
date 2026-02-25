@@ -93,8 +93,8 @@ async fn fetch_knox_for_point(
 /// deduplicates results by coordinate fingerprint so overlapping radius
 /// windows do not produce duplicate entries.
 pub(in crate::locator) async fn fetch_destini_stores(
+    client: &reqwest::Client,
     config: &DestiniLocatorConfig,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let bootstrap_url = format!(
@@ -102,8 +102,7 @@ pub(in crate::locator) async fn fetch_destini_stores(
         config.alpha_code, config.locator_id, config.locator_id
     );
 
-    let bootstrap =
-        crate::locator::fetch::fetch_json(&bootstrap_url, timeout_secs, user_agent).await?;
+    let bootstrap = crate::locator::fetch::fetch_json(client, &bootstrap_url, user_agent).await?;
     let context = bootstrap.get("context").unwrap_or(&serde_json::Value::Null);
 
     let client_id = config
@@ -136,11 +135,7 @@ pub(in crate::locator) async fn fetch_destini_stores(
         .and_then(serde_json::Value::as_str)
         .unwrap_or(DEFAULT_TEXT_STYLE_BM);
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(timeout_secs))
-        .build()?;
-
-    let product_ids = fetch_product_ids(&client, user_agent, knox_base, &client_id).await?;
+    let product_ids = fetch_product_ids(client, user_agent, knox_base, &client_id).await?;
     if product_ids.is_empty() {
         return Ok(vec![]);
     }
@@ -150,7 +145,7 @@ pub(in crate::locator) async fn fetch_destini_stores(
 
     for point in &grid {
         let locs = match fetch_knox_for_point(
-            &client,
+            client,
             user_agent,
             knox_base,
             &client_id,

@@ -83,6 +83,7 @@ fn vtinfo_search_points() -> Vec<(f64, f64, &'static str)> {
 }
 
 pub(in crate::locator) async fn fetch_vtinfo_stores(
+    client: &reqwest::Client,
     embed: &VtinfoEmbed,
     locator_url: &str,
     timeout_secs: u64,
@@ -99,24 +100,14 @@ pub(in crate::locator) async fn fetch_vtinfo_stores(
         ),
     };
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout_secs))
-        .build()?;
-
     let user_agents = if user_agent == BROWSER_FALLBACK_UA {
         vec![BROWSER_FALLBACK_UA.to_string()]
     } else {
         vec![user_agent.to_string(), BROWSER_FALLBACK_UA.to_string()]
     };
 
-    let Some(iframe_html) = fetch_vtinfo_iframe(
-        &client,
-        &user_agents,
-        &iframe_url,
-        locator_url,
-        timeout_secs,
-    )
-    .await
+    let Some(iframe_html) =
+        fetch_vtinfo_iframe(client, &user_agents, &iframe_url, locator_url, timeout_secs).await
     else {
         return Ok(vec![]);
     };
@@ -152,7 +143,7 @@ pub(in crate::locator) async fn fetch_vtinfo_stores(
         tokio::time::sleep(pacing_delay).await;
 
         run_vtinfo_search_point(
-            &client,
+            client,
             &user_agents,
             &iframe_url,
             &embed.cust_id,

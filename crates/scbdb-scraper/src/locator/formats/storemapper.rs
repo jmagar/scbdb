@@ -4,7 +4,6 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::locator::fetch::{fetch_json, fetch_text};
 use crate::locator::types::{LocatorError, RawStoreLocation};
 
 static TOKEN_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
@@ -23,11 +22,6 @@ static USER_ID_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 });
 
 /// Extract the Storemapper API token from HTML.
-///
-/// Recognises patterns such as:
-/// - `data-storemapper-token="abc123"`
-/// - `storemapper.co/api/stores?token=abc123`
-/// - `token: "abc123"` near a storemapper reference
 pub(in crate::locator) fn extract_storemapper_token(html: &str) -> Option<String> {
     if !html.contains("storemapper") {
         return None;
@@ -44,10 +38,6 @@ pub(in crate::locator) fn extract_storemapper_token(html: &str) -> Option<String
 }
 
 /// Extract the Storemapper user ID from HTML.
-///
-/// Recognises patterns such as:
-/// - `data-storemapper-id="8676"`
-/// - `api/users/8676.js`
 pub(in crate::locator) fn extract_storemapper_user_id(html: &str) -> Option<String> {
     if !html.contains("storemapper") {
         return None;
@@ -66,27 +56,26 @@ pub(in crate::locator) fn extract_storemapper_user_id(html: &str) -> Option<Stri
 
 /// Fetch stores from the Storemapper API and map them to `RawStoreLocation`.
 pub(in crate::locator) async fn fetch_storemapper_stores(
+    client: &reqwest::Client,
     token: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let url = format!("https://storemapper.co/api/stores?token={token}");
-    let data = fetch_json(&url, timeout_secs, user_agent).await?;
+    let data = crate::locator::fetch::fetch_json(client, &url, user_agent).await?;
 
     Ok(map_storemapper_stores(&data))
 }
 
-/// Fetch stores from Storemapper's user-ID JSONP endpoint and map them to
-/// `RawStoreLocation`.
+/// Fetch stores from Storemapper's user-ID JSONP endpoint.
 pub(in crate::locator) async fn fetch_storemapper_stores_by_user_id(
+    client: &reqwest::Client,
     user_id: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let url = format!(
         "https://storemapper-herokuapp-com.global.ssl.fastly.net/api/users/{user_id}/stores.js?callback=SMcallback2"
     );
-    let body = fetch_text(&url, timeout_secs, user_agent).await?;
+    let body = crate::locator::fetch::fetch_text(client, &url, user_agent).await?;
     let Some(json) = extract_jsonp_payload(&body) else {
         return Ok(vec![]);
     };

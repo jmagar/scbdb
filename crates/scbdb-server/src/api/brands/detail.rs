@@ -75,6 +75,7 @@ pub(in crate::api) struct BrandCompletenessDetail {
     pub has_media: bool,
 }
 
+#[allow(clippy::too_many_lines)]
 pub(in crate::api) async fn get_brand(
     State(state): State<AppState>,
     Extension(req_id): Extension<RequestId>,
@@ -82,21 +83,28 @@ pub(in crate::api) async fn get_brand(
 ) -> Result<Json<ApiResponse<BrandProfileResponse>>, ApiError> {
     let brand = resolve_brand(&state.pool, &slug, &req_id.0).await?;
 
-    let profile = scbdb_db::get_brand_profile(&state.pool, brand.id)
-        .await
-        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
-
-    let social_handles = scbdb_db::list_brand_social_handles(&state.pool, brand.id)
-        .await
-        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
-
-    let domains = scbdb_db::list_brand_feed_urls(&state.pool, brand.id)
-        .await
-        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
-
-    let completeness = scbdb_db::get_brand_completeness(&state.pool, brand.id)
-        .await
-        .map_err(|e| map_db_error(req_id.0.clone(), &e))?;
+    let (profile, social_handles, domains, completeness) = tokio::try_join!(
+        async {
+            scbdb_db::get_brand_profile(&state.pool, brand.id)
+                .await
+                .map_err(|e| map_db_error(req_id.0.clone(), &e))
+        },
+        async {
+            scbdb_db::list_brand_social_handles(&state.pool, brand.id)
+                .await
+                .map_err(|e| map_db_error(req_id.0.clone(), &e))
+        },
+        async {
+            scbdb_db::list_brand_feed_urls(&state.pool, brand.id)
+                .await
+                .map_err(|e| map_db_error(req_id.0.clone(), &e))
+        },
+        async {
+            scbdb_db::get_brand_completeness(&state.pool, brand.id)
+                .await
+                .map_err(|e| map_db_error(req_id.0.clone(), &e))
+        },
+    )?;
 
     let completeness_detail = completeness.map_or_else(
         || BrandCompletenessDetail {

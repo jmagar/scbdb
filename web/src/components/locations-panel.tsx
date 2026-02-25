@@ -1,13 +1,16 @@
-import { useMemo, useState } from "react";
+import React, { Suspense, useMemo, useState } from "react";
 
 import { getBrandColors } from "../lib/brand-colors";
 import type { LocationBrandSummary } from "../types/api";
 import { useLocationPins } from "../hooks/use-dashboard-data";
 import { ErrorState, LoadingState, formatDate } from "./dashboard-utils";
-import { LocationMapView } from "./location-map-view";
 import { computeVisibleSlugs } from "./map-filter-utils";
 import type { BrandForFilter, Relationship } from "./map-filter-utils";
 import { MapFilterSidebar } from "./map-filter-sidebar";
+
+const LocationMapView = React.lazy(() =>
+  import("./location-map-view").then((m) => ({ default: m.LocationMapView })),
+);
 
 function sourceLabel(source: string | null): string {
   switch (source) {
@@ -20,7 +23,7 @@ function sourceLabel(source: string | null): string {
     case "json_embed":
       return "Embedded JSON";
     default:
-      return source ?? "—";
+      return source ?? "\u2014";
   }
 }
 
@@ -53,7 +56,7 @@ export function LocationsPanel({ summary, byState }: Props) {
   // Derived: brands with relationship/tier, sourced from pins data
   const brandsForFilter = useMemo((): BrandForFilter[] => {
     if (!pins.data || !summary.data) return [];
-    // Build a slug → meta map from pin data (pins have relationship + tier)
+    // Build a slug -> meta map from pin data (pins have relationship + tier)
     const pinMeta = new Map<
       string,
       { relationship: "portfolio" | "competitor"; tier: 1 | 2 | 3 }
@@ -112,167 +115,174 @@ export function LocationsPanel({ summary, byState }: Props) {
   );
   const statesCovered = byState.data?.length ?? 0;
 
+  // Early returns for loading/error states
+  if (summary.isLoading || byState.isLoading) {
+    return (
+      <>
+        <h2>Store Coverage</h2>
+        <LoadingState label="store locations" />
+      </>
+    );
+  }
+
+  if (summary.isError || byState.isError) {
+    return (
+      <>
+        <h2>Store Coverage</h2>
+        <ErrorState label="store locations" />
+      </>
+    );
+  }
+
+  if (!summary.data) {
+    return <h2>Store Coverage</h2>;
+  }
+
   return (
     <>
       <h2>Store Coverage</h2>
 
-      {(summary.isLoading || byState.isLoading) && (
-        <LoadingState label="store locations" />
+      {/* Top-line stat bar */}
+      <div className="locations-stats-bar">
+        <div className="locations-stat">
+          <strong>{totalActive.toLocaleString()}</strong>
+          <span>Active locations</span>
+        </div>
+        <div className="locations-stat">
+          <strong>+{totalNew.toLocaleString()}</strong>
+          <span>New this week</span>
+        </div>
+        <div className="locations-stat">
+          <strong>{statesCovered}</strong>
+          <span>States covered</span>
+        </div>
+        <div className="locations-stat">
+          <strong>{summary.data.length}</strong>
+          <span>Brands tracked</span>
+        </div>
+      </div>
+
+      {/* Interactive map + filter sidebar */}
+      <h3>US Coverage Map</h3>
+      <div className="map-layout">
+        {/* Desktop sidebar -- hidden on mobile via CSS */}
+        <div className="map-desktop-sidebar">
+          <MapFilterSidebar
+            brands={brandsForFilter}
+            brandColors={brandColors}
+            relationship={relationship}
+            setRelationship={setRelationship}
+            tiers={tiers}
+            setTiers={setTiers}
+            enabledSlugs={effectiveEnabledSlugs}
+            setEnabledSlugs={setEnabledSlugs}
+          />
+        </div>
+
+        {/* Map area */}
+        <div className="map-canvas-area">
+          <Suspense fallback={<LoadingState label="map" />}>
+            <LocationMapView
+              pins={pins.data ?? []}
+              selectedSlugs={selectedSlugs}
+              brandColors={brandColors}
+              isLoading={pins.isLoading}
+              isError={pins.isError}
+            />
+          </Suspense>
+
+          {/* Mobile filter toggle button */}
+          <button
+            type="button"
+            className="map-filter-toggle-btn"
+            aria-label="Open map filters"
+            aria-expanded={filterOpen}
+            onClick={() => setFilterOpen(true)}
+          >
+            <span aria-hidden="true">{"\u2699"}</span> Filters
+          </button>
+        </div>
+
+        {/* Mobile overlay -- only rendered on small screens via CSS */}
+        <MapFilterSidebar
+          brands={brandsForFilter}
+          brandColors={brandColors}
+          relationship={relationship}
+          setRelationship={setRelationship}
+          tiers={tiers}
+          setTiers={setTiers}
+          enabledSlugs={effectiveEnabledSlugs}
+          setEnabledSlugs={setEnabledSlugs}
+          isOpen={filterOpen}
+          onClose={() => setFilterOpen(false)}
+        />
+      </div>
+
+      {/* Per-brand cards */}
+      <h3>By Brand</h3>
+      <div className="card-stack">
+        {summary.data.map((item) => (
+          <article className="data-card" key={item.brand_slug}>
+            <header>
+              <h3>{item.brand_name}</h3>
+              {item.locator_source && (
+                <span className="source-badge">
+                  {sourceLabel(item.locator_source)}
+                </span>
+              )}
+            </header>
+            <dl>
+              <div>
+                <dt>Active</dt>
+                <dd>{item.active_count.toLocaleString()}</dd>
+              </div>
+              <div>
+                <dt>New (7d)</dt>
+                <dd>+{item.new_this_week}</dd>
+              </div>
+              <div>
+                <dt>States</dt>
+                <dd>{item.states_covered}</dd>
+              </div>
+              <div>
+                <dt>Last seen</dt>
+                <dd>{formatDate(item.last_seen_at)}</dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+
+      {/* State breakdown table */}
+      {byState.data && byState.data.length > 0 && (
+        <>
+          <h3>State Breakdown</h3>
+          <div
+            className="mini-table"
+            role="table"
+            aria-label="locations-by-state"
+          >
+            {byState.data.map((item) => (
+              <div className="mini-row" role="row" key={item.state}>
+                <span role="cell">{item.state}</span>
+                <strong role="cell">
+                  {item.location_count.toLocaleString()} loc
+                </strong>
+                <span role="cell">
+                  {item.brand_count} brand
+                  {item.brand_count !== 1 ? "s" : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+        </>
       )}
-      {!summary.isLoading &&
-        !byState.isLoading &&
-        (summary.isError || byState.isError) && (
-          <ErrorState label="store locations" />
-        )}
 
-      {!summary.isLoading &&
-        !byState.isLoading &&
-        !summary.isError &&
-        !byState.isError &&
-        summary.data && (
-          <>
-            {/* Top-line stat bar */}
-            <div className="locations-stats-bar">
-              <div className="locations-stat">
-                <strong>{totalActive.toLocaleString()}</strong>
-                <span>Active locations</span>
-              </div>
-              <div className="locations-stat">
-                <strong>+{totalNew.toLocaleString()}</strong>
-                <span>New this week</span>
-              </div>
-              <div className="locations-stat">
-                <strong>{statesCovered}</strong>
-                <span>States covered</span>
-              </div>
-              <div className="locations-stat">
-                <strong>{summary.data.length}</strong>
-                <span>Brands tracked</span>
-              </div>
-            </div>
-
-            {/* Interactive map + filter sidebar */}
-            <h3>US Coverage Map</h3>
-            <div className="map-layout">
-              {/* Desktop sidebar — hidden on mobile via CSS */}
-              <div className="map-desktop-sidebar">
-                <MapFilterSidebar
-                  brands={brandsForFilter}
-                  brandColors={brandColors}
-                  relationship={relationship}
-                  setRelationship={setRelationship}
-                  tiers={tiers}
-                  setTiers={setTiers}
-                  enabledSlugs={effectiveEnabledSlugs}
-                  setEnabledSlugs={setEnabledSlugs}
-                />
-              </div>
-
-              {/* Map area */}
-              <div className="map-canvas-area">
-                <LocationMapView
-                  pins={pins.data ?? []}
-                  selectedSlugs={selectedSlugs}
-                  brandColors={brandColors}
-                  isLoading={pins.isLoading}
-                  isError={pins.isError}
-                />
-
-                {/* Mobile filter toggle button */}
-                <button
-                  type="button"
-                  className="map-filter-toggle-btn"
-                  aria-label="Open map filters"
-                  aria-expanded={filterOpen}
-                  onClick={() => setFilterOpen(true)}
-                >
-                  <span aria-hidden="true">⚙</span> Filters
-                </button>
-              </div>
-
-              {/* Mobile overlay — only rendered on small screens via CSS */}
-              <MapFilterSidebar
-                brands={brandsForFilter}
-                brandColors={brandColors}
-                relationship={relationship}
-                setRelationship={setRelationship}
-                tiers={tiers}
-                setTiers={setTiers}
-                enabledSlugs={effectiveEnabledSlugs}
-                setEnabledSlugs={setEnabledSlugs}
-                isOpen={filterOpen}
-                onClose={() => setFilterOpen(false)}
-              />
-            </div>
-
-            {/* Per-brand cards */}
-            <h3>By Brand</h3>
-            <div className="card-stack">
-              {summary.data.map((item) => (
-                <article className="data-card" key={item.brand_slug}>
-                  <header>
-                    <h3>{item.brand_name}</h3>
-                    {item.locator_source && (
-                      <span className="source-badge">
-                        {sourceLabel(item.locator_source)}
-                      </span>
-                    )}
-                  </header>
-                  <dl>
-                    <div>
-                      <dt>Active</dt>
-                      <dd>{item.active_count.toLocaleString()}</dd>
-                    </div>
-                    <div>
-                      <dt>New (7d)</dt>
-                      <dd>+{item.new_this_week}</dd>
-                    </div>
-                    <div>
-                      <dt>States</dt>
-                      <dd>{item.states_covered}</dd>
-                    </div>
-                    <div>
-                      <dt>Last seen</dt>
-                      <dd>{formatDate(item.last_seen_at)}</dd>
-                    </div>
-                  </dl>
-                </article>
-              ))}
-            </div>
-
-            {/* State breakdown table */}
-            {byState.data && byState.data.length > 0 && (
-              <>
-                <h3>State Breakdown</h3>
-                <div
-                  className="mini-table"
-                  role="table"
-                  aria-label="locations-by-state"
-                >
-                  {byState.data.map((item) => (
-                    <div className="mini-row" role="row" key={item.state}>
-                      <span role="cell">{item.state}</span>
-                      <strong role="cell">
-                        {item.location_count.toLocaleString()} loc
-                      </strong>
-                      <span role="cell">
-                        {item.brand_count} brand
-                        {item.brand_count !== 1 ? "s" : ""}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {summary.data.length === 0 && (
-              <p className="panel-status">
-                No location data yet. Run <code>collect locations</code> to
-                populate.
-              </p>
-            )}
-          </>
-        )}
+      {summary.data.length === 0 && (
+        <p className="panel-status">
+          No location data yet. Run <code>collect locations</code> to populate.
+        </p>
+      )}
     </>
   );
 }

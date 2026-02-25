@@ -36,19 +36,15 @@ pub(in crate::locator) fn extract_agile_store_locator_config(
 /// Fetch stores from the Agile Store Locator `WordPress` AJAX endpoint.
 #[allow(clippy::too_many_arguments)]
 pub(in crate::locator) async fn fetch_agile_store_locator_stores(
+    client: &reqwest::Client,
     ajax_url: &str,
     nonce: &str,
     lang: &str,
     load_all: &str,
     layout: &str,
     stores: Option<&str>,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(timeout_secs))
-        .build()?;
-
     let mut last_http_error: Option<reqwest::Error> = None;
     let mut last_json_error: Option<serde_json::Error> = None;
 

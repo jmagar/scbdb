@@ -42,8 +42,8 @@ pub(in crate::locator) fn extract_storerocket_account(html: &str) -> Option<Stri
 /// This is needed for modern SPA locators that render `StoreRocket.init(...)`
 /// inside a compiled route chunk instead of the main HTML document.
 pub(in crate::locator) async fn discover_storerocket_account(
+    client: &reqwest::Client,
     html: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Option<String> {
     if let Some(account) = extract_storerocket_account(html) {
@@ -52,7 +52,7 @@ pub(in crate::locator) async fn discover_storerocket_account(
 
     let script_urls = extract_script_urls_for_account_probe(html);
     for script_url in script_urls.iter().take(MAX_SCRIPT_PROBES) {
-        match crate::locator::fetch::fetch_text(script_url, timeout_secs, user_agent).await {
+        match crate::locator::fetch::fetch_text(client, script_url, user_agent).await {
             Ok(script_body) => {
                 if let Some(account) = extract_storerocket_account(&script_body) {
                     return Some(account);
@@ -73,12 +73,12 @@ pub(in crate::locator) async fn discover_storerocket_account(
 
 /// Fetch stores from the `StoreRocket` locations endpoint.
 pub(in crate::locator) async fn fetch_storerocket_stores(
+    client: &reqwest::Client,
     account: &str,
-    timeout_secs: u64,
     user_agent: &str,
 ) -> Result<Vec<RawStoreLocation>, LocatorError> {
     let url = format!("https://storerocket.io/api/user/{account}/locations");
-    let payload = crate::locator::fetch::fetch_json(&url, timeout_secs, user_agent).await?;
+    let payload = crate::locator::fetch::fetch_json(client, &url, user_agent).await?;
     Ok(parse_storerocket_locations(&payload))
 }
 

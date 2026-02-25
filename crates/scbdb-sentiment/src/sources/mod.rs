@@ -95,8 +95,13 @@ pub(crate) async fn collect_signals(
     }
 
     // Brand newsroom / press pages
+    let newsroom_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .unwrap_or_default();
     let newsroom_signals =
-        fetch_brand_newsroom_signals(brand_slug, brand_name, brand_base_url).await;
+        fetch_brand_newsroom_signals(&newsroom_client, brand_slug, brand_name, brand_base_url)
+            .await;
     tracing::debug!(
         brand = brand_slug,
         count = newsroom_signals.len(),

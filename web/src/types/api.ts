@@ -1,3 +1,5 @@
+import type { BrandRelationship, BrandTier } from "./brands";
+
 export type ApiResponse<T> = {
   data: T;
   meta: {
@@ -16,8 +18,8 @@ export type ProductItem = {
   brand_name: string;
   brand_slug: string;
   brand_logo_url: string | null;
-  relationship: string;
-  tier: number;
+  relationship: BrandRelationship;
+  tier: BrandTier;
   variant_count: number;
   latest_price: string | null;
   latest_price_captured_at: string | null;
@@ -127,8 +129,8 @@ export type LocationPin = {
   locator_source: string | null;
   brand_name: string;
   brand_slug: string;
-  brand_relationship: string;
-  brand_tier: number;
+  brand_relationship: BrandRelationship;
+  brand_tier: BrandTier;
 };
 
 // ── Brand Intelligence Layer — re-exported from ./brands ──────────────────────
@@ -136,9 +138,11 @@ export type {
   BrandCompletenessDetail,
   BrandProfileDetail,
   BrandProfileResponse,
+  BrandRelationship,
   BrandSignalType,
   BrandSocialHandleItem,
   BrandSummaryItem,
+  BrandTier,
   CompetitorItem,
   DistributorItem,
   FundingEventItem,

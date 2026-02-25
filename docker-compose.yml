@@ -17,6 +17,10 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     logging:
       options:
         max-size: "10m"

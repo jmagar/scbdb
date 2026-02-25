@@ -32,5 +32,7 @@ pub(super) use storemapper::{
     fetch_storemapper_stores_by_user_id,
 };
 pub(super) use storepoint::{extract_storepoint_widget_id, fetch_storepoint_stores};
+#[cfg(test)]
+pub(super) use storerocket::extract_storerocket_account;
 pub(super) use storerocket::{discover_storerocket_account, fetch_storerocket_stores};
 pub(super) use vtinfo::{extract_vtinfo_embed, fetch_vtinfo_stores};

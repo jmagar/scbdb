@@ -39,6 +39,89 @@ pub(in crate::api) struct UpsertDomainsRequest {
 }
 
 // ---------------------------------------------------------------------------
+// Validation helpers
+// ---------------------------------------------------------------------------
+
+fn validate_profile(rid: &str, body: &UpsertProfileRequest) -> Result<(), ApiError> {
+    if let Some(ref desc) = body.description {
+        if desc.len() > 10_000 {
+            return Err(ApiError::new(
+                rid,
+                "validation_error",
+                "description must be at most 10,000 characters",
+            ));
+        }
+    }
+    if let Some(ref tagline) = body.tagline {
+        if tagline.len() > 500 {
+            return Err(ApiError::new(
+                rid,
+                "validation_error",
+                "tagline must be at most 500 characters",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_social_handles(rid: &str, handles: &HashMap<String, String>) -> Result<(), ApiError> {
+    if handles.len() > 20 {
+        return Err(ApiError::new(
+            rid,
+            "validation_error",
+            "at most 20 social handles allowed",
+        ));
+    }
+    for (platform, handle) in handles {
+        if platform.len() > 50 {
+            return Err(ApiError::new(
+                rid,
+                "validation_error",
+                format!("platform name must be at most 50 characters, got '{platform}'"),
+            ));
+        }
+        if handle.len() > 200 {
+            return Err(ApiError::new(
+                rid,
+                "validation_error",
+                format!("handle must be at most 200 characters for platform '{platform}'"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_domains(rid: &str, domains: &[String]) -> Result<(), ApiError> {
+    if domains.len() > 50 {
+        return Err(ApiError::new(
+            rid,
+            "validation_error",
+            "at most 50 domains allowed",
+        ));
+    }
+    for domain in domains {
+        if reqwest::Url::parse(domain).is_err() {
+            return Err(ApiError::new(
+                rid,
+                "validation_error",
+                format!("invalid URL: '{domain}'"),
+            ));
+        }
+        let scheme = reqwest::Url::parse(domain)
+            .map(|u| u.scheme().to_owned())
+            .unwrap_or_default();
+        if scheme != "http" && scheme != "https" {
+            return Err(ApiError::new(
+                rid,
+                "validation_error",
+                format!("domain must use http or https scheme, got '{scheme}' in '{domain}'"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
@@ -51,6 +134,8 @@ pub(in crate::api) async fn upsert_brand_profile(
 ) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
     let rid = &req_id.0;
     let brand = resolve_brand(&state.pool, &slug, rid).await?;
+
+    validate_profile(rid, &body)?;
 
     scbdb_db::overwrite_brand_profile(
         &state.pool,
@@ -83,6 +168,8 @@ pub(in crate::api) async fn upsert_brand_social(
     let rid = &req_id.0;
     let brand = resolve_brand(&state.pool, &slug, rid).await?;
 
+    validate_social_handles(rid, &body.handles)?;
+
     scbdb_db::replace_brand_social_handles(&state.pool, brand.id, &body.handles)
         .await
         .map_err(|e| map_db_error(rid.clone(), &e))?;
@@ -102,6 +189,8 @@ pub(in crate::api) async fn upsert_brand_domains(
 ) -> Result<Json<ApiResponse<serde_json::Value>>, ApiError> {
     let rid = &req_id.0;
     let brand = resolve_brand(&state.pool, &slug, rid).await?;
+
+    validate_domains(rid, &body.domains)?;
 
     scbdb_db::replace_brand_domains(&state.pool, brand.id, &body.domains)
         .await

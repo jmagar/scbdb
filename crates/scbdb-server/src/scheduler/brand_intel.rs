@@ -8,32 +8,29 @@ use std::sync::Arc;
 use sqlx::PgPool;
 use tokio_cron_scheduler::{Job, JobScheduler, JobSchedulerError};
 
-// ---------------------------------------------------------------------------
-// Brand intake job (E1)
-// ---------------------------------------------------------------------------
-
 /// Register a daily brand intake job.
 ///
-/// Runs every day at 06:00 UTC (`0 0 6 * * *`). For each brand that has no
-/// profile yet, the job collects signals from RSS feeds, `YouTube`, and Twitter
-/// sources, embeds them via TEI, and upserts into the database.
-///
-/// The cron schedule can be overridden via the `BRAND_INTAKE_CRON` env var.
+/// Runs at 06:00 UTC by default (`0 0 6 * * *`) and can be overridden with
+/// `BRAND_INTAKE_CRON`.
 pub(super) async fn register_brand_intake_job(
     scheduler: &JobScheduler,
     pool: PgPool,
 ) -> Result<(), JobSchedulerError> {
     let cron = std::env::var("BRAND_INTAKE_CRON").unwrap_or_else(|_| "0 0 6 * * *".to_string());
+    let tei_url: Arc<str> = std::env::var("TEI_URL").unwrap_or_default().into();
+    let youtube_api_key: Option<Arc<str>> = std::env::var("YOUTUBE_API_KEY").ok().map(Into::into);
     let pool = Arc::new(pool);
     let client = reqwest::Client::new();
 
     let job = Job::new_async(cron.as_str(), move |_uuid, _lock| {
         let pool = Arc::clone(&pool);
         let client = client.clone();
+        let tei_url = Arc::clone(&tei_url);
+        let youtube_api_key = youtube_api_key.clone();
 
         Box::pin(async move {
             tracing::info!("scheduler: starting daily brand_intake run");
-            run_brand_intake_job(&pool, &client).await;
+            run_brand_intake_job(&pool, &client, &tei_url, youtube_api_key.as_deref()).await;
             tracing::info!("scheduler: daily brand_intake run complete");
         })
     })?;
@@ -48,7 +45,12 @@ pub(super) async fn register_brand_intake_job(
 /// For each brand without a profile, loads social handles and domain feed URLs,
 /// then runs the profiler intake pipeline. Individual brand failures are logged
 /// but do not abort the run.
-async fn run_brand_intake_job(pool: &PgPool, client: &reqwest::Client) {
+async fn run_brand_intake_job(
+    pool: &PgPool,
+    client: &reqwest::Client,
+    tei_url: &str,
+    youtube_api_key: Option<&str>,
+) {
     let brand_ids = match scbdb_db::list_brands_without_profiles(pool).await {
         Ok(ids) => ids,
         Err(e) => {
@@ -68,7 +70,7 @@ async fn run_brand_intake_job(pool: &PgPool, client: &reqwest::Client) {
     );
 
     for brand_id in &brand_ids {
-        run_brand_intake_for(*brand_id, pool, client).await;
+        run_brand_intake_for(*brand_id, pool, client, tei_url, youtube_api_key).await;
     }
 }
 
@@ -77,7 +79,13 @@ async fn run_brand_intake_job(pool: &PgPool, client: &reqwest::Client) {
 /// Loads the brand's feed URLs and social handles, then invokes the profiler.
 /// All errors are logged rather than propagated so one brand's failure does not
 /// block the rest of the batch.
-async fn run_brand_intake_for(brand_id: i64, pool: &PgPool, client: &reqwest::Client) {
+async fn run_brand_intake_for(
+    brand_id: i64,
+    pool: &PgPool,
+    client: &reqwest::Client,
+    tei_url: &str,
+    youtube_api_key: Option<&str>,
+) {
     // Load feed URLs from brand_domains
     let feed_urls = match scbdb_db::list_brand_feed_urls(pool, brand_id).await {
         Ok(urls) => urls,
@@ -106,14 +114,10 @@ async fn run_brand_intake_for(brand_id: i64, pool: &PgPool, client: &reqwest::Cl
         .find(|h| h.platform == "twitter")
         .map(|h| h.handle.clone());
 
-    // Build the IntakeConfig from env vars (TEI URL, YouTube API key)
-    let tei_url = std::env::var("TEI_URL").unwrap_or_default();
-    let youtube_api_key = std::env::var("YOUTUBE_API_KEY").ok();
-
     let intake_config = scbdb_profiler::IntakeConfig {
         client: client.clone(),
-        tei_url,
-        youtube_api_key,
+        tei_url: tei_url.to_string(),
+        youtube_api_key: youtube_api_key.map(String::from),
     };
 
     match scbdb_profiler::intake::ingest_signals(
@@ -141,28 +145,27 @@ async fn run_brand_intake_for(brand_id: i64, pool: &PgPool, client: &reqwest::Cl
     }
 }
 
-// ---------------------------------------------------------------------------
-// Signal refresh job (E2)
-// ---------------------------------------------------------------------------
-
 /// Register a daily signal refresh job.
 ///
-/// Runs every day at 04:00 UTC (`0 0 4 * * *`). Re-runs signal collection for
-/// brands that have not had signals collected in the last 24 hours.
+/// Runs every day at 04:00 UTC (`0 0 4 * * *`).
 pub(super) async fn register_signal_refresh_job(
     scheduler: &JobScheduler,
     pool: PgPool,
 ) -> Result<(), JobSchedulerError> {
+    let tei_url: Arc<str> = std::env::var("TEI_URL").unwrap_or_default().into();
+    let youtube_api_key: Option<Arc<str>> = std::env::var("YOUTUBE_API_KEY").ok().map(Into::into);
     let pool = Arc::new(pool);
     let client = reqwest::Client::new();
 
     let job = Job::new_async("0 0 4 * * *", move |_uuid, _lock| {
         let pool = Arc::clone(&pool);
         let client = client.clone();
+        let tei_url = Arc::clone(&tei_url);
+        let youtube_api_key = youtube_api_key.clone();
 
         Box::pin(async move {
             tracing::info!("scheduler: starting daily signal_refresh run");
-            run_signal_refresh_job(&pool, &client).await;
+            run_signal_refresh_job(&pool, &client, &tei_url, youtube_api_key.as_deref()).await;
             tracing::info!("scheduler: daily signal_refresh run complete");
         })
     })?;
@@ -173,7 +176,12 @@ pub(super) async fn register_signal_refresh_job(
 }
 
 /// Identify brands with stale signals (>24 hours) and re-run intake for each.
-async fn run_signal_refresh_job(pool: &PgPool, client: &reqwest::Client) {
+async fn run_signal_refresh_job(
+    pool: &PgPool,
+    client: &reqwest::Client,
+    tei_url: &str,
+    youtube_api_key: Option<&str>,
+) {
     let stale_hours = 24;
 
     let brand_ids = match scbdb_db::list_brands_needing_signal_refresh(pool, stale_hours).await {
@@ -196,18 +204,13 @@ async fn run_signal_refresh_job(pool: &PgPool, client: &reqwest::Client) {
     );
 
     for brand_id in &brand_ids {
-        run_brand_intake_for(*brand_id, pool, client).await;
+        run_brand_intake_for(*brand_id, pool, client, tei_url, youtube_api_key).await;
     }
 }
 
-// ---------------------------------------------------------------------------
-// Handle refresh job (E2)
-// ---------------------------------------------------------------------------
-
 /// Register a weekly social-handle verification job.
 ///
-/// Runs every Sunday at 05:00 UTC (`0 0 5 * * SUN`). Checks for brands with
-/// social handles that have not been verified recently and logs them for review.
+/// Runs every Sunday at 05:00 UTC (`0 0 5 * * SUN`).
 pub(super) async fn register_handle_refresh_job(
     scheduler: &JobScheduler,
     pool: PgPool,

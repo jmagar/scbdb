@@ -85,7 +85,7 @@ pub(super) fn raw_to_new_location(
         city: loc.city.clone(),
         state: loc.state.clone(),
         zip: loc.zip.clone(),
-        country: loc.country.clone().or(Some("US".to_string())),
+        country: loc.country.clone().or_else(|| Some("US".to_string())),
         latitude: loc.latitude,
         longitude: loc.longitude,
         phone: loc.phone.clone(),

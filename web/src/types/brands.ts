@@ -20,8 +20,8 @@ export type BrandSummaryItem = {
   id: number;
   slug: string;
   name: string;
-  relationship: string;
-  tier: number;
+  relationship: BrandRelationship;
+  tier: BrandTier;
   logo_url: string | null;
   completeness_score: number;
 };
@@ -31,8 +31,8 @@ export type BrandProfileResponse = {
   id: number;
   slug: string;
   name: string;
-  relationship: string;
-  tier: number;
+  relationship: BrandRelationship;
+  tier: BrandTier;
   domain: string | null;
   shop_url: string | null;
   store_locator_url: string | null;
@@ -209,6 +209,7 @@ export type MediaAppearanceItem = {
 // ── Write body types ──────────────────────────────────────────────────────────
 
 export type BrandRelationship = "portfolio" | "competitor";
+export type BrandTier = 1 | 2 | 3;
 
 export type CreateBrandBody = {
   name: string;
