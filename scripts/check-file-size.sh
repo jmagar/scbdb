@@ -61,9 +61,6 @@ count_effective_loc() {
                 }
             }
 
-            # Skip common mid-block comment prefix lines.
-            if (line ~ /^\*/) next
-
             count++
         }
         END { print count }
