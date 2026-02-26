@@ -78,9 +78,7 @@ pub(crate) fn parse_rss_feed(
                 if in_item {
                     let text = e.unescape().unwrap_or_default().into_owned();
                     if in_description {
-                        // Keep <description> text sanitized regardless of whether
-                        // the feed uses CDATA or plain text with inline tags.
-                        let clean_text = strip_html(&text);
+                        let clean_text = sanitize_description_text(&text);
                         if !clean_text.is_empty() {
                             if !description.is_empty() {
                                 description.push(' ');
@@ -124,4 +122,67 @@ pub(crate) fn strip_html(html: &str) -> String {
         }
     }
     out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn sanitize_description_text(text: &str) -> String {
+    if has_html_tag_like_content(text) {
+        strip_html(text)
+    } else {
+        text.split_whitespace().collect::<Vec<_>>().join(" ")
+    }
+}
+
+fn has_html_tag_like_content(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    for (i, b) in bytes.iter().enumerate() {
+        if *b != b'<' {
+            continue;
+        }
+        let Some(next) = bytes.get(i + 1).copied() else {
+            continue;
+        };
+        let looks_like_tag_start = next.is_ascii_alphabetic() || matches!(next, b'/' | b'!' | b'?');
+        if !looks_like_tag_start {
+            continue;
+        }
+        if bytes[i + 1..].contains(&b'>') {
+            return true;
+        }
+    }
+    false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_rss_feed;
+
+    #[test]
+    fn parse_rss_feed_preserves_literal_angle_brackets_in_plain_text() {
+        let xml = r#"
+            <rss><channel><item>
+              <title>Example</title>
+              <link>https://example.com/post</link>
+              <description>Math: 2 &lt; 3 &gt; 1</description>
+            </item></channel></rss>
+        "#;
+
+        let signals = parse_rss_feed(xml, "brand", "rss", 10).expect("rss parses");
+        assert_eq!(signals.len(), 1);
+        assert!(signals[0].text.contains("Math: 2 < 3 > 1"));
+    }
+
+    #[test]
+    fn parse_rss_feed_strips_html_markup_in_description() {
+        let xml = r#"
+            <rss><channel><item>
+              <title>Example</title>
+              <link>https://example.com/post</link>
+              <description>&lt;p&gt;Hello &lt;b&gt;world&lt;/b&gt;&lt;/p&gt;</description>
+            </item></channel></rss>
+        "#;
+
+        let signals = parse_rss_feed(xml, "brand", "rss", 10).expect("rss parses");
+        assert_eq!(signals.len(), 1);
+        assert!(signals[0].text.contains("Hello world"));
+    }
 }
