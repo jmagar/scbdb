@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     test: {
+      environment: env.VITEST_TEST_ENV || "node",
       // Tests that exercise HTTP behavior should mock fetch explicitly.
       env: {
         VITE_API_BASE_URL: "",

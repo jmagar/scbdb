@@ -1,6 +1,11 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import maplibregl from "maplibre-gl";
 import { useEffect, useRef } from "react";
+import {
+  MAP_EMPTY_OVERLAY_STYLE,
+  MAP_FULL_SIZE_STYLE,
+  MAP_WRAPPER_STYLE,
+} from "./map-filter-utils";
 import type { LocationPin } from "../types/api";
 
 type Props = {
@@ -180,7 +185,7 @@ function MapCanvas({ pins, selectedSlugs, brandColors }: MapCanvasProps) {
     }
   }, [selectedSlugs]);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+  return <div ref={containerRef} style={MAP_FULL_SIZE_STYLE} />;
 }
 
 // Outer component: pure state-machine — no hooks of its own.
@@ -213,23 +218,9 @@ export function LocationMapView({
   }
 
   return (
-    <div
-      className="location-map-wrapper"
-      style={{ position: "relative", width: "100%", height: "100%" }}
-    >
+    <div className="location-map-wrapper" style={MAP_WRAPPER_STYLE}>
       {selectedSlugs.length === 0 && (
-        <div
-          className="map-empty-overlay"
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 10,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            background: "rgba(255,255,255,0.7)",
-          }}
-        >
+        <div className="map-empty-overlay" style={MAP_EMPTY_OVERLAY_STYLE}>
           <p>Select at least one brand to filter the map.</p>
         </div>
       )}

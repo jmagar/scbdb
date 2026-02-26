@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { BrandProfileResponse } from "../types/brands";
 import { useDeactivateBrand } from "../hooks/use-dashboard-data";
-import { ROUTES } from "../main";
+import { ROUTES } from "../lib/routes";
 import { FormSection } from "./form-utils";
 import { BrandEditMetaForm } from "./brand-edit-meta-form";
 import { BrandEditProfileForm } from "./brand-edit-profile-form";

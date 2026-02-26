@@ -19,22 +19,22 @@ import type {
 } from "../../types/brands";
 import { apiGet, apiMutate } from "./client";
 
+function getBrandPath(slug: string): string {
+  return `/api/v1/brands/${encodeURIComponent(slug)}`;
+}
+
 export async function fetchBrands(): Promise<BrandSummaryItem[]> {
   return apiGet<BrandSummaryItem[]>("/api/v1/brands");
 }
 
 export async function fetchBrand(slug: string): Promise<BrandProfileResponse> {
-  return apiGet<BrandProfileResponse>(
-    `/api/v1/brands/${encodeURIComponent(slug)}`,
-  );
+  return apiGet<BrandProfileResponse>(getBrandPath(slug));
 }
 
 export async function fetchBrandProfile(
   slug: string,
 ): Promise<BrandProfileResponse> {
-  return apiGet<BrandProfileResponse>(
-    `/api/v1/brands/${encodeURIComponent(slug)}`,
-  );
+  return fetchBrand(slug);
 }
 
 export async function fetchBrandSignals(
@@ -123,7 +123,7 @@ export async function updateBrandMeta(
 ): Promise<void> {
   return apiMutate<UpdateBrandMetaBody, void>(
     "PATCH",
-    `/api/v1/brands/${encodeURIComponent(slug)}`,
+    getBrandPath(slug),
     body,
   );
 }
@@ -162,8 +162,5 @@ export async function updateBrandDomains(
 }
 
 export async function deactivateBrand(slug: string): Promise<void> {
-  return apiMutate<undefined, void>(
-    "DELETE",
-    `/api/v1/brands/${encodeURIComponent(slug)}`,
-  );
+  return apiMutate<undefined, void>("DELETE", getBrandPath(slug));
 }

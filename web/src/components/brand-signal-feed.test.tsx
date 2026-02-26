@@ -47,12 +47,22 @@ const mockSignals = {
   next_cursor: null,
 };
 
+function makeSignalsData(overrides?: Partial<typeof mockSignals>) {
+  return {
+    pages: [{ ...mockSignals, ...overrides }],
+    pageParams: [undefined],
+  };
+}
+
 describe("BrandSignalFeed", () => {
   it("renders loading state", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
       data: undefined,
       isLoading: true,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html.toLowerCase()).toContain("loading");
@@ -63,6 +73,9 @@ describe("BrandSignalFeed", () => {
       data: undefined,
       isLoading: false,
       error: new Error("fetch failed"),
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html.toLowerCase()).toContain("failed");
@@ -70,9 +83,15 @@ describe("BrandSignalFeed", () => {
 
   it("renders empty state when no signals", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
-      data: { items: [], next_cursor: null },
+      data: {
+        pages: [{ items: [], next_cursor: null }],
+        pageParams: [undefined],
+      },
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html.toLowerCase()).toContain("no signals");
@@ -80,9 +99,12 @@ describe("BrandSignalFeed", () => {
 
   it("renders signal titles", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
-      data: mockSignals,
+      data: makeSignalsData(),
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html).toContain("Test Article Title");
@@ -91,9 +113,12 @@ describe("BrandSignalFeed", () => {
 
   it("renders signal summaries", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
-      data: mockSignals,
+      data: makeSignalsData(),
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html).toContain("A short summary of the article content.");
@@ -102,9 +127,12 @@ describe("BrandSignalFeed", () => {
 
   it("renders source link when source_url is present", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
-      data: mockSignals,
+      data: makeSignalsData(),
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html).toContain("https://example.com/article");
@@ -114,11 +142,14 @@ describe("BrandSignalFeed", () => {
   it("renders article type icon", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
       data: {
-        items: [mockSignals.items[0]],
-        next_cursor: null,
+        pages: [{ items: [mockSignals.items[0]], next_cursor: null }],
+        pageParams: [undefined],
       },
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html).toContain("📰");
@@ -127,11 +158,14 @@ describe("BrandSignalFeed", () => {
   it("renders youtube type icon", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
       data: {
-        items: [mockSignals.items[1]],
-        next_cursor: null,
+        pages: [{ items: [mockSignals.items[1]], next_cursor: null }],
+        pageParams: [undefined],
       },
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html).toContain("▶");
@@ -139,9 +173,12 @@ describe("BrandSignalFeed", () => {
 
   it("does not render Load More when next_cursor is null", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
-      data: mockSignals,
+      data: makeSignalsData(),
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html.toLowerCase()).not.toContain("load more");
@@ -149,9 +186,12 @@ describe("BrandSignalFeed", () => {
 
   it("renders Load More when next_cursor is present", () => {
     vi.mocked(useBrandSignals).mockReturnValue({
-      data: { ...mockSignals, next_cursor: 99 },
+      data: makeSignalsData(),
       isLoading: false,
       error: null,
+      fetchNextPage: vi.fn(),
+      hasNextPage: true,
+      isFetchingNextPage: false,
     } as any);
     const html = renderToStaticMarkup(<BrandSignalFeed slug="test-brand" />);
     expect(html.toLowerCase()).toContain("load more");

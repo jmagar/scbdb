@@ -1,6 +1,6 @@
 import type { BrandSummaryItem } from "../types/api";
 import { useBrands } from "../hooks/use-dashboard-data";
-import { ROUTES } from "../main";
+import { ROUTES } from "../lib/routes";
 import { ErrorState, LoadingState } from "./dashboard-utils";
 import { BrandCreateDialog } from "./brand-create-dialog";
 

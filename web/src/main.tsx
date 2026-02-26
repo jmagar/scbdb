@@ -8,12 +8,6 @@ import { BrandProfilePage } from "./components/brand-profile-page";
 import { NotFoundPage } from "./components/not-found-page";
 import "./styles.css";
 
-export const ROUTES = {
-  dashboard: "#/",
-  brands: "#/brands",
-  brand: (slug: string) => `#/brands/${encodeURIComponent(slug)}`,
-} as const;
-
 const SLUG_PATTERN = /^[a-z0-9-]+$/;
 
 const queryClient = new QueryClient({
@@ -36,7 +30,7 @@ function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  let decoded = hash;
+  let decoded: string;
   try {
     decoded = decodeURIComponent(hash);
   } catch {

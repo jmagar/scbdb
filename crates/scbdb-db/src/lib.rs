@@ -181,9 +181,10 @@ pub use brand_signals::{
 };
 
 pub use api_queries::{
-    list_price_snapshots_dashboard, list_pricing_summary, list_products_dashboard,
-    list_sentiment_snapshots_dashboard, list_sentiment_summary, PriceSnapshotDashboardRow,
-    PriceSnapshotFilters, PricingSummaryRow, ProductDashboardRow, ProductListFilters,
+    get_product_dashboard, list_price_snapshots_dashboard, list_pricing_summary,
+    list_product_variants_dashboard, list_products_dashboard, list_sentiment_snapshots_dashboard,
+    list_sentiment_summary, PriceSnapshotDashboardRow, PriceSnapshotFilters, PricingSummaryRow,
+    ProductDashboardRow, ProductListFilters, ProductVariantDashboardRow,
     SentimentSnapshotDashboardRow, SentimentSummaryRow,
 };
 

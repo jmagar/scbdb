@@ -26,6 +26,26 @@ pub struct ProductDashboardRow {
     pub latest_price_captured_at: Option<DateTime<Utc>>,
 }
 
+/// Product variant row tailored for API/dashboard views.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct ProductVariantDashboardRow {
+    pub variant_id: i64,
+    pub source_variant_id: String,
+    pub sku: Option<String>,
+    pub title: Option<String>,
+    pub is_default: bool,
+    pub is_available: bool,
+    pub dosage_mg: Option<Decimal>,
+    pub cbd_mg: Option<Decimal>,
+    pub size_value: Option<Decimal>,
+    pub size_unit: Option<String>,
+    pub latest_price: Option<Decimal>,
+    pub latest_compare_at_price: Option<Decimal>,
+    pub latest_currency_code: Option<String>,
+    pub latest_price_source_url: Option<String>,
+    pub latest_price_captured_at: Option<DateTime<Utc>>,
+}
+
 /// Input filters for product listing.
 ///
 /// `limit` is `None` to return all products, or `Some(n)` to cap results.
@@ -102,6 +122,79 @@ pub async fn list_products_dashboard(
     .bind(filters.relationship)
     .bind(filters.tier)
     .bind(filters.limit)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows)
+}
+
+/// Returns one product card by internal `product_id`.
+///
+/// # Errors
+///
+/// Returns [`DbError::Sqlx`] if the query fails.
+pub async fn get_product_dashboard(
+    pool: &PgPool,
+    product_id: i64,
+) -> Result<Option<ProductDashboardRow>, DbError> {
+    let row = sqlx::query_as::<_, ProductDashboardRow>(
+        "SELECT \
+             product_id, product_name, product_status, vendor, source_url, \
+             primary_image_url, brand_name, brand_slug, brand_logo_url, \
+             relationship, tier, variant_count, latest_price, \
+             latest_price_captured_at \
+         FROM view_products_dashboard \
+         WHERE product_id = $1 \
+           AND deleted_at IS NULL \
+           AND brand_deleted_at IS NULL",
+    )
+    .bind(product_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row)
+}
+
+/// Returns product variants with latest price context for a product.
+///
+/// # Errors
+///
+/// Returns [`DbError::Sqlx`] if the query fails.
+pub async fn list_product_variants_dashboard(
+    pool: &PgPool,
+    product_id: i64,
+) -> Result<Vec<ProductVariantDashboardRow>, DbError> {
+    let rows = sqlx::query_as::<_, ProductVariantDashboardRow>(
+        "SELECT \
+             pv.id AS variant_id, \
+             pv.source_variant_id, \
+             pv.sku, \
+             pv.title, \
+             pv.is_default, \
+             pv.is_available, \
+             pv.dosage_mg, \
+             pv.cbd_mg, \
+             pv.size_value, \
+             pv.size_unit, \
+             latest.price AS latest_price, \
+             latest.compare_at_price AS latest_compare_at_price, \
+             latest.currency_code::text AS latest_currency_code, \
+             latest.source_url AS latest_price_source_url, \
+             latest.captured_at AS latest_price_captured_at \
+         FROM product_variants pv \
+         JOIN products p ON p.id = pv.product_id \
+         LEFT JOIN LATERAL ( \
+             SELECT ps.price, ps.compare_at_price, ps.currency_code, ps.source_url, ps.captured_at \
+             FROM price_snapshots ps \
+             WHERE ps.variant_id = pv.id \
+             ORDER BY ps.captured_at DESC, ps.id DESC \
+             LIMIT 1 \
+         ) latest ON TRUE \
+         WHERE pv.product_id = $1 \
+           AND p.deleted_at IS NULL \
+         ORDER BY pv.is_default DESC, pv.id ASC",
+    )
+    .bind(product_id)
     .fetch_all(pool)
     .await?;
 

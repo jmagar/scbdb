@@ -6,6 +6,13 @@ default:
 
 ci: check test
 
+# Startup smoke path: db up/migrate/ping, server boot, health + read probes
+smoke-startup:
+    ./scripts/smoke-startup.sh
+
+# Alias for startup smoke
+smoke: smoke-startup
+
 # Bootstrap local environment: start db, migrate, verify health
 bootstrap:
     @echo "Starting database..."

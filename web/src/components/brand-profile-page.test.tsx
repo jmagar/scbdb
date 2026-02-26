@@ -69,9 +69,15 @@ const mockProfile = {
 };
 
 const emptySignals = {
-  data: { items: [], next_cursor: null },
+  data: {
+    pages: [{ items: [], next_cursor: null }],
+    pageParams: [undefined],
+  },
   isLoading: false,
   error: null,
+  fetchNextPage: vi.fn(),
+  hasNextPage: false,
+  isFetchingNextPage: false,
 };
 const emptyList = { data: [], isLoading: false, error: null };
 

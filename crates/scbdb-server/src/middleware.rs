@@ -79,12 +79,7 @@ impl AuthState {
     }
 }
 
-/// Constant-time byte-slice equality comparison.
-///
-/// Returns `false` immediately if lengths differ (length is not secret —
-/// the caller already received the token over the wire). For equal-length
-/// slices, XORs every byte pair and accumulates into a single flag so the
-/// comparison time depends only on length, not content.
+/// Constant-time byte-slice equality for same-length byte slices.
 fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;

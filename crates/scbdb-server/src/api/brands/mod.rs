@@ -43,3 +43,13 @@ async fn resolve_brand(
         .map_err(|e| map_db_error(request_id.to_owned(), &e))?
         .ok_or_else(|| ApiError::new(request_id, "not_found", format!("brand '{slug}' not found")))
 }
+
+/// Parse a URL and convert parse failures into a standardized validation error.
+pub(super) fn parse_url_or_validation_error(
+    request_id: &str,
+    value: &str,
+    invalid_message: impl FnOnce(&str) -> String,
+) -> Result<reqwest::Url, ApiError> {
+    reqwest::Url::parse(value)
+        .map_err(|_| ApiError::new(request_id, "validation_error", invalid_message(value)))
+}

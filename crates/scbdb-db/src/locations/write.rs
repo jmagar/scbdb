@@ -4,6 +4,150 @@ use sqlx::PgPool;
 
 use super::types::NewStoreLocation;
 
+const UPSERT_STORE_LOCATIONS_SQL: &str = "INSERT INTO store_locations \
+     (brand_id, location_key, name, address_line1, city, state, zip, country, \
+      latitude, longitude, phone, external_id, locator_source, raw_data) \
+ SELECT \
+     $1, \
+     u.location_key, \
+     u.name, \
+     u.address_line1, \
+     u.city, \
+     u.state, \
+     u.zip, \
+     u.country, \
+     u.latitude::NUMERIC(9,6), \
+     u.longitude::NUMERIC(9,6), \
+     u.phone, \
+     u.external_id, \
+     u.locator_source, \
+     u.raw_data \
+ FROM UNNEST(\
+      $2::text[], \
+      $3::text[], \
+      $4::text[], \
+      $5::text[], \
+      $6::text[], \
+      $7::text[], \
+      $8::text[], \
+      $9::float8[], \
+      $10::float8[], \
+      $11::text[], \
+      $12::text[], \
+      $13::text[], \
+      $14::jsonb[]) \
+ AS u(\
+      location_key, \
+      name, \
+      address_line1, \
+      city, \
+      state, \
+      zip, \
+      country, \
+      latitude, \
+      longitude, \
+      phone, \
+      external_id, \
+      locator_source, \
+      raw_data) \
+ ON CONFLICT (brand_id, location_key) DO UPDATE SET \
+     last_seen_at    = NOW(), \
+     is_active       = TRUE, \
+     updated_at      = NOW(), \
+     name            = EXCLUDED.name, \
+     address_line1   = EXCLUDED.address_line1, \
+     city            = EXCLUDED.city, \
+     state           = EXCLUDED.state, \
+     zip             = EXCLUDED.zip, \
+     country         = EXCLUDED.country, \
+     latitude        = EXCLUDED.latitude, \
+     longitude       = EXCLUDED.longitude, \
+     phone           = EXCLUDED.phone, \
+     external_id     = EXCLUDED.external_id, \
+     locator_source  = EXCLUDED.locator_source, \
+     raw_data        = EXCLUDED.raw_data \
+ RETURNING (xmax = 0) AS is_new";
+
+struct StoreLocationBatch {
+    location_keys: Vec<String>,
+    names: Vec<String>,
+    address_line1s: Vec<Option<String>>,
+    cities: Vec<Option<String>>,
+    states: Vec<Option<String>>,
+    zips: Vec<Option<String>>,
+    countries: Vec<String>,
+    latitudes: Vec<Option<f64>>,
+    longitudes: Vec<Option<f64>>,
+    phones: Vec<Option<String>>,
+    external_ids: Vec<Option<String>>,
+    locator_sources: Vec<Option<String>>,
+    raw_datas: Vec<serde_json::Value>,
+}
+
+impl StoreLocationBatch {
+    fn from_locations(locations: &[NewStoreLocation]) -> Self {
+        let mut batch = Self {
+            location_keys: Vec::with_capacity(locations.len()),
+            names: Vec::with_capacity(locations.len()),
+            address_line1s: Vec::with_capacity(locations.len()),
+            cities: Vec::with_capacity(locations.len()),
+            states: Vec::with_capacity(locations.len()),
+            zips: Vec::with_capacity(locations.len()),
+            countries: Vec::with_capacity(locations.len()),
+            latitudes: Vec::with_capacity(locations.len()),
+            longitudes: Vec::with_capacity(locations.len()),
+            phones: Vec::with_capacity(locations.len()),
+            external_ids: Vec::with_capacity(locations.len()),
+            locator_sources: Vec::with_capacity(locations.len()),
+            raw_datas: Vec::with_capacity(locations.len()),
+        };
+
+        for loc in locations {
+            batch.location_keys.push(loc.location_key.clone());
+            batch.names.push(loc.name.clone());
+            batch.address_line1s.push(loc.address_line1.clone());
+            batch.cities.push(loc.city.clone());
+            batch.states.push(loc.state.clone());
+            batch.zips.push(loc.zip.clone());
+            batch
+                .countries
+                .push(loc.country.as_deref().unwrap_or("US").to_string());
+            batch.latitudes.push(loc.latitude);
+            batch.longitudes.push(loc.longitude);
+            batch.phones.push(loc.phone.clone());
+            batch.external_ids.push(loc.external_id.clone());
+            batch.locator_sources.push(loc.locator_source.clone());
+            batch.raw_datas.push(loc.raw_data.clone());
+        }
+
+        batch
+    }
+}
+
+async fn run_store_location_upsert(
+    pool: &PgPool,
+    brand_id: i64,
+    batch: &StoreLocationBatch,
+) -> Result<Vec<bool>, sqlx::Error> {
+    sqlx::query_scalar::<_, bool>(UPSERT_STORE_LOCATIONS_SQL)
+        .bind(brand_id)
+        .bind(&batch.location_keys)
+        .bind(&batch.names)
+        .bind(&batch.address_line1s)
+        .bind(&batch.cities)
+        .bind(&batch.states)
+        .bind(&batch.zips)
+        .bind(&batch.countries)
+        .bind(&batch.latitudes)
+        .bind(&batch.longitudes)
+        .bind(&batch.phones)
+        .bind(&batch.external_ids)
+        .bind(&batch.locator_sources)
+        .bind(&batch.raw_datas)
+        .fetch_all(pool)
+        .await
+}
+
 /// Insert new locations and update `last_seen_at` for existing ones.
 ///
 /// Returns `(new_count, updated_count)` where:
@@ -30,118 +174,8 @@ pub async fn upsert_store_locations(
         return Ok((0, 0));
     }
 
-    // Collect each column into a parallel Vec for UNNEST binding.
-    let mut location_keys: Vec<String> = Vec::with_capacity(locations.len());
-    let mut names: Vec<String> = Vec::with_capacity(locations.len());
-    let mut address_line1s: Vec<Option<String>> = Vec::with_capacity(locations.len());
-    let mut cities: Vec<Option<String>> = Vec::with_capacity(locations.len());
-    let mut states: Vec<Option<String>> = Vec::with_capacity(locations.len());
-    let mut zips: Vec<Option<String>> = Vec::with_capacity(locations.len());
-    let mut countries: Vec<String> = Vec::with_capacity(locations.len());
-    let mut latitudes: Vec<Option<f64>> = Vec::with_capacity(locations.len());
-    let mut longitudes: Vec<Option<f64>> = Vec::with_capacity(locations.len());
-    let mut phones: Vec<Option<String>> = Vec::with_capacity(locations.len());
-    let mut external_ids: Vec<Option<String>> = Vec::with_capacity(locations.len());
-    let mut locator_sources: Vec<Option<String>> = Vec::with_capacity(locations.len());
-    let mut raw_datas: Vec<serde_json::Value> = Vec::with_capacity(locations.len());
-
-    for loc in locations {
-        location_keys.push(loc.location_key.clone());
-        names.push(loc.name.clone());
-        address_line1s.push(loc.address_line1.clone());
-        cities.push(loc.city.clone());
-        states.push(loc.state.clone());
-        zips.push(loc.zip.clone());
-        countries.push(loc.country.as_deref().unwrap_or("US").to_string());
-        latitudes.push(loc.latitude);
-        longitudes.push(loc.longitude);
-        phones.push(loc.phone.clone());
-        external_ids.push(loc.external_id.clone());
-        locator_sources.push(loc.locator_source.clone());
-        raw_datas.push(loc.raw_data.clone());
-    }
-
-    let rows: Vec<bool> = sqlx::query_scalar::<_, bool>(
-        "INSERT INTO store_locations \
-             (brand_id, location_key, name, address_line1, city, state, zip, country, \
-              latitude, longitude, phone, external_id, locator_source, raw_data) \
-         SELECT \
-             $1, \
-             u.location_key, \
-             u.name, \
-             u.address_line1, \
-             u.city, \
-             u.state, \
-             u.zip, \
-             u.country, \
-             u.latitude::NUMERIC(9,6), \
-             u.longitude::NUMERIC(9,6), \
-             u.phone, \
-             u.external_id, \
-             u.locator_source, \
-             u.raw_data \
-         FROM UNNEST(\
-              $2::text[], \
-              $3::text[], \
-              $4::text[], \
-              $5::text[], \
-              $6::text[], \
-              $7::text[], \
-              $8::text[], \
-              $9::float8[], \
-              $10::float8[], \
-              $11::text[], \
-              $12::text[], \
-              $13::text[], \
-              $14::jsonb[]) \
-         AS u(\
-              location_key, \
-              name, \
-              address_line1, \
-              city, \
-              state, \
-              zip, \
-              country, \
-              latitude, \
-              longitude, \
-              phone, \
-              external_id, \
-              locator_source, \
-              raw_data) \
-         ON CONFLICT (brand_id, location_key) DO UPDATE SET \
-             last_seen_at    = NOW(), \
-             is_active       = TRUE, \
-             updated_at      = NOW(), \
-             name            = EXCLUDED.name, \
-             address_line1   = EXCLUDED.address_line1, \
-             city            = EXCLUDED.city, \
-             state           = EXCLUDED.state, \
-             zip             = EXCLUDED.zip, \
-             country         = EXCLUDED.country, \
-             latitude        = EXCLUDED.latitude, \
-             longitude       = EXCLUDED.longitude, \
-             phone           = EXCLUDED.phone, \
-             external_id     = EXCLUDED.external_id, \
-             locator_source  = EXCLUDED.locator_source, \
-             raw_data        = EXCLUDED.raw_data \
-         RETURNING (xmax = 0) AS is_new",
-    )
-    .bind(brand_id)
-    .bind(&location_keys)
-    .bind(&names)
-    .bind(&address_line1s)
-    .bind(&cities)
-    .bind(&states)
-    .bind(&zips)
-    .bind(&countries)
-    .bind(&latitudes)
-    .bind(&longitudes)
-    .bind(&phones)
-    .bind(&external_ids)
-    .bind(&locator_sources)
-    .bind(&raw_datas)
-    .fetch_all(pool)
-    .await?;
+    let batch = StoreLocationBatch::from_locations(locations);
+    let rows = run_store_location_upsert(pool, brand_id, &batch).await?;
 
     let new_count = rows.iter().filter(|&&is_new| is_new).count() as u64;
     let updated_count = rows.len() as u64 - new_count;

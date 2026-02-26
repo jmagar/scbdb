@@ -11,7 +11,7 @@ use serde::Deserialize;
 use crate::middleware::RequestId;
 
 use super::super::{map_db_error, ApiError, ApiResponse, AppState, ResponseMeta};
-use super::resolve_brand;
+use super::{parse_url_or_validation_error, resolve_brand};
 
 // ---------------------------------------------------------------------------
 // Request bodies
@@ -82,13 +82,10 @@ fn validate_tier(req_id: &str, value: i16) -> Result<(), ApiError> {
 }
 
 fn validate_url_if_present(req_id: &str, field: &str, value: &str) -> Result<(), ApiError> {
-    reqwest::Url::parse(value).map(|_| ()).map_err(|_| {
-        ApiError::new(
-            req_id,
-            "validation_error",
-            format!("'{field}' must be a valid URL, got '{value}'"),
-        )
+    parse_url_or_validation_error(req_id, value, |v| {
+        format!("'{field}' must be a valid URL, got '{v}'")
     })
+    .map(|_| ())
 }
 
 fn map_unique_violation(req_id: &str, e: &scbdb_db::DbError) -> ApiError {

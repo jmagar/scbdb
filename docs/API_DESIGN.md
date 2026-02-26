@@ -2,13 +2,18 @@
 
 ## Document Metadata
 
-- Version: 1.1
+- Version: 1.2
 - Status: Active
-- Last Updated (EST): 18:55:35 | 02/18/2026 EST
+- Last Updated (EST): 20:22:00 | 02/26/2026 EST
 
 ## Purpose
 
-Defines REST API conventions and endpoint surface for `scbdb-server`.
+Defines the current REST contract for `scbdb-server` and explicitly marks planned-but-not-implemented items.
+
+## Contract Source of Truth
+
+- Router surface: `crates/scbdb-server/src/api/mod.rs`
+- Handler/query behavior: `crates/scbdb-server/src/api/*.rs`
 
 ## Base URL and Versioning
 
@@ -19,10 +24,12 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
 
 ## Authentication
 
-- Scheme: `Authorization: Bearer <api_key>`
-- All endpoints require API keys except `/health`.
+- Scheme (when enabled): `Authorization: Bearer <api_key>`
+- Public endpoint: `GET /health`
+- Protected endpoints: all other `/api/v1/*` routes
+- Environment behavior: in development, auth is disabled if `SCBDB_API_KEYS` is unset/empty
 
-## Standard Response Envelope
+## Response Envelope
 
 ### Success
 
@@ -31,7 +38,7 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
   "data": {},
   "meta": {
     "request_id": "req_123",
-    "timestamp": "2026-02-18T00:00:00Z"
+    "timestamp": "2026-02-26T00:00:00Z"
   }
 }
 ```
@@ -42,114 +49,127 @@ Defines REST API conventions and endpoint surface for `scbdb-server`.
 {
   "error": {
     "code": "validation_error",
-    "message": "Invalid tier value",
-    "details": {
-      "field": "tier"
-    }
+    "message": "Invalid tier value"
   },
   "meta": {
     "request_id": "req_123",
-    "timestamp": "2026-02-18T00:00:00Z"
+    "timestamp": "2026-02-26T00:00:00Z"
   }
 }
 ```
 
+Note: `error.details` is not currently part of the implemented error schema.
+
 ## Pagination
 
-- Cursor-based pagination for large lists.
-- Query params:
-  - `limit` (default `50`, max `200`)
-  - `cursor` (opaque token)
-- Response `meta` includes `next_cursor` when more data exists.
+- Shared limit behavior (where supported): `limit` defaults to `50`, clamped to `1..=200`.
+- Cursor pagination is currently implemented on specific endpoints only:
+  - `GET /brands/{slug}/signals` (query: `cursor`, `limit`)
+  - `GET /locations/pins` (query: `cursor`, `limit`, optional `brand_slug`)
+- `next_cursor` is returned inside `data`, not in `meta`.
 
-## Endpoints
+## Path Parameters
+
+- `{slug}`: brand slug string (e.g. `cann`, `jones-soda`)
+- `{bill_id}`: UUID public bill id
+- Internal integer primary keys are not used as path params.
+
+## Implemented Endpoints
 
 ### System
 
 - `GET /health`
-  - Public status check.
-
-### Path Parameter Convention
-
-Brand endpoints use `{slug}` (the URL-safe brand slug string, e.g. `cann`, `jones-soda`). Bill endpoints use `{bill_id}` (UUID). Internal integer PKs are not exposed in any API response.
+  - Public health check
+  - Returns `200` when DB is healthy, `503` when DB is unavailable
 
 ### Brands
 
 - `GET /brands`
-  - Filters: `relationship`, `tier`, `is_active`, `q`.
-- `GET /brands/{slug}` — `slug` is the brand slug string
 - `POST /brands`
+- `GET /brands/{slug}`
 - `PATCH /brands/{slug}`
-- `DELETE /brands/{slug}` — soft-delete (deactivate)
+- `DELETE /brands/{slug}` (soft deactivate)
+- `GET /brands/{slug}/signals`
+  - Query: `type`, `cursor`, `limit`
+- `GET /brands/{slug}/funding`
+- `GET /brands/{slug}/lab-tests`
+- `GET /brands/{slug}/legal`
+- `GET /brands/{slug}/sponsorships`
+- `GET /brands/{slug}/distributors`
+- `GET /brands/{slug}/competitors`
+- `GET /brands/{slug}/media`
+- `PUT /brands/{slug}/profile`
+- `PUT /brands/{slug}/social`
+- `PUT /brands/{slug}/domains`
 
 ### Products
 
 - `GET /products`
-  - Filters: `brand_slug`, `tier`, `relationship`, `limit`.
-- `GET /products/{product_id}`
-- `GET /products/{product_id}/variants`
+  - Query: `brand_slug`, `relationship`, `tier`, `limit`
 
 ### Pricing
 
 - `GET /pricing/snapshots`
-  - Filters: `brand_slug`, `from`, `to`, `limit`.
+  - Query: `brand_slug`, `from`, `to`, `limit`
 - `GET /pricing/summary`
-  - Aggregates by brand, dosage, and timeframe.
-
-### Collection Runs
-
-- `GET /collection-runs`
-  - Filters: `run_type`, `status`, `from`, `to`.
-- `POST /collection-runs/products` *(Post-MVP — server is read-only in MVP scope; use CLI for collection)*
-  - Triggers product collection.
-- `POST /collection-runs/pricing` *(Post-MVP — server is read-only in MVP scope; use CLI for collection)*
-  - Triggers pricing snapshot collection.
-- `POST /collection-runs/regs` *(Post-MVP — server is read-only in MVP scope; use CLI for collection)*
-  - Triggers legislative collection.
 
 ### Regulatory
 
 - `GET /bills`
-  - Filters: `jurisdiction`, `status`, `q`.
-- `GET /bills/{bill_id}`
+  - Query: `jurisdiction`, `limit`
 - `GET /bills/{bill_id}/events`
+- `GET /bills/{bill_id}/texts`
 
 ### Sentiment
 
-- `GET /sentiment/snapshots`
 - `GET /sentiment/summary`
+- `GET /sentiment/snapshots`
+  - Query: `limit`
 
-## Scope Status
+### Locations
 
-### Defined for MVP Scope
+- `GET /locations/summary`
+- `GET /locations/by-state`
+- `GET /locations/pins`
+  - Query: `cursor`, `limit`, `brand_slug`
 
-- API versioning convention (`/api/v1`)
-- Auth convention (`Authorization: Bearer <api_key>`)
-- Response envelope format
-- Endpoint contract definitions for brands, products, pricing, collection runs, and bills
+## Planned / Not Implemented
 
-### Planned Post-MVP / Future Work
+### API Routes
 
-- Idempotency key enforcement across write operations
-- OpenAPI generation and publication endpoint
+- `GET /collection-runs` is documented in earlier plans but is not currently routed.
+- `POST /collection-runs/products` is not implemented.
+- `POST /collection-runs/pricing` is not implemented.
+- `POST /collection-runs/regs` is not implemented.
+- `GET /products/{product_id}` is not implemented.
+- `GET /products/{product_id}/variants` is not implemented.
+- `GET /bills/{bill_id}` is not implemented.
+
+### OpenAPI Status
+
+- Planned: expose generated spec at `/api/v1/openapi.json`
+- Current state: not implemented
+
+### Idempotency Status
+
+- Planned: explicit `Idempotency-Key` handling for replay-safe writes
+- Current state: no `Idempotency-Key` middleware/contract enforcement implemented
+- Note: `PUT /brands/{slug}/profile|social|domains` are semantically idempotent by HTTP method, but not keyed by idempotency token
+
+### Report Command Status
+
+- `scbdb-cli report` (top-level): planned, currently stubbed/not implemented
+- `scbdb-cli regs report`: implemented
+- `scbdb-cli sentiment report`: implemented
 
 ## HTTP Status Codes
 
-- `200 OK`: read success
-- `201 Created`: resource created
-- `202 Accepted`: async collection job queued
-- `400 Bad Request`: invalid params
-- `401 Unauthorized`: missing/invalid API key
+- `200 OK`: read/update/deactivate success
+- `201 Created`: brand create success (`POST /brands`)
+- `400 Bad Request`: invalid params/body
+- `401 Unauthorized`: missing/invalid bearer token (when auth enabled)
 - `404 Not Found`: missing resource
-- `409 Conflict`: duplicate or invalid state transition
-- `429 Too Many Requests`: rate limit hit
+- `409 Conflict`: uniqueness/state conflict
+- `429 Too Many Requests`: rate limit exceeded
 - `500 Internal Server Error`: unhandled failure
-
-## Idempotency
-
-- Create/update write operations should support `Idempotency-Key` header where replay safety matters.
-
-## OpenAPI
-
-- Server crate should expose generated OpenAPI spec at `/api/v1/openapi.json`.
-- Keep request/response schemas in sync with `scbdb-core` types.
+- `503 Service Unavailable`: degraded health check (DB unavailable)

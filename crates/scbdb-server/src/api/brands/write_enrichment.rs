@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use crate::middleware::RequestId;
 
 use super::super::{map_db_error, ApiError, ApiResponse, AppState, ResponseMeta};
-use super::resolve_brand;
+use super::{parse_url_or_validation_error, resolve_brand};
 
 // ---------------------------------------------------------------------------
 // Request bodies
@@ -100,16 +100,8 @@ fn validate_domains(rid: &str, domains: &[String]) -> Result<(), ApiError> {
         ));
     }
     for domain in domains {
-        if reqwest::Url::parse(domain).is_err() {
-            return Err(ApiError::new(
-                rid,
-                "validation_error",
-                format!("invalid URL: '{domain}'"),
-            ));
-        }
-        let scheme = reqwest::Url::parse(domain)
-            .map(|u| u.scheme().to_owned())
-            .unwrap_or_default();
+        let url = parse_url_or_validation_error(rid, domain, |v| format!("invalid URL: '{v}'"))?;
+        let scheme = url.scheme().to_owned();
         if scheme != "http" && scheme != "https" {
             return Err(ApiError::new(
                 rid,
