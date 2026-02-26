@@ -36,7 +36,12 @@ function App() {
     return () => window.removeEventListener("hashchange", handleHashChange);
   }, []);
 
-  const decoded = decodeURIComponent(hash);
+  let decoded = hash;
+  try {
+    decoded = decodeURIComponent(hash);
+  } catch {
+    return <NotFoundPage />;
+  }
 
   if (decoded.startsWith("#/brands/")) {
     const slug = decoded.replace("#/brands/", "");

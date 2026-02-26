@@ -10,11 +10,11 @@ use super::types::NewStoreLocation;
 /// - `new_count`: rows that did not exist before (were inserted)
 /// - `updated_count`: rows that already existed (were updated)
 ///
-/// Uses a single `INSERT … SELECT * FROM UNNEST(…) ON CONFLICT` so that
+/// Uses a single `INSERT … SELECT FROM UNNEST(…) ON CONFLICT` so that
 /// the entire batch is upserted in one round-trip regardless of batch size.
 ///
 /// Latitude and longitude are bound as `Option<f64>` slices and cast to
-/// `NUMERIC(9,6)[]` inside the SQL statement so that the database engine
+/// `NUMERIC(9,6)` inside the SQL statement so that the database engine
 /// performs the type coercion consistently (matching the pattern used in
 /// `upsert_variant` for dosage/size columns).
 ///
@@ -65,9 +65,49 @@ pub async fn upsert_store_locations(
         "INSERT INTO store_locations \
              (brand_id, location_key, name, address_line1, city, state, zip, country, \
               latitude, longitude, phone, external_id, locator_source, raw_data) \
-         SELECT $1, * FROM UNNEST(\
-              $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::text[], \
-              $9::float8[], $10::float8[], $11::text[], $12::text[], $13::text[], $14::jsonb[]) \
+         SELECT \
+             $1, \
+             u.location_key, \
+             u.name, \
+             u.address_line1, \
+             u.city, \
+             u.state, \
+             u.zip, \
+             u.country, \
+             u.latitude::NUMERIC(9,6), \
+             u.longitude::NUMERIC(9,6), \
+             u.phone, \
+             u.external_id, \
+             u.locator_source, \
+             u.raw_data \
+         FROM UNNEST(\
+              $2::text[], \
+              $3::text[], \
+              $4::text[], \
+              $5::text[], \
+              $6::text[], \
+              $7::text[], \
+              $8::text[], \
+              $9::float8[], \
+              $10::float8[], \
+              $11::text[], \
+              $12::text[], \
+              $13::text[], \
+              $14::jsonb[]) \
+         AS u(\
+              location_key, \
+              name, \
+              address_line1, \
+              city, \
+              state, \
+              zip, \
+              country, \
+              latitude, \
+              longitude, \
+              phone, \
+              external_id, \
+              locator_source, \
+              raw_data) \
          ON CONFLICT (brand_id, location_key) DO UPDATE SET \
              last_seen_at    = NOW(), \
              is_active       = TRUE, \

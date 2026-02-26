@@ -15,7 +15,7 @@ Deployment and operations guide for self-hosted SCBDB environments.
 | Dependency | Version | Notes |
 |------------|---------|-------|
 | Rust | stable (latest) | `rustup` recommended |
-| Node.js | 24+ LTS | Required for web frontend build |
+| Node.js | >=20.19.0 | Required for web frontend build |
 | pnpm | 10+ | Frontend package manager |
 | Docker | 24+ | For PostgreSQL and optional containerized deployment |
 | Docker Compose | v2+ | `docker compose` (not the deprecated `docker-compose`) |

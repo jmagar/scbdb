@@ -328,7 +328,8 @@ scbdb-cli collect locations --brand cann
 # Debug — see which strategy fired and what it returned
 RUST_LOG=scbdb_scraper=debug cargo run -p scbdb-cli -- collect locations --brand recess
 
-# Dry-run (no DB writes; not yet implemented — use --brand in dev instead)
+# Dry-run (no DB writes)
+scbdb-cli collect locations --dry-run
 ```
 
 ---

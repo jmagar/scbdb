@@ -21,7 +21,6 @@ pub struct RequestId(pub String);
 
 /// Marker for the authenticated token, used to key rate limits.
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 struct AuthenticatedToken(String);
 
 /// API key auth settings used by middleware.
@@ -116,11 +115,30 @@ pub struct RateLimitState {
 impl RateLimitState {
     #[must_use]
     pub fn new(max_requests: usize, window: Duration) -> Self {
-        Self {
+        let state = Self {
             max_requests,
             window,
             state: Arc::new(Mutex::new(HashMap::new())),
-        }
+        };
+        state.spawn_cleanup_task();
+        state
+    }
+
+    /// Starts periodic cleanup when a Tokio runtime is active.
+    fn spawn_cleanup_task(&self) {
+        let Ok(handle) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+
+        let state = self.clone();
+        let cleanup_interval = self.window.max(Duration::from_secs(30));
+
+        handle.spawn(async move {
+            loop {
+                tokio::time::sleep(cleanup_interval).await;
+                state.cleanup().await;
+            }
+        });
     }
 
     /// Evicts entries whose window has fully elapsed.

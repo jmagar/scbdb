@@ -82,15 +82,24 @@ fn location_record_has_minimum_shape(location: &RawStoreLocation) -> bool {
 
 /// Compute a stable dedup key for a location.
 ///
-/// SHA-256 over `brand_id || name || city || state || zip`, normalised to
-/// lower-case city/name, upper-case state. Hex-encoded.
+/// SHA-256 over `brand_id || name || address_line1 || city || state || zip`,
+/// normalised to lower-case name/address/city, upper-case state. Hex-encoded.
+///
+/// `address_line1` is included to disambiguate co-located stores with the same
+/// name in the same zip code (e.g. two "Whole Foods" at different street
+/// addresses in the same postal zone).
 #[must_use]
 pub fn make_location_key(brand_id: i64, loc: &RawStoreLocation) -> String {
     use sha2::{Digest, Sha256};
     let input = format!(
-        "{}\x00{}\x00{}\x00{}\x00{}",
+        "{}\x00{}\x00{}\x00{}\x00{}\x00{}",
         brand_id,
         loc.name.to_lowercase().trim(),
+        loc.address_line1
+            .as_deref()
+            .unwrap_or("")
+            .trim()
+            .to_lowercase(),
         loc.city.as_deref().unwrap_or("").trim().to_lowercase(),
         loc.state.as_deref().unwrap_or("").trim().to_uppercase(),
         loc.zip.as_deref().unwrap_or("").trim(),

@@ -1,5 +1,6 @@
 mod bills;
 mod brands;
+mod collection_runs;
 mod locations;
 mod pricing;
 mod products;
@@ -126,6 +127,11 @@ fn build_cors() -> CorsLayer {
 fn protected_router(auth: AuthState, rate_limit: RateLimitState) -> Router<AppState> {
     Router::new()
         .route("/api/v1/products", get(products::list_products))
+        .route("/api/v1/products/{product_id}", get(products::get_product))
+        .route(
+            "/api/v1/products/{product_id}/variants",
+            get(products::list_product_variants),
+        )
         .route(
             "/api/v1/pricing/snapshots",
             get(pricing::list_pricing_snapshots),
@@ -135,11 +141,16 @@ fn protected_router(auth: AuthState, rate_limit: RateLimitState) -> Router<AppSt
             get(pricing::list_pricing_summary),
         )
         .route("/api/v1/bills", get(bills::list_bills))
+        .route("/api/v1/bills/{bill_id}", get(bills::get_bill))
         .route(
             "/api/v1/bills/{bill_id}/events",
             get(bills::list_bill_events),
         )
         .route("/api/v1/bills/{bill_id}/texts", get(bills::list_bill_texts))
+        .route(
+            "/api/v1/collection-runs",
+            get(collection_runs::list_collection_runs),
+        )
         .route(
             "/api/v1/sentiment/summary",
             get(sentiment::list_sentiment_summary),

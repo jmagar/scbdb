@@ -114,7 +114,7 @@ Brand endpoints use `{slug}` (the URL-safe brand slug string, e.g. `cann`, `jone
 - `GET /bills/{bill_id}`
 - `GET /bills/{bill_id}/events`
 
-### Sentiment (Post-MVP)
+### Sentiment
 
 - `GET /sentiment/snapshots`
 - `GET /sentiment/summary`
@@ -130,7 +130,6 @@ Brand endpoints use `{slug}` (the URL-safe brand slug string, e.g. `cann`, `jone
 
 ### Planned Post-MVP / Future Work
 
-- Sentiment endpoints
 - Idempotency key enforcement across write operations
 - OpenAPI generation and publication endpoint
 

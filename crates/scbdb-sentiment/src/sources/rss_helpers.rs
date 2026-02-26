@@ -78,12 +78,15 @@ pub(crate) fn parse_rss_feed(
                 if in_item {
                     let text = e.unescape().unwrap_or_default().into_owned();
                     if in_description {
-                        // Accumulate all text nodes inside <description>,
-                        // including those emitted after nested tags like <b>.
-                        if !description.is_empty() {
-                            description.push(' ');
+                        // Keep <description> text sanitized regardless of whether
+                        // the feed uses CDATA or plain text with inline tags.
+                        let clean_text = strip_html(&text);
+                        if !clean_text.is_empty() {
+                            if !description.is_empty() {
+                                description.push(' ');
+                            }
+                            description.push_str(&clean_text);
                         }
-                        description.push_str(&text);
                     } else {
                         match current_tag.as_str() {
                             "title" => title = text,
