@@ -85,6 +85,14 @@ pub struct ShopifyProduct {
     #[serde(default)]
     pub vendor: Option<String>,
 
+    /// Primary image object from Shopify.
+    #[serde(default)]
+    pub image: Option<ShopifyImage>,
+
+    /// Full image gallery for the product.
+    #[serde(default)]
+    pub images: Vec<ShopifyImage>,
+
     /// All purchasable variants for this product.
     pub variants: Vec<ShopifyVariant>,
 }
@@ -119,6 +127,31 @@ pub struct ShopifyVariant {
     /// 1-based position; `1` is the storefront-default variant.
     #[serde(default)]
     pub position: Option<i32>,
+}
+
+/// A product image from Shopify `products.json`.
+#[derive(Debug, Deserialize)]
+pub struct ShopifyImage {
+    /// Shopify numeric image ID.
+    #[serde(default)]
+    pub id: Option<i64>,
+    /// Canonical CDN URL.
+    pub src: String,
+    /// Optional alt text.
+    #[serde(default)]
+    pub alt: Option<String>,
+    /// 1-based image position.
+    #[serde(default)]
+    pub position: Option<i32>,
+    /// Pixel width.
+    #[serde(default)]
+    pub width: Option<i32>,
+    /// Pixel height.
+    #[serde(default)]
+    pub height: Option<i32>,
+    /// Variant IDs associated with this image.
+    #[serde(default)]
+    pub variant_ids: Vec<i64>,
 }
 
 /// Default value for `ShopifyVariant::available` when the field is absent.

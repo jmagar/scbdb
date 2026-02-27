@@ -19,7 +19,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 /// Build a [`LegiscanClient`] suitable for tests: short timeout, pointed at
 /// the given mock server URI.
 fn test_client(base_url: &str) -> LegiscanClient {
-    LegiscanClient::with_base_url("test-key", 5, base_url)
+    LegiscanClient::with_base_url("test-key", 5, 1_000, base_url)
         .expect("client construction should not fail")
 }
 
@@ -115,7 +115,7 @@ async fn search_bills_returns_results() {
 
     let client = test_client(&server.uri());
     let results = client
-        .search_bills("hemp", Some("SC"))
+        .search_bills("hemp", Some("SC"), 5)
         .await
         .expect("should parse search results");
 

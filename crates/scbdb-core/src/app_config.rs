@@ -25,7 +25,6 @@ pub struct AppConfig {
     pub bind_addr: SocketAddr,
     pub log_level: String,
     pub brands_path: PathBuf,
-    pub api_key_hash_salt: Option<String>,
     pub legiscan_api_key: Option<String>,
     pub db_max_connections: u32,
     pub db_min_connections: u32,
@@ -47,10 +46,6 @@ impl std::fmt::Debug for AppConfig {
             .field("log_level", &self.log_level)
             .field("brands_path", &self.brands_path)
             .field("database_url", &"[redacted]")
-            .field(
-                "api_key_hash_salt",
-                &self.api_key_hash_salt.as_ref().map(|_| "[redacted]"),
-            )
             .field(
                 "legiscan_api_key",
                 &self.legiscan_api_key.as_ref().map(|_| "[redacted]"),

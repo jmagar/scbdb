@@ -4,6 +4,7 @@
 //! established. The `ingest` subcommand fetches bills from the `LegiScan` API
 //! and persists them; the remaining subcommands are read-only queries.
 
+mod discovery;
 mod ingest;
 mod query;
 
@@ -18,12 +19,34 @@ pub(crate) use query::{run_regs_report, run_regs_status, run_regs_timeline};
 pub enum RegsCommands {
     /// Ingest bills from `LegiScan` API
     Ingest {
-        /// State to ingest bills for (e.g., SC)
+        /// States to search (repeat for multiple: --state SC --state US).
+        /// "US" fetches US Congress bills.
         #[arg(long, default_value = "SC")]
-        state: String,
-        /// Search keyword (defaults to "hemp")
+        state: Vec<String>,
+
+        /// Keywords to search (repeat for multiple: --keyword hemp --keyword "intoxicating hemp").
+        /// Defaults to "hemp" when not specified.
         #[arg(long)]
-        keyword: Option<String>,
+        keyword: Vec<String>,
+
+        /// Maximum result pages per keyword search (50 results/page).
+        /// Lower this to reduce API request usage.
+        #[arg(long, default_value = "3")]
+        max_pages: u32,
+
+        /// Hard ceiling on `LegiScan` API requests for this run.
+        /// Protects the 30 000/month quota. Default of 5 000 supports daily
+        /// runs (~150/month remaining for ad-hoc use). Each search page and
+        /// each `getBill` call counts as one request.
+        #[arg(long, default_value = "5000")]
+        max_requests: u32,
+
+        /// Backfill all historical sessions, not just the current active session.
+        /// Calls `getSessionList` + `getMasterList(session_id)` for every session.
+        /// Each historical session costs 1 additional API request.
+        #[arg(long)]
+        all_sessions: bool,
+
         /// Preview what would be ingested without writing to the database
         #[arg(long)]
         dry_run: bool,

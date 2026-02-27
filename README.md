@@ -2,133 +2,223 @@
 
 SCBDB is a self-hosted competitive intelligence and regulatory tracking platform for hemp-derived THC beverages.
 
-## What It Does
+## Status Snapshot (Verified)
 
-- Tracks 25 brands from a single `config/brands.yaml` registry (portfolio + competitor, tiered 1–3).
-- Collects product catalog and variant data from Shopify storefronts via `scbdb-scraper`.
-- Captures time-series pricing snapshots tied to auditable collection runs.
-- Tracks legislative activity and bill timelines via `scbdb-legiscan` (Phase 3).
-- Runs sentiment analysis over product and brand data via `scbdb-sentiment` (Phase 4).
-- Generates decision-ready outputs for portfolio and competitor analysis (Phase 5).
+- Tracks 24 brands from `config/brands.yaml` (portfolio + competitor, tiered 1-3); 16 brands have confirmed Twitter/X handles for brand-timeline monitoring.
+- Rust Cargo workspace with 8 crates:
+  - `scbdb-cli`
+  - `scbdb-server`
+  - `scbdb-core`
+  - `scbdb-db`
+  - `scbdb-scraper`
+  - `scbdb-legiscan`
+  - `scbdb-sentiment`
+  - `scbdb-profiler`
+- Two binaries:
+  - `scbdb-cli`: operator workflows (collect, regs, sentiment, db)
+  - `scbdb-server`: Axum API for health, products, pricing, regulatory, sentiment, locations, and brand intelligence
+- PostgreSQL 16 with sqlx migrations.
+- Current schema includes 24 tables (see `docs/DATABASE_SCHEMA.md` for full detail):
+  - Core: `brands`, `products`, `product_variants`, `collection_runs`, `collection_run_brands`, `price_snapshots`
+  - Regulatory: `bills`, `bill_events`, `bill_texts`
+  - Sentiment: `sentiment_snapshots`
+  - Locations: `store_locations`
+  - Brand intelligence: `brand_profiles`, `brand_social_handles`, `brand_domains`, `brand_signals`, `brand_funding_events`, `brand_lab_tests`, `brand_legal_proceedings`, `brand_sponsorships`, `brand_distributors`, `brand_competitor_relationships`, `brand_newsletters`, `brand_media_appearances`, `brand_profile_runs`
+- Frontend (`web/`) is a Vite + React 19 + TypeScript single-page app with a five-tab dashboard (Products, Pricing, Regulatory, Sentiment, Locations) and a separate Brands registry page (`#/brands`). Styling uses CSS variables and custom component styles (no Tailwind).
 
-## Current Scope
+## Implemented Capabilities
 
-- Rust Cargo workspace with 7 crates: `scbdb-cli`, `scbdb-server`, `scbdb-core`, `scbdb-db`, `scbdb-scraper`, `scbdb-legiscan`, `scbdb-sentiment`.
-- Two binaries: `scbdb-cli` (operator commands) and `scbdb-server` (Axum HTTP API).
-- PostgreSQL 16 persistence with sqlx migrations (8 tables: brands, products, product variants, price snapshots, collection runs, bills, bill events, and run-brand outcomes).
-- CLI-first MVP execution; the server is a read-only query layer over the database.
-- React 19 + TypeScript frontend (`web/`) with Tailwind v4 + shadcn/ui — Phase 5.
-- Phased delivery docs under `docs/mvp_phases/`.
+- Product catalog collection from Shopify storefronts.
+- Pricing snapshot collection tied to auditable collection runs.
+- Legislative ingestion and reporting via LegiScan.
+- Sentiment collection and scoring pipeline (Google News RSS, Bing News RSS, Yahoo News RSS, Reddit, and Twitter/X sources), with snapshot persistence.
+- Store locator crawler — detects 13 formats (Locally.com, Storemapper, Stockist, Storepoint, Roseperl, VTInfo, AskHoodie, BeverageFinder, Agile Store Locator, StoreRocket, Destini, JSON-LD, embedded JSON); tracks `first_seen_at` per location for territory monitoring.
+- Brand intelligence API: list brands with completeness scores, full brand profile, cursor-paginated signal feed, funding events, lab tests, legal proceedings, sponsorships, distributors, competitors, media appearances.
+- Brand management API: create, update (sparse patch), and soft-delete brands; overwrite profile, social handles, and domains.
+- LegiScan change-hash caching: `getMasterList` replaces search-per-page discovery; only changed bills call `getBill`. `--all-sessions` backfills historical legislative sessions; `--state US` tracks federal bills.
+- Bill texts: `getBill` text versions stored in `bill_texts` and served at `GET /api/v1/bills/{id}/texts`.
+- Health-check API at `GET /api/v1/health` plus dashboard endpoints for products, pricing snapshots/summary, bills + bill texts, sentiment summary/snapshots, location summary/by-state/pins, and all brand intelligence endpoints.
 
-Post-MVP roadmap includes Spider, Qdrant, and TEI integration.
+## Known Limitations
 
-## Phase 1 Quickstart
+- API auth is enabled when `SCBDB_API_KEYS` is set (comma-separated bearer tokens); in development, auth is disabled when keys are omitted.
+- `scbdb-cli report` exists as a stub and exits with an error.
+- `SCBDB_SCRAPER_MAX_CONCURRENT_BRANDS` is parsed from env but currently not active (collection still runs one brand at a time).
+- Store locator URLs in `brands.yaml` are best-guess defaults for most brands; run `collect locations --dry-run` to validate and update via auto-discovery.
+
+## Quickstart
 
 ### Prerequisites
 
-- Rust (stable, MSRV 1.93.0): `rustup install stable`
-- Docker + Docker Compose plugin
-- `sqlx-cli`: `cargo install sqlx-cli --no-default-features --features postgres,rustls`
-- `just`: `cargo install just`
-- `lefthook`: `cargo install lefthook` (git hooks — pre-commit format, pre-push clippy + tests)
-- `pnpm` (web frontend): `npm install -g pnpm` or `corepack enable pnpm`
+- Rust toolchain with MSRV 1.93 (`rustup install stable`)
+- Docker + Compose plugin (`docker compose`)
+- `sqlx-cli`:
+  - `cargo install sqlx-cli --no-default-features --features postgres,rustls`
+- `just`:
+  - `cargo install just`
+- `lefthook`:
+  - `brew install lefthook` (macOS) or `go install github.com/evilmartians/lefthook@latest` (Go) or download from [releases](https://github.com/evilmartians/lefthook/releases)
+- Node.js (web project requires `>=20.19.0`)
+- `pnpm`:
+  - `npm install -g pnpm` (or `corepack enable pnpm`)
 
 ### First-time setup
 
 ```bash
-# 1. Copy env template and set POSTGRES_PASSWORD
+# 1) Copy env template and set secrets/credentials
 cp .env.example .env
 
-# 2. Bootstrap: starts postgres, waits for healthy, runs migrations, seeds brands, verifies DB
+# 2) Bootstrap database (start postgres, migrate, verify, seed brands)
 just bootstrap
 
-# 3. Install git hooks (one-time per clone)
+# 3) Install git hooks
 just hooks
+
+# 4) Install frontend dependencies
+pnpm --dir web install
 ```
 
 ### Daily workflow
 
 ```bash
 just db-up            # start postgres container
-just db-down          # stop postgres container
-just dev              # start postgres + web dev server together
+just db-down          # stop compose services
+just dev              # start postgres and run web dev server (if pnpm is available)
 just migrate          # apply pending migrations
-just migrate-status   # show current migration state
-just ci               # full gate: check + test (run before pushing)
-just check            # fmt check + clippy + web typecheck + lint
-just test             # run all tests (Rust + web)
-just format           # fix formatting issues (cargo fmt + pnpm format)
-just db-reset         # destroy all postgres data (interactive prompt)
+just migrate-status   # show migration status
+just check            # rust fmt/clippy + web typecheck/lint/format check
+just test             # rust + web tests
+just ci               # check + test
+just format           # apply rust + web formatting
+just db-reset         # destroy postgres data (interactive)
 just clean            # remove build artifacts (target/)
 ```
 
-### Verify the server
+## Server
 
 ```bash
-cargo run --bin scbdb-server &
+cargo run --bin scbdb-server
 curl http://localhost:3000/api/v1/health
-# → {
-#     "data": {"status": "ok", "database": "ok"},
-#     "meta": {"request_id": "550e8400-e29b-41d4-a716-446655440000", "timestamp": "2026-02-19T09:00:00.000Z"}
-#   }
 ```
 
-The server binds to `0.0.0.0:3000` by default. Override with the `SCBDB_BIND_ADDR` environment variable.
+Default bind address is `0.0.0.0:3000` (`SCBDB_BIND_ADDR` overrides).
 
-### CLI commands
+## CLI Commands
+
+### Database
 
 ```bash
-# Database
-cargo run --bin scbdb-cli -- db ping      # test DB connection
-cargo run --bin scbdb-cli -- db migrate   # run pending migrations
-cargo run --bin scbdb-cli -- db seed      # seed brands from config/brands.yaml
+cargo run --bin scbdb-cli -- db ping
+cargo run --bin scbdb-cli -- db migrate
+cargo run --bin scbdb-cli -- db seed
+```
 
-# Data collection (Phase 2 — complete)
-cargo run --bin scbdb-cli -- collect products                       # collect product catalog for all brands
-cargo run --bin scbdb-cli -- collect products --brand <SLUG>        # restrict to one brand by slug
-cargo run --bin scbdb-cli -- collect products --dry-run             # preview without writing to DB
-cargo run --bin scbdb-cli -- collect pricing                        # capture pricing snapshots
-cargo run --bin scbdb-cli -- collect pricing --brand <SLUG>         # restrict to one brand
+### Product & Pricing Collection
 
-# Regulatory tracking (Phase 3 — fully implemented)
-cargo run --bin scbdb-cli -- regs ingest    # ingest bills from LegiScan into DB
-cargo run --bin scbdb-cli -- regs status    # show current bill statuses
-cargo run --bin scbdb-cli -- regs timeline  # show bill event timeline
-cargo run --bin scbdb-cli -- regs report    # generate regulatory summary report
+```bash
+cargo run --bin scbdb-cli -- collect products
+cargo run --bin scbdb-cli -- collect products --brand <slug>
+cargo run --bin scbdb-cli -- collect products --dry-run
 
-# Not yet implemented (stub that exits with an error)
-# cargo run --bin scbdb-cli -- report  # reports and exports (Phase 5)
+cargo run --bin scbdb-cli -- collect pricing
+cargo run --bin scbdb-cli -- collect pricing --brand <slug>
+
+cargo run --bin scbdb-cli -- collect verify-images
+cargo run --bin scbdb-cli -- collect verify-images --brand <slug>
+cargo run --bin scbdb-cli -- collect verify-images --concurrency 12
+```
+
+### Regulatory Tracking
+
+```bash
+cargo run --bin scbdb-cli -- regs ingest
+cargo run --bin scbdb-cli -- regs ingest --state SC --keyword hemp --dry-run
+cargo run --bin scbdb-cli -- regs status
+cargo run --bin scbdb-cli -- regs status --state SC --limit 50
+cargo run --bin scbdb-cli -- regs timeline --state SC --bill HB1234
+cargo run --bin scbdb-cli -- regs report
+cargo run --bin scbdb-cli -- regs report --state SC
+```
+
+### Sentiment
+
+```bash
+cargo run --bin scbdb-cli -- sentiment collect
+cargo run --bin scbdb-cli -- sentiment collect --brand cann --dry-run
+cargo run --bin scbdb-cli -- sentiment status
+cargo run --bin scbdb-cli -- sentiment status --brand cann
+cargo run --bin scbdb-cli -- sentiment report
+cargo run --bin scbdb-cli -- sentiment report --brand cann
+```
+
+### Store Locator
+
+```bash
+cargo run --bin scbdb-cli -- collect locations
+cargo run --bin scbdb-cli -- collect locations --brand cann
+cargo run --bin scbdb-cli -- collect locations --dry-run
+```
+
+### Not Yet Implemented
+
+```bash
+cargo run --bin scbdb-cli -- report
 ```
 
 ## Environment Variables
 
-Copy `.env.example` to `.env`. Key variables:
+Copy `.env.example` to `.env`.
 
-| Variable | Default | Notes |
-|---|---|---|
-| `POSTGRES_PASSWORD` | (none) | **Required** — no default, must be set explicitly |
-| `DATABASE_URL` | `postgres://scbdb:changeme@localhost:15432/scbdb` | Full connection string |
-| `POSTGRES_PORT` | `15432` | Host-side port mapping (avoids collision with a system postgres on 5432) |
-| `SCBDB_BIND_ADDR` | `0.0.0.0:3000` | Server listen address |
-| `SCBDB_LOG_LEVEL` | `info` | Log verbosity |
-| `SCBDB_BRANDS_PATH` | `./config/brands.yaml` | Path to brand registry |
-| `LEGISCAN_API_KEY` | (empty) | Required for legislative tracking (Phase 3) |
+| Variable | Required | Default | Notes |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | `postgres://scbdb:changeme@localhost:15432/scbdb` | Primary DB connection string |
+| `POSTGRES_PASSWORD` | Yes | `changeme` in template | Must be set for local docker postgres |
+| `POSTGRES_PORT` | No | `15432` | Host port mapping |
+| `POSTGRES_DB` | No | `scbdb` | Docker postgres DB name |
+| `POSTGRES_USER` | No | `scbdb` | Docker postgres user |
+| `SCBDB_ENV` | No | `development` | `development`, `test`, or `production` |
+| `SCBDB_BIND_ADDR` | No | `0.0.0.0:3000` | API listen address |
+| `SCBDB_LOG_LEVEL` | No | `info` | Used when `RUST_LOG` is unset |
+| `SCBDB_BRANDS_PATH` | No | `./config/brands.yaml` | Brand registry path |
+| `LEGISCAN_API_KEY` | Optional* | empty | Required for meaningful `regs ingest` runs |
+| `SCBDB_DB_MAX_CONNECTIONS` | No | `10` | DB pool max |
+| `SCBDB_DB_MIN_CONNECTIONS` | No | `1` | DB pool min (must be <= max) |
+| `SCBDB_DB_ACQUIRE_TIMEOUT_SECS` | No | `10` | DB acquire timeout |
+| `SCBDB_SCRAPER_REQUEST_TIMEOUT_SECS` | No | `30` | Scraper request timeout |
+| `SCBDB_LEGISCAN_REQUEST_TIMEOUT_SECS` | No | `30` | LegiScan request timeout |
+| `SCBDB_SCRAPER_USER_AGENT` | No | `scbdb/0.1 (product-intelligence)` | Scraper user agent |
+| `SCBDB_SCRAPER_MAX_CONCURRENT_BRANDS` | No | `1` | Parsed, not currently active |
+| `SCBDB_SCRAPER_INTER_REQUEST_DELAY_MS` | No | `250` | Inter-request delay |
+| `SCBDB_SCRAPER_MAX_RETRIES` | No | `3` | Retry attempts |
+| `SCBDB_SCRAPER_RETRY_BACKOFF_BASE_SECS` | No | `5` | Backoff base |
+| `SENTIMENT_TEI_URL` | No** | `http://localhost:52000` | Parsed by sentiment pipeline |
+| `SENTIMENT_QDRANT_URL` | No** | `http://localhost:53333` | Parsed by sentiment pipeline |
+| `SENTIMENT_QDRANT_COLLECTION` | No** | `scbdb_sentiment` | Parsed by sentiment pipeline |
+| `REDDIT_CLIENT_ID` | No** | empty | Parsed by sentiment pipeline |
+| `REDDIT_CLIENT_SECRET` | No** | empty | Parsed by sentiment pipeline |
+| `REDDIT_USER_AGENT` | No** | `scbdb/0.1.0` | Parsed by sentiment pipeline |
+| `TWITTER_AUTH_TOKEN` | No** | empty | Parsed by sentiment pipeline (Twitter/X source) |
+| `TWITTER_CT0` | No** | empty | Parsed by sentiment pipeline (Twitter/X source) |
 
-See `.env.example` for the full list, including scraper tuning variables (`timeout`, `user agent`, `concurrency`, `retry backoff`).
+- `*` `LEGISCAN_API_KEY` is optional for booting, but required to ingest real regulatory data.
+- `**` Sentiment vars are not required for server startup, but they are required for `sentiment collect` (the command fails if any key is missing from env).
 
 ## Core Docs
 
-- Documentation index: `docs/INDEX.md`
-- Product requirements: `docs/PRD.md`
-- Architecture: `docs/ARCHITECTURE.md`
-- Technology stack: `docs/TECHNOLOGY.md`
-- Database schema: `docs/DATABASE_SCHEMA.md`
-- API design: `docs/API_DESIGN.md`
-- Config loading strategy: `docs/CONFIG_LOADING.md`
-- MVP index and phases: `docs/MVP.md`
-- MVP phase breakdown: `docs/mvp_phases/` (phases 1–5)
-- Deployment runbook: `docs/DEPLOYMENT.md`
-- Development standards: `docs/DEVELOPMENT.md`
-- Testing standards: `docs/TESTING.md`
-- Logging and errors: `docs/LOGGING.md`
-- Extraction prompt schema: `docs/EXTRACTION_PROMPT_SCHEMA.md`
+- `docs/INDEX.md`
+- `docs/PRD.md`
+- `docs/ARCHITECTURE.md`
+- `docs/TECHNOLOGY.md`
+- `docs/DATABASE_SCHEMA.md`
+- `docs/API_DESIGN.md`
+- `docs/CONFIG_LOADING.md`
+- `docs/MVP.md`
+- `docs/mvp_phases/`
+- `docs/DEPLOYMENT.md`
+- `docs/DEVELOPMENT.md`
+- `docs/TESTING.md`
+- `docs/LOGGING.md`
+- `docs/EXTRACTION_PROMPT_SCHEMA.md`
+- `docs/SENTIMENT_PIPELINE.md`
+- `docs/STORE_LOCATOR.md`
+- `docs/LOCATIONS_DASHBOARD.md`

@@ -29,7 +29,6 @@
 
 - `DATABASE_URL` — full PostgreSQL connection string read by the application
 - `SCBDB_ENV` (`development`, `test`, `production`)
-- `SCBDB_API_KEY_HASH_SALT`
 
 ## Docker Compose Variables
 

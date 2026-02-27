@@ -156,10 +156,7 @@ impl QdrantClient {
             }],
         };
 
-        let upsert_url = format!(
-            "{}/collections/{}/points/upsert",
-            self.base_url, self.collection
-        );
+        let upsert_url = format!("{}/collections/{}/points", self.base_url, self.collection);
 
         let resp = self
             .client

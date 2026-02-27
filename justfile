@@ -6,19 +6,24 @@ default:
 
 ci: check test
 
+# Startup smoke path: db up/migrate/ping, server boot, health + read probes
+smoke-startup:
+    ./scripts/smoke-startup.sh
+
+# Alias for startup smoke
+smoke: smoke-startup
+
 # Bootstrap local environment: start db, migrate, verify health
 bootstrap:
     @echo "Starting database..."
     just db-up
     @echo "Waiting for postgres to be ready..."
-    @status=""; \
-    for i in $$(seq 1 60); do \
-      status="$$(docker inspect --format='{{{{.State.Health.Status}}}}' scbdb-postgres 2>/dev/null || true)"; \
-      if [ "$$status" = "healthy" ]; then break; fi; \
+    @for i in {1..60}; do \
+      if docker exec scbdb-postgres pg_isready -U scbdb >/dev/null 2>&1; then break; fi; \
       sleep 1; \
     done; \
-    if [ "$$status" != "healthy" ]; then \
-      echo "error: postgres did not become healthy within 60s (last status: $$status)"; \
+    if ! docker exec scbdb-postgres pg_isready -U scbdb >/dev/null 2>&1; then \
+      echo "error: postgres did not become healthy within 60s"; \
       exit 1; \
     fi
     @echo "Running migrations..."
@@ -33,6 +38,22 @@ bootstrap:
 seed:
     cargo run --bin scbdb-cli -- db seed
 
+# Collect full product catalog from all brands
+collect-products:
+    cargo run --bin scbdb-cli -- collect products
+
+# Collect product catalog for a single brand (usage: just collect-brand <slug>)
+collect-brand brand:
+    cargo run --bin scbdb-cli -- collect products --brand '{{brand}}'
+
+# Capture price snapshots for all brands
+collect-pricing:
+    cargo run --bin scbdb-cli -- collect pricing
+
+# Dry-run product collection (preview only, no DB writes)
+collect-dry:
+    cargo run --bin scbdb-cli -- collect products --dry-run
+
 dev:
     @echo "Starting local dependencies..."
     docker compose up -d postgres
@@ -40,6 +61,25 @@ dev:
       echo "Starting web dev server..."; \
       pnpm --dir web dev; \
     fi
+
+# Start API server + web dev server together; Ctrl-C stops both
+serve:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Starting postgres..."
+    docker compose up -d postgres
+    echo "Starting API server..."
+    cargo run --bin scbdb-server &
+    SERVER_PID=$!
+    cleanup() {
+        echo ""
+        echo "Shutting down..."
+        kill "$SERVER_PID" 2>/dev/null || true
+        wait "$SERVER_PID" 2>/dev/null || true
+    }
+    trap cleanup EXIT INT TERM
+    echo "Starting web dev server..."
+    pnpm --dir web dev
 
 build:
     @if [ -f Cargo.toml ]; then cargo build --workspace; else echo "No Cargo workspace yet"; fi

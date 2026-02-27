@@ -1,0 +1,5 @@
+[advisories]
+# sqlx 0.8.x can pull `sqlx-mysql` into Cargo.lock even when this project is
+# Postgres-only. RUSTSEC-2023-0071 has no upstream fix available yet.
+# Revisit when upgrading sqlx or when RustSec publishes a patched path.
+ignore = ["RUSTSEC-2023-0071"]

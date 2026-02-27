@@ -74,6 +74,7 @@ pub(crate) async fn load_brands_for_sentiment(
 ///
 /// Returns an error if no brands are found, the sentiment config is missing env vars,
 /// or the collection run cannot be created. Per-brand failures are logged and skipped.
+#[allow(clippy::too_many_lines)]
 pub(crate) async fn run_sentiment_collect(
     pool: &sqlx::PgPool,
     brand_filter: Option<&str>,
@@ -110,14 +111,28 @@ pub(crate) async fn run_sentiment_collect(
     let brand_count = brands.len();
 
     for brand in &brands {
-        let result =
-            scbdb_sentiment::run_brand_sentiment(&sentiment_config, &brand.slug, &brand.name).await;
+        let brand_base_url = select_brand_base_url(brand);
+        let result = scbdb_sentiment::run_brand_sentiment(
+            &sentiment_config,
+            &brand.slug,
+            &brand.name,
+            brand_base_url,
+            brand.twitter_handle.as_deref(),
+        )
+        .await;
 
         match result {
             Ok(sentiment) => {
                 let score = Decimal::from_f32(sentiment.score).unwrap_or(Decimal::ZERO);
                 let signal_count = i32::try_from(sentiment.signal_count).unwrap_or(i32::MAX);
                 let captured_at = Utc::now();
+                let metadata = serde_json::json!({
+                    "version": 1,
+                    "brand_slug": sentiment.brand_slug,
+                    "source_counts": sentiment.source_counts,
+                    "top_signals": sentiment.top_signals,
+                    "captured_at": captured_at,
+                });
 
                 match scbdb_db::insert_sentiment_snapshot(
                     pool,
@@ -125,7 +140,7 @@ pub(crate) async fn run_sentiment_collect(
                     captured_at,
                     score,
                     signal_count,
-                    serde_json::json!({}),
+                    metadata,
                 )
                 .await
                 {
@@ -183,17 +198,48 @@ pub(crate) async fn run_sentiment_collect(
     Ok(())
 }
 
+fn select_brand_base_url(brand: &scbdb_db::BrandRow) -> Option<&str> {
+    brand
+        .domain
+        .as_deref()
+        .filter(|d| !d.trim().is_empty())
+        .or_else(|| brand.shop_url.as_deref().filter(|u| !u.trim().is_empty()))
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
+    use chrono::Utc;
     use clap::Parser;
+    use sqlx::types::Uuid;
 
     use crate::{Cli, Commands};
 
     use super::SentimentCommands;
+
+    fn test_brand_row(domain: Option<&str>, shop_url: Option<&str>) -> scbdb_db::BrandRow {
+        scbdb_db::BrandRow {
+            id: 1,
+            public_id: Uuid::new_v4(),
+            name: "Brand".to_string(),
+            slug: "brand".to_string(),
+            relationship: "owned".to_string(),
+            tier: 1,
+            domain: domain.map(ToString::to_string),
+            shop_url: shop_url.map(ToString::to_string),
+            logo_url: None,
+            store_locator_url: None,
+            notes: None,
+            twitter_handle: None,
+            is_active: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            deleted_at: None,
+        }
+    }
 
     #[test]
     fn parses_sentiment_collect_defaults() {
@@ -258,5 +304,23 @@ mod tests {
                 }
             }) if b == "cann"
         ));
+    }
+
+    #[test]
+    fn select_brand_base_url_prefers_domain_then_shop_url_then_none() {
+        let brand_with_both = test_brand_row(Some("brand.com"), Some("https://shop.brand.com"));
+        assert_eq!(
+            super::select_brand_base_url(&brand_with_both),
+            Some("brand.com")
+        );
+
+        let brand_with_shop_only = test_brand_row(None, Some("https://shop.brand.com"));
+        assert_eq!(
+            super::select_brand_base_url(&brand_with_shop_only),
+            Some("https://shop.brand.com")
+        );
+
+        let brand_with_none = test_brand_row(None, None);
+        assert_eq!(super::select_brand_base_url(&brand_with_none), None);
     }
 }

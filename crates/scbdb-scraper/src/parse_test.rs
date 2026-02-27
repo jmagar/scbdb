@@ -184,3 +184,73 @@ fn thc_mg_label_before_value_cbd_precedes_value_suppressed() {
     // "THC CBD 5mg" — CBD appears *before* the value; the 5mg belongs to CBD, not THC.
     assert!(parse_thc_mg("THC CBD 5mg").is_none());
 }
+
+// Multi-occurrence tests: dose near second label occurrence
+#[test]
+fn thc_mg_dose_near_second_occurrence_of_label() {
+    // Buzzn pattern: "Watermelon THC Seltzer... 7.5mg of Delta-9 THC per can"
+    // The first "THC" has no mg in its window; the second does.
+    assert_eq!(
+        parse_thc_mg("Watermelon THC Seltzer, crafted with 7.5mg of Delta-9 THC for buzz"),
+        Some(7.5)
+    );
+}
+
+// Window-boundary tests (MG_LABEL_WINDOW = 40 bytes)
+#[test]
+fn thc_mg_long_phrase_before_label_within_window() {
+    // "5mg Rapid Onset Emulsion THC" — 25 chars between mg and THC label.
+    // This failed with the old 20-byte window; must pass with 40.
+    assert_eq!(parse_thc_mg("5mg Rapid Onset Emulsion THC"), Some(5.0));
+}
+
+#[test]
+fn thc_mg_product_name_dosage_pattern() {
+    // Better Than Booze product title style: dosage in name, not variant title.
+    assert_eq!(
+        parse_thc_mg("2MG THC + 6MG CBD Lemon Drop Martini"),
+        Some(2.0)
+    );
+}
+
+// -----------------------------------------------------------------------
+// parse_dosage_from_html
+// -----------------------------------------------------------------------
+
+#[test]
+fn html_dosage_finds_thc_in_brez_style() {
+    assert_eq!(
+        parse_dosage_from_html("<p>3mg micronized THC, 6mg CBD per can</p>"),
+        Some(3.0)
+    );
+}
+
+#[test]
+fn html_dosage_returns_none_for_empty() {
+    assert_eq!(parse_dosage_from_html(""), None);
+}
+
+#[test]
+fn html_dosage_strips_tags_correctly() {
+    assert_eq!(
+        parse_dosage_from_html("<strong>5mg</strong> THC"),
+        Some(5.0)
+    );
+}
+
+#[test]
+fn html_dosage_returns_none_when_no_mg() {
+    assert_eq!(parse_dosage_from_html("<p>A refreshing beverage</p>"), None);
+}
+
+#[test]
+fn html_dosage_thc_found_when_cbd_text_comes_first() {
+    // When CBD appears before THC in body_html text, the THC value is still
+    // returned because parse_thc_mg uses the "closest before-label" window —
+    // all mg values before the THC label are collected and the last (closest)
+    // is chosen, which in "6mg CBD, 3mg THC" is 3mg.
+    assert_eq!(
+        parse_dosage_from_html("<p>6mg CBD, 3mg THC per can</p>"),
+        Some(3.0)
+    );
+}

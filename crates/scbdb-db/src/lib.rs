@@ -145,27 +145,85 @@ mod tests {
     }
 }
 
+pub mod api_queries;
+pub mod bill_events;
+pub mod bill_texts;
 pub mod bills;
+pub mod brand_completeness;
+pub mod brand_intel;
+pub mod brand_profiles;
+pub mod brand_signals;
 pub mod brands;
 pub mod collection_runs;
+pub mod locations;
 pub mod products;
 pub mod seed;
 pub mod sentiment;
 
-pub use bills::{
-    get_bill_by_jurisdiction_number, list_bill_events, list_bill_events_batch, list_bills,
-    upsert_bill, upsert_bill_event, BillEventRow, BillRow,
+pub use brand_completeness::{
+    get_all_brands_completeness, get_brand_completeness, BrandCompletenessScore,
 };
-pub use brands::{get_brand_by_slug, list_active_brands, BrandRow};
+pub use brand_intel::{
+    insert_brand_competitor_relationship, insert_brand_distributor, insert_brand_funding_event,
+    insert_brand_lab_test, insert_brand_legal_proceeding, insert_brand_media_appearance,
+    insert_brand_newsletter, insert_brand_sponsorship, list_brand_competitor_relationships,
+    list_brand_distributors, list_brand_funding_events, list_brand_lab_tests,
+    list_brand_legal_proceedings, list_brand_media_appearances, list_brand_newsletters,
+    list_brand_sponsorships, BrandCompetitorRelationshipRow, BrandDistributorRow,
+    BrandFundingEventRow, BrandLabTestRow, BrandLegalProceedingRow, BrandMediaAppearanceRow,
+    BrandNewsletterRow, BrandSponsorshipRow, NewBrandCompetitorRelationship, NewBrandDistributor,
+    NewBrandFundingEvent, NewBrandLabTest, NewBrandLegalProceeding, NewBrandMediaAppearance,
+    NewBrandNewsletter, NewBrandSponsorship,
+};
+pub use brand_signals::{
+    list_brand_feed_urls, list_brand_signals, list_brands_needing_signal_refresh,
+    list_brands_with_stale_handles, upsert_brand_signal, BrandSignalRow, NewBrandSignal,
+};
+
+pub use api_queries::{
+    get_product_dashboard, list_price_snapshots_dashboard, list_pricing_summary,
+    list_product_variants_dashboard, list_products_dashboard, list_sentiment_snapshots_dashboard,
+    list_sentiment_summary, PriceSnapshotDashboardRow, PriceSnapshotFilters, PricingSummaryRow,
+    ProductDashboardRow, ProductListFilters, ProductVariantDashboardRow,
+    SentimentSnapshotDashboardRow, SentimentSummaryRow,
+};
+
+pub use bill_events::{
+    list_bill_events, list_bill_events_batch, list_bill_events_by_public_id, upsert_bill_event,
+    BillEventRow,
+};
+pub use bill_texts::{
+    get_bills_stored_hashes, list_bill_texts_by_public_id, upsert_bill_text, BillTextRow,
+};
+pub use bills::{
+    get_bill_by_jurisdiction_number, get_bill_by_public_id, list_bills, upsert_bill, BillRow,
+};
+pub use brand_profiles::{
+    get_brand_profile, list_brand_social_handles, list_brands_without_profiles,
+    overwrite_brand_profile, replace_brand_domains, replace_brand_social_handles,
+    upsert_brand_profile, BrandProfileRow, BrandSocialHandleRow,
+};
+pub use brands::{
+    create_brand, deactivate_brand, get_brand_by_slug, list_active_brands,
+    list_brands_with_locator, update_brand, update_brand_logo, update_brand_store_locator_url,
+    BrandRow,
+};
 pub use collection_runs::{
     complete_collection_run, create_collection_run, fail_collection_run, get_collection_run,
     list_collection_run_brands, list_collection_runs, start_collection_run,
     upsert_collection_run_brand, CollectionRunBrandRow, CollectionRunRow,
 };
+pub use locations::{
+    deactivate_missing_locations, get_active_location_keys_for_brand, list_active_location_pins,
+    list_active_locations_by_brand, list_locations_by_state, list_locations_dashboard_summary,
+    list_new_locations_since, upsert_store_locations, LocationPinRow, LocationsByStateRow,
+    LocationsDashboardRow, NewStoreLocation, StoreLocationRow,
+};
 pub use products::{
     get_last_price_snapshot, insert_price_snapshot_if_changed, upsert_product, upsert_variant,
     PriceSnapshotRow, ProductRow, VariantRow,
 };
+pub use seed::{upsert_brand_domains, upsert_brand_social_handles};
 pub use sentiment::{
     get_latest_sentiment_by_brand, insert_sentiment_snapshot, list_sentiment_snapshots,
     SentimentSnapshotRow,

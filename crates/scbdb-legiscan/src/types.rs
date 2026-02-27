@@ -8,6 +8,35 @@ use std::collections::HashMap;
 
 use serde::Deserialize;
 
+/// Deserializes an `Option<i32>` that the `LegiScan` API may return as either
+/// a JSON integer (`1`) or a JSON string (`"1"`). Fields absent from the
+/// response deserialize as `None` via `#[serde(default)]`.
+mod de_opt_int {
+    use serde::{Deserialize, Deserializer};
+
+    pub(super) fn deserialize<'de, D>(d: D) -> Result<Option<i32>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum IntOrStr {
+            Int(i32),
+            Str(String),
+        }
+
+        match Option::<IntOrStr>::deserialize(d)? {
+            None => Ok(None),
+            Some(IntOrStr::Int(n)) => Ok(Some(n)),
+            Some(IntOrStr::Str(s)) => s
+                .trim()
+                .parse::<i32>()
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+        }
+    }
+}
+
 /// Top-level envelope for all `LegiScan` API responses.
 ///
 /// The `status` field is `"OK"` on success or `"ERROR"` on failure.
@@ -51,6 +80,25 @@ pub struct BillDetail {
     pub history: Vec<BillHistory>,
     #[serde(default)]
     pub progress: Vec<BillProgress>,
+    /// Versioned text links (Introduced, Engrossed, etc.) returned by `getBill`.
+    #[serde(default)]
+    pub texts: Vec<BillTextEntry>,
+}
+
+/// A versioned text entry for a bill, returned inside `getBill`.
+///
+/// `doc_id` is stable and immutable; used as the idempotency key in `bill_texts`.
+#[derive(Debug, Deserialize)]
+pub struct BillTextEntry {
+    pub doc_id: i64,
+    #[serde(default)]
+    pub date: Option<String>,
+    #[serde(rename = "type")]
+    pub text_type: String,
+    pub mime: String,
+    /// `LegiScan` URL; may be an empty string for bills without hosted text.
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 /// Session metadata embedded inside a [`BillDetail`].
@@ -117,9 +165,9 @@ pub struct SearchSummary {
     #[serde(default)]
     pub relevancy: String,
     pub count: i32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_opt_int::deserialize")]
     pub page_current: Option<i32>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "de_opt_int::deserialize")]
     pub page_total: Option<i32>,
 }
 
@@ -130,7 +178,8 @@ pub struct BillSearchItem {
     pub bill_number: String,
     pub title: String,
     pub state: String,
-    pub status: i32,
+    #[serde(default, deserialize_with = "de_opt_int::deserialize")]
+    pub status: Option<i32>,
     #[serde(default)]
     pub status_date: Option<String>,
     #[serde(default)]

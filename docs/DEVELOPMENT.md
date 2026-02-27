@@ -376,7 +376,6 @@ Copy `.env.example` to `.env` and fill in required values:
 ```sh
 SCBDB_ENV=development
 DATABASE_URL=postgres://scbdb:scbdb@localhost:15432/scbdb
-SCBDB_API_KEY_HASH_SALT=<change-me>
 SCBDB_BIND_ADDR=0.0.0.0:3000
 SCBDB_LOG_LEVEL=info
 SCBDB_BRANDS_PATH=./config/brands.yaml

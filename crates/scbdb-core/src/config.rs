@@ -79,7 +79,6 @@ where
     };
 
     let database_url = require("DATABASE_URL")?;
-    let api_key_hash_salt = lookup("SCBDB_API_KEY_HASH_SALT").ok();
 
     let env = parse_environment(&or_default("SCBDB_ENV", "development"))?;
 
@@ -118,7 +117,6 @@ where
         bind_addr,
         log_level,
         brands_path,
-        api_key_hash_salt,
         legiscan_api_key,
         db_max_connections,
         db_min_connections,

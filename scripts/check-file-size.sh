@@ -19,17 +19,66 @@ is_test_file() {
     return 1
 }
 
-# Count production lines in a .rs file: lines before the first top-level
-# #[cfg(test)] annotation. If no such marker exists, count all lines.
+# Count effective LOC (non-blank, non-comment) for a source file.
+# If end_line > 0, only count up to that line (inclusive).
+count_effective_loc() {
+    local f="$1"
+    local end_line="${2:-0}"
+    awk -v end_line="$end_line" '
+        BEGIN { count=0; in_block=0 }
+        end_line > 0 && NR > end_line { exit }
+        {
+            line=$0
+            sub(/^[[:space:]]+/, "", line)
+
+            # Skip blank lines.
+            if (line == "") next
+
+            # Skip block-comment body lines until closing marker.
+            if (in_block) {
+                if (line ~ /\*\//) {
+                    sub(/^.*\*\//, "", line)
+                    sub(/^[[:space:]]+/, "", line)
+                    in_block=0
+                    if (line == "") next
+                } else {
+                    next
+                }
+            }
+
+            # Skip line comments.
+            if (line ~ /^\/\//) next
+
+            # Handle block comment starts.
+            if (line ~ /^\/\*/) {
+                if (line ~ /\*\//) {
+                    sub(/^\/\*.*\*\//, "", line)
+                    sub(/^[[:space:]]+/, "", line)
+                    if (line == "") next
+                } else {
+                    in_block=1
+                    next
+                }
+            }
+
+            count++
+        }
+        END { print count }
+    ' "$f"
+}
+
+# Count production LOC in a .rs file:
+# - Excludes inline test module lines (from top-level #[cfg(test)] onward)
+# - Excludes comments and blanks
 rs_production_lines() {
     local f="$1"
     local test_line
+    local end_line=0
     test_line=$(grep -n '^#\[cfg(test)\]' "$f" | head -1 | cut -d: -f1 || true)
     if [[ -n "$test_line" ]]; then
-        echo $(( test_line - 1 ))
-    else
-        wc -l < "$f"
+        end_line=$(( test_line - 1 ))
     fi
+    count_effective_loc "$f" "$end_line"
 }
 
 # ── Check staged files ────────────────────────────────────────────────────────
@@ -45,7 +94,7 @@ while IFS= read -r file; do
             limit=$MAX_RS
             ;;
         *.ts|*.tsx)
-            lines=$(wc -l < "$file")
+            lines=$(count_effective_loc "$file")
             limit=$MAX_TS
             ;;
         *) continue ;;

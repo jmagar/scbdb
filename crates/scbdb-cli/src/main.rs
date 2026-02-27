@@ -75,16 +75,38 @@ async fn main() -> anyhow::Result<()> {
                 let pool = connect_or_exit().await;
                 collect::run_collect_pricing(&pool, &config, brand.as_deref()).await?;
             }
+            CollectCommands::VerifyImages { brand, concurrency } => {
+                let pool = connect_or_exit().await;
+                collect::run_collect_verify_images(&pool, brand.as_deref(), concurrency).await?;
+            }
+            CollectCommands::Locations { brand, dry_run } => {
+                let config = load_config_or_exit();
+                let pool = connect_or_exit().await;
+                collect::run_collect_locations(&pool, &config, brand.as_deref(), dry_run).await?;
+            }
         },
         Some(Commands::Regs { command }) => match command {
             RegsCommands::Ingest {
                 state,
                 keyword,
+                max_pages,
+                max_requests,
+                all_sessions,
                 dry_run,
             } => {
                 let config = load_config_or_exit();
                 let pool = connect_or_exit().await;
-                regs::run_regs_ingest(&pool, &config, &state, keyword.as_deref(), dry_run).await?;
+                regs::run_regs_ingest(
+                    &pool,
+                    &config,
+                    &state,
+                    &keyword,
+                    max_pages,
+                    max_requests,
+                    all_sessions,
+                    dry_run,
+                )
+                .await?;
             }
             RegsCommands::Status { state, limit } => {
                 let pool = connect_or_exit().await;
@@ -183,22 +205,12 @@ async fn connect_or_exit() -> sqlx::PgPool {
                 eprintln!("error: failed to connect to database: {sql_err}");
                 eprintln!("hint: ensure postgres is running (just db-up)");
             }
-            // TODO: DbError::Migration and DbError::NotFound are never returned by
-            // connect_pool_from_env; move them to dedicated helpers when needed.
-            scbdb_db::DbError::Migration(ref mig_err) => {
-                eprintln!("error: unexpected migration error during connect: {mig_err}");
-            }
-            scbdb_db::DbError::NotFound => {
-                eprintln!("error: unexpected not-found during connect");
-            }
             scbdb_db::DbError::Config(cfg_err) => {
                 eprintln!("error: invalid configuration: {cfg_err}");
                 eprintln!("hint: copy .env.example to .env and fill required values");
             }
-            scbdb_db::DbError::InvalidCollectionRunTransition { id, expected_status } => {
-                eprintln!(
-                    "error: unexpected collection run state for id {id}: expected '{expected_status}'"
-                );
+            other => {
+                eprintln!("error: unexpected database error during connect: {other}");
             }
         }
         std::process::exit(1);

@@ -31,6 +31,8 @@ pub struct ProductRow {
     /// Added in Phase 2 migration (20260219000300); excluded from queries
     /// against earlier schema versions.
     pub source_url: Option<String>,
+    /// Shopify vendor field; added in migration 20260220000700.
+    pub vendor: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -82,7 +84,7 @@ pub struct PriceSnapshotRow {
 ///
 /// Conflicts on `(brand_id, source_platform, source_product_id)` update
 /// `name`, `description`, `status`, `product_type`, `tags`, `handle`,
-/// `source_url`, and `updated_at` in place.
+/// `source_url`, `vendor`, and `updated_at` in place.
 ///
 /// Returns the internal `id` of the upserted row.
 ///
@@ -94,14 +96,17 @@ pub async fn upsert_product(
     brand_id: i64,
     product: &scbdb_core::NormalizedProduct,
 ) -> Result<i64, DbError> {
-    let metadata = json!({});
+    let metadata = json!({
+        "primary_image_url": product.primary_image_url,
+        "image_gallery": product.image_gallery,
+    });
 
     let id: i64 = sqlx::query_scalar::<_, i64>(
         "INSERT INTO products \
              (brand_id, source_platform, source_product_id, name, description, status, \
-              product_type, tags, handle, source_url, metadata) \
+              product_type, tags, handle, source_url, metadata, vendor) \
          VALUES ($1, $2, $3, $4, $5, $6, \
-                 $7, $8, $9, $10, $11::jsonb) \
+                 $7, $8, $9, $10, $11::jsonb, $12) \
          ON CONFLICT (brand_id, source_platform, source_product_id) DO UPDATE SET \
              name         = EXCLUDED.name, \
              description  = EXCLUDED.description, \
@@ -110,6 +115,8 @@ pub async fn upsert_product(
              tags         = EXCLUDED.tags, \
              handle       = EXCLUDED.handle, \
              source_url   = EXCLUDED.source_url, \
+             metadata     = EXCLUDED.metadata, \
+             vendor       = EXCLUDED.vendor, \
              updated_at   = NOW() \
          RETURNING id",
     )
@@ -124,6 +131,7 @@ pub async fn upsert_product(
     .bind(&product.handle)
     .bind(&product.source_url)
     .bind(metadata)
+    .bind(&product.vendor)
     .fetch_one(pool)
     .await?;
 

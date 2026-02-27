@@ -21,6 +21,16 @@ pub struct NormalizedBill {
     pub source_url: Option<String>,
 }
 
+/// A normalized bill text link ready for database persistence.
+#[derive(Debug, Clone)]
+pub struct NormalizedBillText {
+    pub legiscan_text_id: i64,
+    pub text_date: Option<NaiveDate>,
+    pub text_type: String,
+    pub mime: String,
+    pub legiscan_url: Option<String>,
+}
+
 /// A normalized bill event (history action) ready for database persistence.
 #[derive(Debug, Clone)]
 pub struct NormalizedBillEvent {
@@ -104,10 +114,27 @@ pub fn normalize_bill_events(detail: &BillDetail) -> Vec<NormalizedBillEvent> {
         .collect()
 }
 
+/// Converts the text entries of a [`BillDetail`] into a list of
+/// [`NormalizedBillText`]s for database persistence.
+#[must_use]
+pub fn normalize_bill_texts(detail: &BillDetail) -> Vec<NormalizedBillText> {
+    detail
+        .texts
+        .iter()
+        .map(|t| NormalizedBillText {
+            legiscan_text_id: t.doc_id,
+            text_date: t.date.as_deref().and_then(parse_date),
+            text_type: t.text_type.clone(),
+            mime: t.mime.clone(),
+            legiscan_url: t.url.clone(),
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{BillHistory, SessionDetail};
+    use crate::types::{BillHistory, BillTextEntry, SessionDetail};
 
     #[test]
     fn map_status_known_codes() {
@@ -163,6 +190,7 @@ mod tests {
                 },
             ],
             progress: vec![],
+            texts: vec![],
         };
 
         let normalized = normalize_bill(&detail);
@@ -197,11 +225,59 @@ mod tests {
                 chamber: Some("Senate".to_string()),
             }],
             progress: vec![],
+            texts: vec![],
         };
 
         let events = normalize_bill_events(&detail);
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].description, "Filed");
         assert_eq!(events[0].chamber.as_deref(), Some("Senate"));
+    }
+
+    #[test]
+    fn normalize_bill_texts_maps_entries() {
+        let detail = BillDetail {
+            bill_id: 5,
+            bill_number: "HB200".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            status: 1,
+            status_date: None,
+            state: "SC".to_string(),
+            session: None,
+            url: None,
+            history: vec![],
+            progress: vec![],
+            texts: vec![
+                BillTextEntry {
+                    doc_id: 9001,
+                    date: Some("2025-02-01".to_string()),
+                    text_type: "Introduced".to_string(),
+                    mime: "text/html".to_string(),
+                    url: Some("https://legiscan.com/SC/text/HB200/intro".to_string()),
+                },
+                BillTextEntry {
+                    doc_id: 9002,
+                    date: None,
+                    text_type: "Engrossed".to_string(),
+                    mime: "application/pdf".to_string(),
+                    url: None,
+                },
+            ],
+        };
+
+        let texts = normalize_bill_texts(&detail);
+        assert_eq!(texts.len(), 2);
+        assert_eq!(texts[0].legiscan_text_id, 9001);
+        assert_eq!(texts[0].text_type, "Introduced");
+        assert_eq!(texts[0].mime, "text/html");
+        assert_eq!(
+            texts[0].text_date,
+            Some(NaiveDate::from_ymd_opt(2025, 2, 1).unwrap())
+        );
+        assert!(texts[0].legiscan_url.is_some());
+        assert_eq!(texts[1].legiscan_text_id, 9002);
+        assert!(texts[1].text_date.is_none());
+        assert!(texts[1].legiscan_url.is_none());
     }
 }
