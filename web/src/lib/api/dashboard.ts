@@ -63,5 +63,8 @@ export async function fetchLocationsByState(): Promise<LocationsByState[]> {
 }
 
 export async function fetchLocationPins(): Promise<LocationPin[]> {
-  return apiGet<LocationPin[]>("/api/v1/locations/pins");
+  const response = await apiGet<{ items: LocationPin[] }>(
+    "/api/v1/locations/pins",
+  );
+  return response.items;
 }

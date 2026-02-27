@@ -49,3 +49,7 @@ logs/
 # Proof/screenshot files (generated during dev, not source artifacts)
 phase5-*.png
 *.proof.png
+
+# Claude Code artifacts
+.claude/
+server.log
